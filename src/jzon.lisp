@@ -80,6 +80,7 @@
                ((char= #\\ char)
                 (let ((escaped (%step step)))
                   (case escaped
+                    ((nil) (%raise 'json-eof-error "Unexpected end of input after '\\' in string."))
                     ((#\" #\\ #\/) escaped)
                     (#\b #\Backspace)
                     (#\f #\Formfeed)
@@ -89,7 +90,7 @@
                     (#\u (read-unicode))
                     (t (%raise 'json-parse-error "Invalid escape sequence in string '\\~A'." escaped)))))
                ((%control-char-p char)
-                (%raise 'json-parse-error "Unexpected control character in string '~A'." char))
+                (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)." char (char-name char)))
                (t char)))
            (read-unicode ()
              ;; refer to ECMA-404, strings.
@@ -162,11 +163,11 @@
              (%skip-whitespace peek step)
              ;; Read quote
              (case (%step step)
-               ((nil) (%raise 'json-eof-error "End of input inside object reading key."))
-               ((#\") nil)
-               ((#\})
+               ((nil) (%raise 'json-eof-error "End of input in object. Expected key."))
+               (#\" nil)
+               (#\}
                 (return-from read-key-value nil))
-               (t (%raise 'json-parse-error "Expected key while reading object.")))
+               (t (%raise 'json-parse-error "Expected key in object.")))
 
              (let* ((key (funcall read-string))
                     (key (or (gethash key pool)
@@ -183,12 +184,12 @@
         (loop
           (%skip-whitespace peek step)
           (case (%step step)
-            ((nil) (%raise 'json-eof-error "End of input inside object expecting comma."))
+            ((nil) (%raise 'json-eof-error "End of input in object. Expecting comma."))
             (#\, nil)
             (#\} (return))
             (t (%raise 'json-parse-error "Expected comma in object.")))
           (unless (read-key-value)
-            (%raise 'json-parse-error "Expected \"key\":value in object")))
+            (%raise 'json-parse-error "Expected \"key\": value after comma.")))
         accum))))
 
 (defun %number-value (string)
@@ -355,13 +356,13 @@
                          (step (lambda () (when (< i len) (prog1 (aref in i) (incf i)))))
                          (read-string (lambda ()
                                         (let ((q-pos (position #\" in :start i :end len)))
-                                          (unless q-pos (%raise 'json-eof-error "Encountered end of input inside string constant."))
+                                          (unless q-pos (%raise 'json-eof-error "Unexpected end of input reading string."))
                                           (cond
                                             ((null (position #\\ in :start i :end q-pos))
                                              ;; Fast path, just need to check for control chars
                                              (let ((control-char (find-if #'%control-char-p in :start i :end q-pos)))
                                                (when control-char
-                                                 (%raise 'json-parse-error "Unexpected control character in '~A'." control-char)))
+                                                 (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)." control-char (char-name control-char))))
                                              (prog1 (subseq in i q-pos)
                                                (setf i (1+ q-pos))))
                                             (t
