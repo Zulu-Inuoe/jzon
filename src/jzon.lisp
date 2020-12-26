@@ -24,11 +24,11 @@
          (inline %peek %step))
 (defun %peek (peek)
   (declare (function peek))
-  (the (or null character) (funcall peek)))
+  (values (the (or null character) (funcall peek))))
 
 (defun %step (step)
   (declare (function step))
-  (the (or null character) (funcall step)))
+  (values (the (or null character) (funcall step))))
 
 (defun %whitespace-p (char)
   (and (member char '(#\Space #\Linefeed #\Return #\Tab))
