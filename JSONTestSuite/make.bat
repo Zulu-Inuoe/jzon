@@ -1,0 +1,36 @@
+@setlocal
+
+@set SRC_DIR=%~dp0..\src\
+@set BIN_DIR=%~dp0bin\
+@set JZON_ASD=%SRC_DIR%com.inuoe.jzon.asd
+@set JZON_EXE=%BIN_DIR%jzon-parsing.exe
+
+@rem Escape backslashes for SBCL string literals
+@set JZON_ASD_E=%JZON_ASD:\=\\%
+@set JZON_EXE_E=%JZON_EXE:\=\\%
+
+@set BUILD_EXP=^
+(sb-ext:save-lisp-and-die \"%JZON_EXE_E%\"^
+  :toplevel (lambda ()^
+              (handler-case (sb-ext:exit :code (apply #'com.inuoe.jzon-parsing:main (rest sb-ext:*posix-argv*)))^
+                (error ()^
+                  (sb-ext:exit :code 2 :abort t))^
+                (sb-sys:interactive-interrupt ()^
+                  (sb-ext:exit :code #x-3FFFFEC6 :abort t))))^
+  :executable t)
+
+@mkdir "%BIN_DIR%"
+@sbcl^
+ --noinform^
+ --end-runtime-options^
+ --no-sysinit^
+ --no-userinit^
+ --disable-debugger^
+ --eval "(require ""ASDF\"")"^
+ --eval "(asdf:load-asd #p""%JZON_ASD_E%\"")"^
+ --eval "(asdf:load-system '#:com.inuoe.jzon)"^
+ --load "%~dp0jzon-parsing.lisp"^
+ --eval "%BUILD_EXP%"
+@if %errorlevel% neq 0 exit /b %errorlevel%
+
+@endlocal

@@ -1,0 +1,2 @@
+*.fasl
+JSONTestSuite/bin/*.exe
