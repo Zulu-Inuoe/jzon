@@ -2,6 +2,7 @@
   (:use #:cl)
   (:export
    #:parse
+   #:stringify
 
    #:json-error
    #:json-parse-error
@@ -398,3 +399,148 @@
         (stream (%make-fns-stream in)))
     (declare (dynamic-extent peek step read-string))
     (%read-top-json-element maximum-depth (and allow-comments t) peek step read-string)))
+
+(defun %stringify (obj stream)
+  "Stringify non-pretty."
+  (etypecase obj
+    ((eql t)      (write-string "true" stream))
+    (null         (write-string "false" stream))
+    ((eql null)   (write-string "null" stream))
+    (integer      (format stream "~D" obj))
+    ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
+    (real         (format stream "~F" obj))
+    (string
+     (write-char #\" stream)
+     (loop :for c :across obj
+           :do
+              (case c
+                ((#\" #\\)
+                 (write-char #\\ stream)
+                 (write-char c stream))
+                (#\Backspace
+                 (write-char #\\ stream)
+                 (write-char #\b stream))
+                (#\Formfeed
+                 (write-char #\\ stream)
+                 (write-char #\f stream))
+                (#\Linefeed
+                 (write-char #\\ stream)
+                 (write-char #\n stream))
+                (#\Return
+                 (write-char #\\ stream)
+                 (write-char #\r stream))
+                (#\Tab
+                 (write-char #\\ stream)
+                 (write-char #\t stream))
+                (t
+                 (cond
+                   ((%control-char-p c)
+                    (format stream "\\u~4,'0X" (char-code c)))
+                   (t
+                    (write-char c stream))))))
+     (write-char #\" stream))
+    (vector
+     (write-char #\[ stream)
+     (unless (zerop (length obj))
+       (%stringify (aref obj 0) stream)
+       (loop :for i :from 1 :below (length obj)
+             :do (write-char #\, stream)
+                 (%stringify (aref obj i) stream)))
+     (write-char #\] stream))
+    (hash-table
+     (write-char #\{ stream)
+     (with-hash-table-iterator (iter obj)
+       (multiple-value-bind (more? key val) (iter)
+         (when more?
+           (%stringify (string key) stream)
+           (write-char #\: stream)
+           (%stringify val stream)
+           (loop
+             (multiple-value-bind (more? key val) (iter)
+               (unless more? (return))
+               (write-char #\, stream)
+               (%stringify (string key) stream)
+               (write-char #\: stream)
+               (%stringify val stream))))))
+     (write-char #\} stream))))
+
+(defun %needs-lf-separator (element)
+  "For pretty-prenting. Returns true if `element' should have a lf separator."
+  (typecase element
+    ((and vector (not string))
+     (some #'%needs-lf-separator element))
+    (hash-table
+     (or (> (hash-table-count element) 1)
+         (block nil
+           (maphash (lambda (k v)
+                      (declare (ignore k))
+                      (when (%needs-lf-separator v)
+                        (return t)))
+                    element))))))
+
+(defun %indent (stream separator depth)
+  "Indent `stream' by outputting `separator' and then spaces for `depth'."
+  (write-char separator stream)
+  (dotimes (_ (* depth 2))
+    (write-char #\Space stream)))
+
+(defun %stringifyp (element stream depth)
+  "Stringify Pretty."
+  (typecase element
+    ((and vector (not string))
+     (write-char #\[ stream)
+     (unless (zerop (length element))
+       (let* ((needs-lf  (%needs-lf-separator element))
+              (separator (if needs-lf #\Linefeed #\Space))
+              (depth     (if needs-lf (1+ depth) 0)))
+         (%indent stream separator depth)
+         (%stringifyp (aref element 0) stream depth)
+         (loop :for i :from 1 :below (length element)
+               :do (write-char #\, stream)
+                   (%indent stream separator depth)
+                   (%stringifyp (aref element i) stream depth))
+         (%indent stream separator (1- depth))))
+     (write-char #\] stream))
+    (hash-table
+     (write-char #\{ stream)
+     (with-hash-table-iterator (iter element)
+       (multiple-value-bind (more? key val) (iter)
+         (when more?
+           (let* ((needs-lf  (%needs-lf-separator element))
+                  (separator (if needs-lf #\Linefeed #\Space))
+                  (depth     (if needs-lf (1+ depth) 0)))
+             (%indent stream separator depth)
+             (%stringify (string key) stream)
+             (write-char #\: stream)
+             (write-char #\Space stream)
+             (%stringifyp val stream depth)
+             (loop
+               (multiple-value-bind (more? key val) (iter)
+                 (unless more? (return))
+                 (write-char #\, stream)
+                 (%indent stream separator depth)
+                 (%stringify (string key) stream)
+                 (write-char #\: stream)
+                 (write-char #\Space stream)
+                 (%stringifyp val stream depth)))
+             (%indent stream separator (1- depth))))))
+     (write-char #\} stream))
+    (t
+     (%stringify element stream))))
+
+(defun stringify (element &key stream pretty)
+  "Serialize `element' into JSON. If `stream' is provided, the output is written to it and returns `nil'.
+ If `stream' is `nil', a string is created and returned.
+  `:stream' is a stream designator to write to, or `nil'
+  `:pretty' if true, pretty-format the output"
+  (cond
+    (stream
+     (if pretty
+         (%stringifyp element stream 0)
+         (%stringify element stream))
+     nil)
+    (t
+     (with-output-to-string (stream)
+       (if pretty
+           (%stringifyp element stream 0)
+           (%stringify element stream))))))

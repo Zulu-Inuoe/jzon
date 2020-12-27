@@ -6,6 +6,8 @@ A correct and safe JSON [RFC 8259][JSONRFC] parser.
 
 # Usage
 
+## Reading JSON
+
 There's a single entry point: `parse`:
 
 ``` common-lisp
@@ -40,6 +42,15 @@ There's a single entry point: `parse`:
 `parse` accepts the follwing keyword arguments:
 * `:allow-comments` This allows the given JSON to contain `//cpp-style comments`
 * `:maximum-depth` This controls the maximum depth to allow arrays/objects to nest. Can be a positive integer, or `nil` to disable depth tests.
+
+## Writing JSON
+
+`stringify` will serialize an object to JSON:
+
+``` common-lisp
+(stringify #("Hello, world!" 5 2.2 #(null)))
+; => "[\"Hello, world!\",5,2.2,[null]]"
+```
 
 # Features
 

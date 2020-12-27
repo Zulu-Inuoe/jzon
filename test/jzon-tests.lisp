@@ -5,8 +5,9 @@
    #:plist-hash-table)
   (:import-from
    #:com.inuoe.jzon
+   #:json-parse-error
    #:parse
-   #:json-parse-error)
+   #:stringify)
   (:import-from
    #:fiveam
    #:def-suite
@@ -132,3 +133,35 @@
     (#\Linefeed  (parse "\"\\n\""))
     (#\Return    (parse "\"\\r\""))
     (#\Tab       (parse "\"\\t\""))))
+
+(test stringify-atoms
+  (is-every string=
+    ("true" (stringify t))
+    ("false" (stringify nil))
+    ("null" (stringify 'null))))
+
+(test stringify-integers
+  (is (string= "5" (stringify 5)))
+  (is (string= "0" (stringify 0))))
+
+(test stringify-strings
+  (is (string= "\"hello, world!\"" (stringify "hello, world!")))
+  (is (string= "\"\"" (stringify ""))))
+
+(test stringify-string-handles-special-escapes
+  (is-every string=
+    ("\"\\b\"" (stringify (string #\Backspace)))
+    ("\"\\f\"" (stringify (string #\Formfeed)))
+    ("\"\\n\"" (stringify (string #\Linefeed)))
+    ("\"\\r\"" (stringify (string #\Return)))
+    ("\"\\t\"" (stringify (string #\Tab)))))
+
+(test stringify-array
+  (is (string= "[]" (stringify #())))
+  (is (string= "[42,\"hello\",[]]" (stringify #(42 "hello" #())))))
+
+(test stringify-object
+  (is (string= "{}" (stringify (ph))))
+  ;; Note - We can't reliably test object string output because hash tables ordering might differ
+  ;; So instead, parse and verify structure matches
+  (is (equalp (ph "x" 100 "y" 45 "name" "Rock") (parse (stringify (ph "x" 100 "y" 45 "name" "Rock"))))))
