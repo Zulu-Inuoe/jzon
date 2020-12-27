@@ -2,6 +2,9 @@
 
 A correct and safe JSON [RFC 8259](https://tools.ietf.org/html/rfc8259) parser.
 
+[![Actions Status](https://github.com/Zulu-Inuoe/jzon/workflows/ci/badge.svg)](https://github.com/Zulu-Inuoe/jzon/actions)
+
+
 # Usage
 
 There's a single entry point: `parse`:
