@@ -50,16 +50,18 @@ There's a single entry point: `parse`:
 ```
 In this example, the string `x` is shared (eq) between all 3 objects.
 
-## Unambiguous valus
+## Unambiguous values
 
 Values are never ambiguous between `[]`, `false`, `{}`, `null`, as in some other json parsers.
 
 ## Strict spec compliance
+
 This parser is written against [RFC 8259](https://tools.ietf.org/html/rfc8259) and strives to adhere strictly for maximum compliance and little surprises.
 
 Also, this has been tested against the [JSONTestSuite](https://github.com/nst/JSONTestSuite). See the [JSONTestSuite](JSONTestSuite/) directory in this repo for making & running the tests.
 
 # License
+
 See [LICENSE](LICENSE).
 
 jzon was originally a fork of [st-json](https://marijnhaverbeke.nl/st-json/), but I ended up scrapping all of the code except for for the function decoding Unicode.
