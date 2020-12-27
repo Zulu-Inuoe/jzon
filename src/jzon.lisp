@@ -60,7 +60,7 @@
                    ((%whitespace-p char)
                     (%step step)
                     t)
-                   ((and *%allow-comments* (char= #\/ char))
+                   ((and (char= #\/ char) *%allow-comments*)
                     (skip-cpp-comment)
                     t)))))
 
