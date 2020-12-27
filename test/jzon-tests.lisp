@@ -24,7 +24,7 @@
 (in-package #:com.inuoe.jzon-tests)
 
 (def-suite jzon
-  :description "Tests for the seq library.")
+  :description "Tests for the jzon library.")
 
 (defun run ()
   (fiveam:run! 'jzon))
