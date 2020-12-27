@@ -13,6 +13,7 @@
    #:finishes
    #:in-suite
    #:is
+   #:is-every
    #:signals
    #:test)
   (:export
@@ -123,3 +124,11 @@
 
   (is (equalp (ph "lambdaλlambda" "poop💩poop")
               (parse "{\"lambda\\u03BBlambda\":\"poop\\ud83d\\udca9poop\"}"))))
+
+(test string-expands-special-escapes
+  (is-every string=
+    ((parse "\"\\b\"") #\Backspace)
+    ((parse "\"\\f\"") #\Formfeed)
+    ((parse "\"\\n\"") #\Linefeed)
+    ((parse "\"\\r\"") #\Return)
+    ((parse "\"\\t\"") #\Tab)))
