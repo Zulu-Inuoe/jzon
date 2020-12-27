@@ -43,7 +43,7 @@ jobs:
         run: |
           $uri = "https://beta.quicklisp.org/quicklisp.lisp"
           Invoke-WebRequest -Uri $uri -OutFile "$env:TEMP\quicklisp.lisp" -UserAgent "_"
-          sbcl --noinform --end-runtime-options --no-sysinit --no-userinit --disable-debugger --load "$env:TEMP\quicklisp.lisp" --eval "(quicklisp-quickstart:install)"
+          sbcl --noinform --end-runtime-options --no-sysinit --no-userinit --disable-debugger --load "$env:TEMP\quicklisp.lisp" --eval "(quicklisp-quickstart:install)" --quit
 
       - name: Unit Tests
         shell: cmd
