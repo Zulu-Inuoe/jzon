@@ -11,7 +11,7 @@
 (defun main (&rest argv)
   (prog ((file (first argv)))
      (unless file (return 2))
-     (with-open-file (stream file :direction :input :if-does-not-exist nil)
+     (with-open-file (stream file :direction :input :if-does-not-exist nil :external-format :utf8)
        (unless stream (return 2))
        (return
          (if (ignore-errors (com.inuoe.jzon:parse stream)
