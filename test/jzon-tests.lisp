@@ -127,8 +127,8 @@
 
 (test string-expands-special-escapes
   (is-every string=
-    ((parse "\"\\b\"") #\Backspace)
-    ((parse "\"\\f\"") #\Formfeed)
-    ((parse "\"\\n\"") #\Linefeed)
-    ((parse "\"\\r\"") #\Return)
-    ((parse "\"\\t\"") #\Tab)))
+    (#\Backspace (parse "\"\\b\""))
+    (#\Formfeed  (parse "\"\\f\""))
+    (#\Linefeed  (parse "\"\\n\""))
+    (#\Return    (parse "\"\\r\""))
+    (#\Tab       (parse "\"\\t\""))))
