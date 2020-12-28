@@ -1,9 +1,21 @@
 (defpackage #:com.inuoe.jzon
   (:use #:cl)
   (:export
+   ;; Serialize
    #:parse
+   ;; Deserialize
    #:stringify
 
+   ;; Extensible serialization
+   #:coerce-element
+   #:coerce-key
+   #:coerced-keys
+
+   ;; Types
+   #:json-atom
+   #:json-element
+
+   ;; conditions
    #:json-error
    #:json-parse-error
    #:json-eof-error))
@@ -13,6 +25,18 @@
 (define-condition json-error (simple-error) ())
 (define-condition json-parse-error (json-error) ())
 (define-condition json-eof-error (json-parse-error) ())
+
+(deftype json-atom ()
+  `(or (eql t)
+       null
+       (eql null)
+       real
+       string))
+
+(deftype json-element ()
+  `(or json-atom
+       vector
+       hash-table))
 
 (declaim (inline %raise))
 (defun %raise (type format &rest args)
@@ -400,18 +424,117 @@
     (declare (dynamic-extent peek step read-string))
     (%read-top-json-element maximum-depth (and allow-comments t) peek step read-string)))
 
-(defun %stringify (obj stream)
-  "Stringify non-pretty."
-  (etypecase obj
+(defgeneric coerce-key (key)
+  (:documentation "Coerce `key' into a string designator, or `nil' if `key' is an unsuitable key.")
+  (:method (key)
+    nil)
+  (:method ((key symbol))
+    (string key))
+  (:method ((key string))
+    key)
+  (:method ((key character))
+    (string key))
+  (:method ((key integer))
+    (format nil "~D" key)))
+
+(defgeneric coerced-keys (element)
+  (:documentation "Return a list of key definitions for `element'.
+ A key definition is a three-element list of the form
+  (name value type)
+ name is the key name and will be coerced if not already a string
+ value is the value, and will be coerced if not a `json-element'
+ type is a type for the key, in order to handle ambiguous `nil' interpretations")
+  (:method ((element standard-object))
+    (let* ((class (class-of element))
+           (slots (remove-if-not (lambda (s) (c2mop:slot-boundp-using-class class element s))
+                                 (c2mop:class-slots class))))
+      (mapcar (lambda (s)
+                (list (c2mop:slot-definition-name s)
+                      (c2mop:slot-value-using-class class element s)
+                      (c2mop:slot-definition-type s)))
+              slots))))
+
+(defgeneric coerce-element (element coerce-key)
+  (:documentation "Coerce `element' into a `json-element', using `coerce-key' in cases the result is a hash-table.")
+  (:method (element coerce-key)
+    (loop :with ret := (make-hash-table :test 'equal)
+          :for (name value . type-cell) :in (coerced-keys element)
+          :for type := (if type-cell (car type-cell) t)
+          :for key := (funcall coerce-key name)
+          :do
+             (when key ; TODO - Should we error instead?
+               (setf (gethash key ret)
+                     (typecase value
+                       (null
+                        (cond
+                          ((and (subtypep 'boolean type) (subtypep type 'boolean))
+                           nil)
+                          ((and (subtypep 'list type) (subtypep type 'list))
+                           #())
+                          (t
+                           'null)))
+                       (json-element value)
+                       (t (coerce-element value coerce-key)))))
+          :finally (return ret)))
+  (:method ((element null) coerce-key)
+    nil)
+  (:method ((element number) coerce-key)
+    element)
+  (:method ((element symbol) coerce-key)
+    (string element))
+  (:method ((element (eql t)) coerce-key)
+    t)
+  (:method ((element real) coerce-key)
+    element)
+  (:method ((element vector) coerce-key)
+    element)
+  (:method ((element sequence) coerce-key)
+    (coerce element 'simple-vector))
+  (:method ((element cons) coerce-key)
+    ;; Try and guess alist/plist
+    ;; TODO - this might be too hacky/brittle to have on by default
+    (let* ((alist-keys (and (every #'consp element)
+                            (loop :for (k . v) :in element
+                                  :for key := (funcall coerce-key k)
+                                  :unless key
+                                    :return nil
+                                  :collect key)))
+           (plist-keys (and (null alist-keys)
+                            (evenp (length element))
+                            (loop :for k :in element :by #'cddr
+                                  :for key := (funcall coerce-key k)
+                                  :unless (and (or (symbolp k) (stringp k))
+                                               key)
+                                    :return nil
+                                  :collect key))))
+      (cond
+        (alist-keys
+         (loop :with ret := (make-hash-table :test 'equal)
+               :for (k . v) :in element
+               :for key :in alist-keys
+               :do (setf (gethash key ret) v)
+               :finally (return ret)))
+        (plist-keys
+         (loop :with ret := (make-hash-table :test 'equal)
+               :for (k v . rest) :on element :by #'cddr
+               :for key :in plist-keys
+               :do (setf (gethash key ret) v)
+               :finally (return ret)))
+        (t
+         ;; Otherwise treat it as a sequence
+         (coerce element 'simple-vector))))))
+
+(defun %stringify-atom (atom stream)
+  (etypecase atom
     ((eql t)      (write-string "true" stream))
     (null         (write-string "false" stream))
     ((eql null)   (write-string "null" stream))
-    (integer      (format stream "~D" obj))
+    (integer      (format stream "~D" atom))
     ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
-    (real         (format stream "~F" obj))
+    (real         (format stream "~F" atom))
     (string
      (write-char #\" stream)
-     (loop :for c :across obj
+     (loop :for c :across atom
            :do
               (case c
                 ((#\" #\\)
@@ -438,31 +561,44 @@
                     (format stream "\\u~4,'0X" (char-code c)))
                    (t
                     (write-char c stream))))))
-     (write-char #\" stream))
+     (write-char #\" stream))))
+
+(defun %stringify (element stream coerce-element coerce-key)
+  "Stringify non-pretty."
+  (typecase element
+    (json-atom (%stringify-atom element stream))
     (vector
      (write-char #\[ stream)
-     (unless (zerop (length obj))
-       (%stringify (aref obj 0) stream)
-       (loop :for i :from 1 :below (length obj)
+     (unless (zerop (length element))
+       (%stringify (aref element 0) stream coerce-element coerce-key)
+       (loop :for i :from 1 :below (length element)
              :do (write-char #\, stream)
-                 (%stringify (aref obj i) stream)))
+                 (%stringify (aref element i) stream coerce-element coerce-key)))
      (write-char #\] stream))
     (hash-table
      (write-char #\{ stream)
-     (with-hash-table-iterator (iter obj)
+     (with-hash-table-iterator (iter element)
        (multiple-value-bind (more? key val) (iter)
          (when more?
-           (%stringify (string key) stream)
-           (write-char #\: stream)
-           (%stringify val stream)
-           (loop
-             (multiple-value-bind (more? key val) (iter)
-               (unless more? (return))
-               (write-char #\, stream)
-               (%stringify (string key) stream)
-               (write-char #\: stream)
-               (%stringify val stream))))))
-     (write-char #\} stream))))
+           (flet ((stringify-key-value (key value)
+                    (let ((key-str (funcall coerce-key key)))
+                      (unless (typep key '(or string character (and (not null) symbol)))
+                        (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
+                      (%stringify (string key-str) stream coerce-element coerce-key))
+                    (write-char #\: stream)
+                    (%stringify value stream coerce-element coerce-key)))
+             (stringify-key-value key val)
+             (loop
+               (multiple-value-bind (more? key val) (iter)
+                 (unless more? (return))
+                 (write-char #\, stream)
+                 (stringify-key-value key val)))))))
+     (write-char #\} stream))
+    (t
+     (let ((coerced-element (funcall coerce-element element coerce-key)))
+       (unless (typep coerced-element 'json-element)
+         (error "Unknown value to stringify: '~A'" coerced-element))
+       (%stringify coerced-element stream coerce-element coerce-key)))))
 
 (defun %needs-lf-separator (element)
   "For pretty-prenting. Returns true if `element' should have a lf separator."
@@ -484,9 +620,10 @@
   (dotimes (_ (* depth 2))
     (write-char #\Space stream)))
 
-(defun %stringifyp (element stream depth)
+(defun %stringifyp (element stream depth coerce-element coerce-key)
   "Stringify Pretty."
   (typecase element
+    (json-atom (%stringify-atom element stream))
     ((and vector (not string))
      (write-char #\[ stream)
      (unless (zerop (length element))
@@ -494,11 +631,11 @@
               (separator (if needs-lf #\Linefeed #\Space))
               (depth     (if needs-lf (1+ depth) 0)))
          (%indent stream separator depth)
-         (%stringifyp (aref element 0) stream depth)
+         (%stringifyp (aref element 0) coerce-element coerce-key stream depth)
          (loop :for i :from 1 :below (length element)
                :do (write-char #\, stream)
                    (%indent stream separator depth)
-                   (%stringifyp (aref element i) stream depth))
+                   (%stringifyp (aref element i) stream depth coerce-element coerce-key))
          (%indent stream separator (1- depth))))
      (write-char #\] stream))
     (hash-table
@@ -509,38 +646,47 @@
            (let* ((needs-lf  (%needs-lf-separator element))
                   (separator (if needs-lf #\Linefeed #\Space))
                   (depth     (if needs-lf (1+ depth) 0)))
-             (%indent stream separator depth)
-             (%stringify (string key) stream)
-             (write-char #\: stream)
-             (write-char #\Space stream)
-             (%stringifyp val stream depth)
-             (loop
-               (multiple-value-bind (more? key val) (iter)
-                 (unless more? (return))
-                 (write-char #\, stream)
-                 (%indent stream separator depth)
-                 (%stringify (string key) stream)
-                 (write-char #\: stream)
-                 (write-char #\Space stream)
-                 (%stringifyp val stream depth)))
+             (flet ((stringify-key-value (key value)
+                      (%indent stream separator depth)
+                      (let ((key-str (funcall coerce-key key)))
+                        (unless (typep key '(or string character (and (not null) symbol)))
+                          (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
+                        (%stringify (string key-str) stream coerce-element coerce-key))
+                      (write-char #\: stream)
+                      (write-char #\Space stream)
+                      (%stringifyp value stream depth coerce-element coerce-key)))
+               (stringify-key-value key val)
+               (loop
+                 (multiple-value-bind (more? key val) (iter)
+                   (unless more? (return))
+                   (write-char #\, stream)
+                   (stringify-key-value key val))))
              (%indent stream separator (1- depth))))))
      (write-char #\} stream))
     (t
-     (%stringify element stream))))
+     (let ((coerced-element (funcall coerce-element element coerce-key)))
+       (unless (typep coerced-element 'json-element)
+         (error "Unknown value to stringify: '~A'" coerced-element))
+       (%stringifyp coerced-element stream depth coerce-element coerce-key)))))
 
-(defun stringify (element &key stream pretty)
+(defun stringify (element &key stream pretty (coerce-element #'coerce-element) (coerce-key #'coerce-key))
   "Serialize `element' into JSON. If `stream' is provided, the output is written to it and returns `nil'.
  If `stream' is `nil', a string is created and returned.
   `:stream' is a stream designator to write to, or `nil'
-  `:pretty' if true, pretty-format the output"
+  `:pretty' if true, pretty-format the output
+  `:coerce-element' is a function of two arguments, and is used to coerce an unknown value to a `json-element'
+  `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
+
+ see `coerce-element'
+ see `coerce-key'"
   (cond
     (stream
      (if pretty
-         (%stringifyp element stream 0)
-         (%stringify element stream))
+         (%stringifyp element stream 0 coerce-element coerce-key)
+         (%stringify element stream coerce-element coerce-key))
      nil)
     (t
      (with-output-to-string (stream)
        (if pretty
-           (%stringifyp element stream 0)
-           (%stringify element stream))))))
+           (%stringifyp element stream 0 coerce-element coerce-key)
+           (%stringify element stream coerce-element coerce-key))))))

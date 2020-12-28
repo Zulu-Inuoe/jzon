@@ -26,18 +26,7 @@ There's a single entry point: `parse`:
 }")
 ```
 
-`parse` accepts either a string, or a stream, and returns a parsed object depending on the following chart:
-
-
-| JSON   | CL                      |
-|--------|-------------------------|
-| true   | symbol `t`              |
-| false  | symbol `nil`            |
-| null   | symbol `null`           |
-| number | integer or double-float |
-| string | simple-string           |
-| array  | simple-vector           |
-| object | hash-table (equal)      |
+`parse` accepts either a string, or a stream, and returns a parsed value per [Type Mappings][#Type Mappings]
 
 `parse` accepts the follwing keyword arguments:
 * `:allow-comments` This allows the given JSON to contain `//cpp-style comments`
@@ -51,6 +40,103 @@ There's a single entry point: `parse`:
 (stringify #("Hello, world!" 5 2.2 #(null)))
 ; => "[\"Hello, world!\",5,2.2,[null]]"
 ```
+
+`stringify` accepts the following keyword arguments:
+* `:stream` A stream designator, or `nil`. if `nil`, stringify will serialize to a string and return it (as `format`)
+* `:pretty` If true, output pretty-formatted JSON
+* `:coerce-value` A function for coercing 'non-native' values to JSON. See [Custom Serialization][#Custom Serialization]
+* `:coerce-key` A function for coercing key values to strings. See [Custom Serialization][#Custom Serialization]
+
+### Custom Serialization
+
+`stringify` allows serializing 'non-native' objects in an extensible way. Non-native means any object not in [Type Mappings][#Type Mappings] in several different ways.
+
+By default, If your object is a `standard-object`, it will be serialized as a JSON object, using each of its **bound** slots as keys.
+
+If you wish more control over how your value is serialized, the most straightforward way is to specialize `coerced-keys`.
+
+For example, if we had an `account` defined as follows:
+
+``` common-lisp
+(defclass account ()
+  ((id :accessor account-id :initform 0)
+   (name :accessor account-name :initform "")
+   (token :accessor account-token)))
+```
+
+and we wanted to only serialize the `id` and `name` slots, we could specialize `coerced-keys` as follows:
+
+``` common-lisp
+(defmethod coerced-keys ((account account))
+  (list (list "id" (account-id account))
+        (list "name" (account-name account))))
+```
+
+This would result in:
+
+``` json
+{
+  "id": 0,
+  "name": "foobar"
+}
+```
+
+`coerced-keys` returns a list of 'keys', which are two (or three) element lists of the form:
+
+``` common-lisp
+(name value &optional type)
+```
+
+The `value` can be any value - it'll be coerced if necessary.
+
+The `type` is only used to resolve ambiguities with `nil`. Demonstrate, consider the following class definition:
+
+``` common-lisp
+(defclass coordinate ()
+  ((x :initform 0)
+   (y :initform 0)))
+
+(defclass object ()
+  ((alive
+    :initform nil
+    :type boolean)
+   (coordinate
+    :initform nil
+    :type (or null coordinate))
+   (children
+    :initform nil
+    :type list)))
+```
+
+By default, a fresh instance of this object shall be serialized as:
+
+``` json
+{
+  "ALIVE": false,
+  "COORDINATE": null,
+  "CHILDREN": []
+}
+```
+
+Notice we have three distinct interpretations of `nil` - boolean, null, and an empty array.
+
+This works by making use of the `:type` annotation on the slot.
+
+A specialization of `coerced-keys` can return provide any valid `type` and inherit this behaviour.
+
+## Type Mappings
+
+jzon maps types per the following chart:
+
+| JSON   | CL                      |
+|--------|-------------------------|
+| true   | symbol `t`              |
+| false  | symbol `nil`            |
+| null   | symbol `null`           |
+| number | integer or double-float |
+| string | simple-string           |
+| array  | simple-vector           |
+| object | hash-table (equal)      |
 
 # Features
 

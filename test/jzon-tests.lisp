@@ -172,3 +172,15 @@
   ;; Note - We can't reliably test object string output because hash tables ordering might differ
   ;; So instead, parse and verify structure matches
   (is (equalp (ph "x" 100 "y" 45 "name" "Rock") (parse (stringify (ph "x" 100 "y" 45 "name" "Rock"))))))
+
+(defclass test-class ()
+  ((a :initarg :a)
+   (b :initarg :b)))
+
+(test stringify-class
+  (is (equalp (ph) (parse (stringify (make-instance 'test-class)))))
+  (is (equalp (ph "A" 'null) (parse (stringify (make-instance 'test-class :a nil))))))
+
+(test stringify-class
+  (is (equalp (ph) (parse (stringify (make-instance 'test-class)))))
+  (is (equalp (ph "A" 'null "B" 100) (parse (stringify (make-instance 'test-class :a nil :b 100))))))
