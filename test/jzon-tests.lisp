@@ -83,6 +83,13 @@
   (signals (com.inuoe.jzon:json-parse-error)
     (parse "0e")))
 
+(test parses-arrays
+  (is (equalp #() (parse "[]")))
+  (is (equalp #(1 2 3) (parse "[1, 2, 3]"))))
+
+(test parses-objects
+  (is (equalp (ph) (parse "{}")))
+  (is (equalp (ph "x" 1 "y" 2) (parse "{\"x\": 1, \"y\": 2}"))))
 
 (test parse-singular
   (is (equalp (ph "foo" "bar")

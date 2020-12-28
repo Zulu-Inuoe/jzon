@@ -190,8 +190,8 @@
             (#\} (return))
             (t (%raise 'json-parse-error "Expected comma in object.")))
           (unless (read-key-value)
-            (%raise 'json-parse-error "Expected \"key\": value after comma.")))
-        accum))))
+            (%raise 'json-parse-error "Expected \"key\": value after comma."))))
+      accum)))
 
 (defun %number-value (string)
   "Interprets the value of `string' as an RFC 8259 number:
