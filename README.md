@@ -26,7 +26,7 @@ There's a single entry point: `parse`:
 }")
 ```
 
-`parse` accepts either a string, or a stream, and returns a parsed value per [Type Mappings][#Type Mappings]
+`parse` accepts either a string, or a stream, and returns a parsed value per [Type Mappings](#type-mappings)
 
 `parse` accepts the follwing keyword arguments:
 * `:allow-comments` This allows the given JSON to contain `//cpp-style comments`
@@ -44,12 +44,12 @@ There's a single entry point: `parse`:
 `stringify` accepts the following keyword arguments:
 * `:stream` A stream designator, or `nil`. if `nil`, stringify will serialize to a string and return it (as `format`)
 * `:pretty` If true, output pretty-formatted JSON
-* `:coerce-value` A function for coercing 'non-native' values to JSON. See [Custom Serialization][#Custom Serialization]
-* `:coerce-key` A function for coercing key values to strings. See [Custom Serialization][#Custom Serialization]
+* `:coerce-value` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
+* `:coerce-key` A function for coercing key values to strings. See [Custom Serialization](#custom-serialization)
 
 ### Custom Serialization
 
-`stringify` allows serializing 'non-native' objects in an extensible way. Non-native means any object not in [Type Mappings][#Type Mappings] in several different ways.
+`stringify` allows serializing 'non-native' objects in an extensible way. Non-native means any object not in [Type Mappings](#type-mappings) in several different ways.
 
 By default, If your object is a `standard-object`, it will be serialized as a JSON object, using each of its **bound** slots as keys.
 
