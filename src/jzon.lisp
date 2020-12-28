@@ -18,7 +18,8 @@
    ;; conditions
    #:json-error
    #:json-parse-error
-   #:json-eof-error))
+   #:json-eof-error)
+  (:import-from #:closer-mop))
 
 (in-package #:com.inuoe.jzon)
 

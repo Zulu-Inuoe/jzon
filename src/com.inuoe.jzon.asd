@@ -3,5 +3,5 @@
   :description "JSON read/write"
   :author "Wilfredo Velázquez-Rodríguez <zulu.inuoe@gmail.com>"
   :license "MIT"
-  :depends-on ()
+  :depends-on (#:closer-mop)
   :components ((:file "jzon")))
