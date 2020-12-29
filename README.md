@@ -49,66 +49,60 @@ There's a single entry point: `parse`:
 
 ### Custom Serialization
 
-`stringify` allows serializing 'non-native' objects in an extensible way. Non-native means any object not in [Type Mappings](#type-mappings) in several different ways.
+`stringify` allows serializing any values not covered in the [Type Mappings](#type-mappings) in an few different ways.
 
-By default, If your object is a `standard-object`, it will be serialized as a JSON object, using each of its **bound** slots as keys.
+By default, if your object is a `standard-object`, it will be serialized as a JSON object, using each of its **bound** slots as keys.
 
-If you wish more control over how your value is serialized, the most straightforward way is to specialize `coerced-keys`.
-
-For example, if we had an `account` defined as follows:
-
-``` common-lisp
-(defclass account ()
-  ((id :accessor account-id :initform 0)
-   (name :accessor account-name :initform "")
-   (token :accessor account-token)))
-```
-
-and we wanted to only serialize the `id` and `name` slots, we could specialize `coerced-keys` as follows:
-
-``` common-lisp
-(defmethod coerced-keys ((account account))
-  (list (list "id" (account-id account))
-        (list "name" (account-name account))))
-```
-
-This would result in:
-
-``` json
-{
-  "id": 0,
-  "name": "foobar"
-}
-```
-
-`coerced-keys` returns a list of 'keys', which are two (or three) element lists of the form:
-
-``` common-lisp
-(name value &optional type)
-```
-
-The `value` can be any value - it'll be coerced if necessary.
-
-The `type` is only used to resolve ambiguities with `nil`. Demonstrate, consider the following class definition:
+Consider the following classes:
 
 ``` common-lisp
 (defclass coordinate ()
-  ((x :initform 0)
-   (y :initform 0)))
+  ((reference
+    :initarg :reference)
+   (x
+    :initform 0
+    :initarg :x
+    :accessor x)
+   (y
+    :initform 0
+    :initarg :y
+    :accessor y)))
 
 (defclass object ()
   ((alive
     :initform nil
+    :initarg :alive
     :type boolean)
    (coordinate
     :initform nil
+    :initarg :coordinate
     :type (or null coordinate))
    (children
     :initform nil
+    :initarg :children
     :type list)))
 ```
 
-By default, a fresh instance of this object shall be serialized as:
+If we stringify a fresh `coordinate` object via `(stringify (make-instance 'coordinate))`, we'd end up with:
+
+``` json
+{
+  "X": 0,
+  "Y": 0
+}
+```
+
+And if we `(stringify (make-instance 'coordinate :reference "Earth"))`:
+
+``` json
+{
+  "REFERENCE": "Earth",
+  "X": 0,
+  "Y": 0
+}
+```
+
+Similarly if we `(stringify (make-instance 'object'))`:
 
 ``` json
 {
@@ -118,11 +112,60 @@ By default, a fresh instance of this object shall be serialized as:
 }
 ```
 
-Notice we have three distinct interpretations of `nil` - boolean, null, and an empty array.
+Note that here we have `nil` representing `false`, `null`, and `[]`. This is done by examining the `:type` of each slot.
+If no type is provided, `nil` shall serialize as `null`.
 
-This works by making use of the `:type` annotation on the slot.
+`stringify` recurses, so if we have:
 
-A specialization of `coerced-keys` can return provide any valid `type` and inherit this behaviour.
+``` common-lisp
+(stringify (make-instance 'object :coordinate (make-instance 'coordinate)))
+```
+
+We'll have:
+
+``` json
+{
+  "ALIVE": false,
+  "COORDINATE": {
+    "X": 0,
+    "Y": 0
+  },
+  "CHILDREN": []
+}
+```
+
+#### coerced-keys
+
+If you wish more control over how your object is serialized, the most straightforward way is to specialize `coerced-keys`.
+
+Consider our previous `coordinate` class. If we always wanted to serialize only the `x` and `y` slots, and wanted them lowercased, we could specialize `coerced-keys` as follows:
+
+``` common-lisp
+(defmethod coerced-keys ((coordinate coordinate))
+  (list (list "x" (x coordinate))
+        (list "y" (y coordinate))))
+```
+
+This results in:
+
+``` json
+{
+  "x": 0,
+  "y": 0
+}
+```
+
+`coerced-keys` should a list of 'keys', which are two (or three) element lists of the form:
+
+``` common-lisp
+(name value &optional type)
+```
+
+The `name` can be any suitable key name. In particular, integers are allowed coerced to their decimal string representation.
+
+The `value` can be any value - it'll be coerced if necessary.
+
+The `type` is used as `:type` above, in order to resolve ambiguities with `nil`.
 
 ## Type Mappings
 
