@@ -195,15 +195,22 @@
 (test stringify-class-includes-only-bound-slots
   (is-every equalp
     ((ph) (recode (test-class)))
-    ((ph "A" 'null) (recode (test-class :a nil)))
-    ((ph "B" #(1 2 3)) (recode (test-class :b '(1 2 3))))
-    ((ph "A" 42 "B" #(1 2 3)) (recode (test-class :a 42 :b '(1 2 3))))))
+    ((ph "a" 'null) (recode (test-class :a nil)))
+    ((ph "b" #(1 2 3)) (recode (test-class :b '(1 2 3))))
+    ((ph "a" 42 "b" #(1 2 3)) (recode (test-class :a 42 :b '(1 2 3))))))
 
 (test stringify-class-uses-type-for-nil
-  (is (equalp (ph "A" 'null "B" #() "C" nil) (recode (test-class :a nil :b nil :c nil)))))
+  (is (equalp (ph "a" 'null "b" #() "c" nil) (recode (test-class :a nil :b nil :c nil)))))
 
 (test stringify-class-recurses
-  (is (equalp (ph "A" (ph "A" 42)) (recode (test-class :a (test-class :a 42))))))
+  (is (equalp (ph "a" (ph "a" 42)) (recode (test-class :a (test-class :a 42))))))
 
 (test stringify-class-in-plain-data
-  (is (equalp (ph "A" (ph "A" 42)) (recode (ph "A" (test-class :a 42))))))
+  (is (equalp (ph "a" (ph "a" 42)) (recode (ph "a" (test-class :a 42))))))
+
+(defclass test-class-case ()
+  ((all-upper :initform 0)
+   (|mixedCase| :initform 0)))
+
+(test stringify-class-downcases-symbols-except-mixed-case
+  (is (equalp (ph "all-upper" 0 "mixedCase" 0) (recode (make-instance 'test-class-case)))))

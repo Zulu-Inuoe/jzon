@@ -430,7 +430,10 @@
   (:method (key)
     nil)
   (:method ((key symbol))
-    (string key))
+    (let ((name (symbol-name key)))
+      (if (some #'lower-case-p name)
+          name
+          (string-downcase name))))
   (:method ((key string))
     key)
   (:method ((key character))

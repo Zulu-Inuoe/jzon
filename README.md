@@ -47,6 +47,31 @@ There's a single entry point: `parse`:
 * `:coerce-value` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
 * `:coerce-key` A function for coercing key values to strings. See [Custom Serialization](#custom-serialization)
 
+### Symbol keys case
+
+When symbols are used as keys in objects, their names will be downcased, unless they contain mixed-case characters.
+
+For example:
+
+``` common-lisp
+(let ((ht (make-hash-table)))
+  (setf (gethash 'all-upper ht) 0)
+  (setf (gethash '|mixedCase| ht) 0)
+
+  (stringify ht))
+```
+
+shall result in:
+
+``` json
+{
+  "all-upper": 0,
+  "mixedCase": 0
+}
+```
+
+This is particularly important when serializing CLOS objects per [Custom Serialization](#custom-serialization).
+
 ### Custom Serialization
 
 `stringify` allows serializing any values not covered in the [Type Mappings](#type-mappings) in an few different ways.
@@ -87,8 +112,8 @@ If we stringify a fresh `coordinate` object via `(stringify (make-instance 'coor
 
 ``` json
 {
-  "X": 0,
-  "Y": 0
+  "x": 0,
+  "y": 0
 }
 ```
 
@@ -96,9 +121,9 @@ And if we `(stringify (make-instance 'coordinate :reference "Earth"))`:
 
 ``` json
 {
-  "REFERENCE": "Earth",
-  "X": 0,
-  "Y": 0
+  "reference": "Earth",
+  "x": 0,
+  "y": 0
 }
 ```
 
@@ -106,9 +131,9 @@ Similarly if we `(stringify (make-instance 'object'))`:
 
 ``` json
 {
-  "ALIVE": false,
-  "COORDINATE": null,
-  "CHILDREN": []
+  "alive": false,
+  "coordinate": null,
+  "children": []
 }
 ```
 
@@ -125,12 +150,12 @@ We'll have:
 
 ``` json
 {
-  "ALIVE": false,
-  "COORDINATE": {
-    "X": 0,
-    "Y": 0
+  "alive": false,
+  "coordinate": {
+    "x": 0,
+    "y": 0
   },
-  "CHILDREN": []
+  "children": []
 }
 ```
 
@@ -138,20 +163,20 @@ We'll have:
 
 If you wish more control over how your object is serialized, the most straightforward way is to specialize `coerced-keys`.
 
-Consider our previous `coordinate` class. If we always wanted to serialize only the `x` and `y` slots, and wanted them lowercased, we could specialize `coerced-keys` as follows:
+Consider our previous `coordinate` class. If we always wanted to serialize only the `x` and `y` slots, and wanted to rename them, we could specialize `coerced-keys` as follows:
 
 ``` common-lisp
 (defmethod coerced-keys ((coordinate coordinate))
-  (list (list "x" (x coordinate))
-        (list "y" (y coordinate))))
+  (list (list "coord-x" (x coordinate))
+        (list "coord-y" (y coordinate))))
 ```
 
 This results in:
 
 ``` json
 {
-  "x": 0,
-  "y": 0
+  "coord-x": 0,
+  "coord-y": 0
 }
 ```
 
