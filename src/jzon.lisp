@@ -583,7 +583,7 @@
          (when more?
            (flet ((stringify-key-value (key value)
                     (let ((key-str (funcall coerce-key key)))
-                      (unless (typep key '(or string character (and (not null) symbol)))
+                      (unless (typep key-str '(or string character (and (not null) symbol)))
                         (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
                       (%stringify (string key-str) stream coerce-element coerce-key))
                     (write-char #\: stream)
@@ -650,7 +650,7 @@
              (flet ((stringify-key-value (key value)
                       (%indent stream separator depth)
                       (let ((key-str (funcall coerce-key key)))
-                        (unless (typep key '(or string character (and (not null) symbol)))
+                        (unless (typep key-str '(or string character (and (not null) symbol)))
                           (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
                         (%stringify (string key-str) stream coerce-element coerce-key))
                       (write-char #\: stream)
