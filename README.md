@@ -127,7 +127,7 @@ And if we `(stringify (make-instance 'coordinate :reference "Earth"))`:
 }
 ```
 
-Similarly if we `(stringify (make-instance 'object'))`:
+Similarly if we `(stringify (make-instance 'object))`:
 
 ``` json
 {
