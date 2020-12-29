@@ -26,9 +26,9 @@
  --no-sysinit^
  --no-userinit^
  --disable-debugger^
- --eval "(require ""ASDF\"")"^
+ --eval "(load """"~/quicklisp/setup.lisp"""")"^
  --eval "(asdf:load-asd #p""%JZON_ASD_E%\"")"^
- --eval "(asdf:load-system '#:com.inuoe.jzon)"^
+ --eval "(ql:quickload '#:com.inuoe.jzon)"^
  --load "%~dp0jzon-parsing.lisp"^
  --eval "%BUILD_EXP%"
 @if %errorlevel% neq 0 exit /b %errorlevel%
