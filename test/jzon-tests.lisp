@@ -167,20 +167,43 @@
   (is (string= "[]" (stringify #())))
   (is (string= "[42,\"hello\",[]]" (stringify #(42 "hello" #())))))
 
+(defun recode (value)
+  "Shorthand for (parse (stringify value))"
+  (parse (stringify value)))
+
 (test stringify-object
   (is (string= "{}" (stringify (ph))))
   ;; Note - We can't reliably test object string output because hash tables ordering might differ
   ;; So instead, parse and verify structure matches
-  (is (equalp (ph "x" 100 "y" 45 "name" "Rock") (parse (stringify (ph "x" 100 "y" 45 "name" "Rock"))))))
+  (is (equalp (ph "x" 100 "y" 45 "name" "Rock") (recode (ph "x" 100 "y" 45 "name" "Rock")))))
 
 (defclass test-class ()
-  ((a :initarg :a)
-   (b :initarg :b)))
+  ((a
+    :initarg :a
+    :type t)
+   (b
+    :initarg :b
+    :type list)
+   (c
+    :initarg :c
+    :type boolean)))
 
-(test stringify-class
-  (is (equalp (ph) (parse (stringify (make-instance 'test-class)))))
-  (is (equalp (ph "A" 'null) (parse (stringify (make-instance 'test-class :a nil))))))
+(defun test-class (&rest args)
+  "Shorthand for (make-instance 'test-class ...)"
+  (apply #'make-instance 'test-class args))
 
-(test stringify-class
-  (is (equalp (ph) (parse (stringify (make-instance 'test-class)))))
-  (is (equalp (ph "A" 'null "B" 100) (parse (stringify (make-instance 'test-class :a nil :b 100))))))
+(test stringify-class-includes-only-bound-slots
+  (is-every equalp
+    ((ph) (recode (test-class)))
+    ((ph "A" 'null) (recode (test-class :a nil)))
+    ((ph "B" #(1 2 3)) (recode (test-class :b '(1 2 3))))
+    ((ph "A" 42 "B" #(1 2 3)) (recode (test-class :a 42 :b '(1 2 3))))))
+
+(test stringify-class-uses-type-for-nil
+  (is (equalp (ph "A" 'null "B" #() "C" nil) (recode (test-class :a nil :b nil :c nil)))))
+
+(test stringify-class-recurses
+  (is (equalp (ph "A" (ph "A" 42)) (recode (test-class :a (test-class :a 42))))))
+
+(test stringify-class-in-plain-data
+  (is (equalp (ph "A" (ph "A" 42)) (recode (ph "A" (test-class :a 42))))))
