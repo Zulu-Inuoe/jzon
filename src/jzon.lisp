@@ -674,23 +674,32 @@
        (%stringifyp coerced-element stream depth coerce-element coerce-key)))))
 
 (defun stringify (element &key stream pretty (coerce-element #'coerce-element) (coerce-key #'coerce-key))
-  "Serialize `element' into JSON. If `stream' is provided, the output is written to it and returns `nil'.
- If `stream' is `nil', a string is created and returned.
-  `:stream' is a stream designator to write to, or `nil'
+  "Serialize `element' into JSON.
+ Returns a fresh string if `stream' is nil, nil otherwise.
+  `:stream' like the `destination' in `format'
   `:pretty' if true, pretty-format the output
   `:coerce-element' is a function of two arguments, and is used to coerce an unknown value to a `json-element'
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-element'
  see `coerce-key'"
-  (cond
-    (stream
-     (if pretty
-         (%stringifyp element stream 0 coerce-element coerce-key)
-         (%stringify element stream coerce-element coerce-key))
-     nil)
-    (t
-     (with-output-to-string (stream)
-       (if pretty
-           (%stringifyp element stream 0 coerce-element coerce-key)
-           (%stringify element stream coerce-element coerce-key))))))
+  (flet ((stringify-to (stream)
+           (if pretty
+               (%stringifyp element stream 0 coerce-element coerce-key)
+               (%stringify element stream coerce-element coerce-key))))
+    (cond
+      ((null stream)
+       (with-output-to-string (stream)
+         (stringify-to stream)))
+      ((stringp stream)
+       (unless (array-has-fill-pointer-p stream)
+         (error 'type-error :datum stream :expected-type '(and vector (satisfies array-has-fill-pointer-p))))
+       (with-output-to-string (stream stream)
+         (stringify-to stream))
+       nil)
+      (t
+       (let ((stream (etypecase stream
+                       ((eql t) *standard-output*)
+                       (stream stream))))
+         (stringify-to stream))
+       nil))))

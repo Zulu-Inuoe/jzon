@@ -138,6 +138,17 @@
   (is (equalp (ph "lambdaλlambda" "poop💩poop")
               (parse "{\"lambda\\u03BBlambda\":\"poop\\ud83d\\udca9poop\"}"))))
 
+(test stringify-to-nil-returns-string
+  (is (string= "42" (stringify 42))))
+
+(test stringify-to-t-writes-to-stdout
+  (is (string= "42" (with-output-to-string (*standard-output*)
+                      (stringify 42 :stream t)))))
+
+(test stringify-to-stream-writes-to-stream
+  (is (string= "42" (with-output-to-string (stream)
+                      (stringify 42 :stream stream)))))
+
 (test string-expands-special-escapes
   (is-every string=
     (#\Backspace (parse "\"\\b\""))
