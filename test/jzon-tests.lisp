@@ -5,6 +5,9 @@
    #:plist-hash-table)
   (:import-from
    #:com.inuoe.jzon
+   #:coerced-fields
+   #:coerce-key
+   #:coerce-element
    #:json-parse-error
    #:parse
    #:stringify)
@@ -17,6 +20,8 @@
    #:is-every
    #:signals
    #:test)
+  (:local-nicknames
+   (#:jzon #:com.inuoe.jzon))
   (:export
    #:jzon
    #:run
@@ -214,3 +219,19 @@
 
 (test stringify-class-downcases-symbols-except-mixed-case
   (is (equalp (ph "all-upper" 0 "mixedCase" 0) (recode (make-instance 'test-class-case)))))
+
+(defclass test-class/stringify-coerced-fields ()
+  ())
+
+(defmethod jzon:coerced-fields ((a test-class/stringify-coerced-fields))
+  (declare (ignore a))
+  (list (list "foo" 42)
+        (list "bar" 101.1d0)
+        (list "baz" #(192 168 1 1))))
+
+(test coerce-element-uses-coerced-fields-spec
+  (let ((coerced (coerce-element (make-instance 'test-class/stringify-coerced-fields) #'coerce-key)))
+    (is-every equalp
+      (42 (gethash "foo" coerced))
+      (101.1d0 (gethash "bar" coerced))
+      (#(192 168 1 1) (gethash "baz" coerced)))))

@@ -159,14 +159,14 @@ We'll have:
 }
 ```
 
-#### coerced-keys
+#### coerced-fields
 
-If you wish more control over how your object is serialized, the most straightforward way is to specialize `coerced-keys`.
+If you wish more control over how your object is serialized, the most straightforward way is to specialize `coerced-fields`.
 
-Consider our previous `coordinate` class. If we always wanted to serialize only the `x` and `y` slots, and wanted to rename them, we could specialize `coerced-keys` as follows:
+Consider our previous `coordinate` class. If we always wanted to serialize only the `x` and `y` slots, and wanted to rename them, we could specialize `coerced-fields` as follows:
 
 ``` common-lisp
-(defmethod coerced-keys ((coordinate coordinate))
+(defmethod coerced-fields ((coordinate coordinate))
   (list (list "coord-x" (x coordinate))
         (list "coord-y" (y coordinate))))
 ```
@@ -180,7 +180,7 @@ This results in:
 }
 ```
 
-`coerced-keys` should a list of 'keys', which are two (or three) element lists of the form:
+`coerced-fields` should a list of 'fields', which are two (or three) element lists of the form:
 
 ``` common-lisp
 (name value &optional type)

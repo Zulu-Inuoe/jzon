@@ -7,9 +7,9 @@
    #:stringify
 
    ;; Extensible serialization
-   #:coerce-element
+   #:coerced-fields
    #:coerce-key
-   #:coerced-keys
+   #:coerce-element
 
    ;; Types
    #:json-atom
@@ -425,23 +425,7 @@
     (declare (dynamic-extent peek step read-string))
     (%read-top-json-element maximum-depth (and allow-comments t) peek step read-string)))
 
-(defgeneric coerce-key (key)
-  (:documentation "Coerce `key' into a string designator, or `nil' if `key' is an unsuitable key.")
-  (:method (key)
-    nil)
-  (:method ((key symbol))
-    (let ((name (symbol-name key)))
-      (if (some #'lower-case-p name)
-          name
-          (string-downcase name))))
-  (:method ((key string))
-    key)
-  (:method ((key character))
-    (string key))
-  (:method ((key integer))
-    (format nil "~D" key)))
-
-(defgeneric coerced-keys (element)
+(defgeneric coerced-fields (element)
   (:documentation "Return a list of key definitions for `element'.
  A key definition is a three-element list of the form
   (name value type)
@@ -458,11 +442,27 @@
                       (c2mop:slot-definition-type s)))
               slots))))
 
+(defgeneric coerce-key (key)
+  (:documentation "Coerce `key' into a string designator, or `nil' if `key' is an unsuitable key.")
+  (:method (key)
+    nil)
+  (:method ((key symbol))
+    (let ((name (symbol-name key)))
+      (if (some #'lower-case-p name)
+          name
+          (string-downcase name))))
+  (:method ((key string))
+    key)
+  (:method ((key character))
+    (string key))
+  (:method ((key integer))
+    (format nil "~D" key)))
+
 (defgeneric coerce-element (element coerce-key)
   (:documentation "Coerce `element' into a `json-element', using `coerce-key' in cases the result is a hash-table.")
   (:method (element coerce-key)
     (loop :with ret := (make-hash-table :test 'equal)
-          :for (name value . type-cell) :in (coerced-keys element)
+          :for (name value . type-cell) :in (coerced-fields element)
           :for type := (if type-cell (car type-cell) t)
           :for key := (funcall coerce-key name)
           :do
