@@ -239,11 +239,8 @@
             (%raise 'json-parse-error "Expected \"key\": value after comma."))))
       accum)))
 
-(defun %number-value (string)
-  "Interprets the value of `string' as an RFC 8259 number:
-  [ minus ] int [ frac ] [ exp ]
- Returns an `integer', except when frac or exp are present, in which case a `double-float' is returned"
-  (declare (type simple-string string))
+(defun %read-json-number (peek step c)
+  "Reads an RFC 8259 number, starting with `c'."
   (flet ((digit09-p (c)
            (let ((val (- (char-code c) (char-code #\0))))
              (and (<= 0 val 9) val)))
@@ -251,14 +248,13 @@
            (let ((val (- (char-code c) (char-code #\0))))
              (and (<= 1 val 9) val))))
     (macrolet ((takec (on-eof)
-                 "Take the next character, `go'ing to `label' on EOF"
-                 `(if (< i len)
-                      (prog1 (char string i)
-                        (incf i))
-                      (go ,on-eof))))
-      (prog ((i 0)
-             (len (length string))
-             (int-sign 1)
+                 "Take the next character, `go'ing to `label' on EOF or end of token."
+                 `(let ((c (%peek peek)))
+                    (when (or (null c) (%ends-atom-p c))
+                      (go ,on-eof))
+                    (%step step)
+                    c)))
+      (prog ((int-sign 1)
              (int-val 0)
              (frac-val 0)
              (frac-len 0)
@@ -267,7 +263,7 @@
              (exp-val 0))
          (declare (type (integer 0) int-val frac-val exp-val frac-len)
                   (type (member -1 1) int-sign exp-sign))
-         (let ((c (takec :fail)))
+         (let ((c c))
            (when (char= c #\-)
              (setf int-sign -1)
              (setf c (takec :fail)))
@@ -347,20 +343,32 @@
 (defun %read-json-atom (peek step c)
   "Parse a non-string JSON atom and return its value.
  `c' is the lookahead character already read."
-  (let ((accum *%string-accum*))
-    (setf (fill-pointer accum) 1)
-    (setf (aref accum 0) c)
-    (loop
-      :for next := (%peek peek)
-      :until (or (null next) (%ends-atom-p next))
-      :do (vector-push-extend next accum)
-          (%step step))
-    (cond
-      ((string= accum "false") nil)
-      ((string= accum "true")  t)
-      ((string= accum "null")  'null)
-      ((%number-value (subseq accum 0)))
-      (t (%raise 'json-parse-error "Unrecognized value in JSON data: '~A'" accum)))))
+  (macrolet ((expect (c atom)
+               `(case (%step step)
+                  (null (%raise 'json-eof-error ,(format nil "End of input in token '~A'. Expected '~A'" atom c)))
+                  (,c)
+                  (t (%raise 'json-parse-error ,(format nil "Unexpected character in token '~A'. Expected '~A'" atom c))))))
+    (case c
+      (#\f
+       (expect #\a "false")
+       (expect #\l "false")
+       (expect #\s "false")
+       (expect #\e "false")
+       nil)
+      (#\t
+       (expect #\r "true")
+       (expect #\u "true")
+       (expect #\e "true")
+       t)
+      (#\n
+       (expect #\u "null")
+       (expect #\l "null")
+       (expect #\l "null")
+       'null)
+      (t
+       ;; Try to read a number
+       (or (%read-json-number peek step c)
+           (%raise 'json-parse-error "Unrecognized character in JSON data"))))))
 
 (declaim (type (integer 0) *%current-depth*))
 (defvar *%current-depth*)
