@@ -635,7 +635,7 @@
               (separator (if needs-lf #\Linefeed #\Space))
               (depth     (if needs-lf (1+ depth) 0)))
          (%indent stream separator depth)
-         (%stringifyp (aref element 0) coerce-element coerce-key stream depth)
+         (%stringifyp (aref element 0) stream depth coerce-element coerce-key)
          (loop :for i :from 1 :below (length element)
                :do (write-char #\, stream)
                    (%indent stream separator depth)

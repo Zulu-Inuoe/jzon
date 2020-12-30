@@ -235,3 +235,6 @@
       (42 (gethash "foo" coerced))
       (101.1d0 (gethash "bar" coerced))
       (#(192 168 1 1) (gethash "baz" coerced)))))
+
+(test stringify-pretty-argorder-bugfix
+  (is (string= "[ { \"x\": 0 } ]" (stringify (vector (ph "x" 0)) :pretty t))))
