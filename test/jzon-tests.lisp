@@ -149,6 +149,35 @@
   (is (string= "42" (with-output-to-string (stream)
                       (stringify 42 :stream stream)))))
 
+(test stringify-pretty-array-spaces-elements
+  (is (string= "[ 1, 2, 3 ]" (stringify #(1 2 3) :pretty t))))
+
+(test stringify-pretty-object-spaces-kv
+  (is (string= "{ \"x\": 0 }" (stringify (ph "x" 0) :pretty t))))
+
+(test stringify-pretty-object-newlines-multiple-kv
+  (is (string= "{
+  \"x\": 0,
+  \"y\": 5
+}" (stringify (ph "x" 0 "y" 5) :pretty t))))
+
+(test stringify-pretty-object-newlines-if-nested-object
+  (is (string= "{
+  \"obj\": {
+    \"x\": 0,
+    \"y\": 5
+  }
+}" (stringify (ph "obj" (ph "x" 0 "y" 5)) :pretty t))))
+
+(test stringify-pretty-array-newlines-if-nested-object
+  (is (string= "[
+  1,
+  {
+    \"x\": 0,
+    \"y\": 5
+  }
+]" (stringify (vector 1 (ph "x" 0 "y" 5)) :pretty t))))
+
 (test string-expands-special-escapes
   (is-every string=
     (#\Backspace (parse "\"\\b\""))
