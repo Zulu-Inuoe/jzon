@@ -12,6 +12,7 @@ jobs:
       matrix:
         os: [ windows-latest ]
     steps:
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v2
       - name: Cache SBCL
         id: cache-sbcl
