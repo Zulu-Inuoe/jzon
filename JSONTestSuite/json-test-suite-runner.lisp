@@ -57,5 +57,7 @@
      (unless (and test-dir (probe-file test-dir))
        (format *error-output* "Second argument must be a directory of files to test.")
        (return 2))
-     (return (test-files (uiop:parse-native-namestring tester) (uiop:parse-native-namestring test-dir :ensure-directory t) rest-args))))
+     (return (if (test-files (uiop:parse-native-namestring tester) (uiop:parse-native-namestring test-dir :ensure-directory t) rest-args)
+                 0
+                 1))))
 
