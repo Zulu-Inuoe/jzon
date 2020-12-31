@@ -60,11 +60,6 @@
   (and (member char '(#\Space #\Linefeed #\Return #\Tab))
        t))
 
-(defun %ends-atom-p (char)
-  (or (%whitespace-p char)
-      (and (member char '(#\) #\] #\} #\, #\:))
-           t)))
-
 (defun %skip-whitespace (peek step)
   "Skip whitespace, and optionally comments, depending on `%*allow-comments*'.
  Returns the next character."
@@ -246,11 +241,14 @@
              (and (<= 0 val 9) val)))
          (digit19-p (c)
            (let ((val (- (char-code c) (char-code #\0))))
-             (and (<= 1 val 9) val))))
+             (and (<= 1 val 9) val)))
+         (ends-number-p (c)
+           (or (%whitespace-p c)
+               (member c '(#\) #\] #\} #\,)))))
     (macrolet ((takec (on-eof)
                  "Take the next character, `go'ing to `label' on EOF or end of token."
                  `(let ((c (%peek peek)))
-                    (when (or (null c) (%ends-atom-p c))
+                    (when (or (null c) (ends-number-p c))
                       (go ,on-eof))
                     (%step step)
                     c)))
