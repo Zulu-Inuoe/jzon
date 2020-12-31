@@ -4,9 +4,43 @@ A correct and safe JSON [RFC 8259][JSONRFC] parser.
 
 [![Actions Status](https://github.com/Zulu-Inuoe/jzon/workflows/ci/badge.svg)](https://github.com/Zulu-Inuoe/jzon/actions)
 
+#### Table of Contents
+* [Overview](#overview)
+* [Usage](#usage)
+  * [Type Mappings](#type-mappings)
+  * [Reading](#reading)
+  * [Writing](#writing)
+    * [Symbol key case](#symbol-key-case)
+    * [Custom Serialization](#custom-serialization)
+      * [coerced-fields][#coerced-fields]
+  * [Features](#features)
+    * [Unambiguous values](#unambiguous-values)
+    * [Strict spec compliance](#string-spec-compliance)
+    * [Safety](#safety)
+    * [Simplicity](#simplicity)
+    * [Object key pooling](#object-key-pooling)
+* [Dependencies](#dependencies)
+* [License](#license)
+
 # Usage
 
-## Reading JSON
+## Type Mappings
+
+jzon maps types per the following chart:
+
+| JSON   | CL                      |
+|--------|-------------------------|
+| true   | symbol `t`              |
+| false  | symbol `nil`            |
+| null   | symbol `null`           |
+| number | integer or double-float |
+| string | simple-string           |
+| array  | simple-vector           |
+| object | hash-table (equal)      |
+
+**Note** the usage of symbol `cl:null` as a sentinel for JSON `null`
+
+## Reading
 
 There's a single entry point: `parse`:
 
@@ -32,7 +66,7 @@ There's a single entry point: `parse`:
 * `:allow-comments` This allows the given JSON to contain `//cpp-style comments`
 * `:maximum-depth` This controls the maximum depth to allow arrays/objects to nest. Can be a positive integer, or `nil` to disable depth tests.
 
-## Writing JSON
+## Writing
 
 `stringify` will serialize an object to JSON:
 
@@ -47,7 +81,7 @@ There's a single entry point: `parse`:
 * `:coerce-value` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
 * `:coerce-key` A function for coercing key values to strings. See [Custom Serialization](#custom-serialization)
 
-### Symbol keys case
+### Symbol key case
 
 When symbols are used as keys in objects, their names will be downcased, unless they contain mixed-case characters.
 
@@ -192,32 +226,17 @@ The `value` can be any value - it'll be coerced if necessary.
 
 The `type` is used as `:type` above, in order to resolve ambiguities with `nil`.
 
-## Type Mappings
-
-jzon maps types per the following chart:
-
-| JSON   | CL                      |
-|--------|-------------------------|
-| true   | symbol `t`              |
-| false  | symbol `nil`            |
-| null   | symbol `null`           |
-| number | integer or double-float |
-| string | simple-string           |
-| array  | simple-vector           |
-| object | hash-table (equal)      |
-
 # Features
 
-These are some of jzon's specific features.
+This section notes some of jzon's more noteworthy features.
 
-## Object key pooling
+In general, jzon strives for (in order):
 
-`jzon` will use a key pool per-parse, causing shared keys in a nested JSON object to share keys:
-
-``` common-lisp
-(parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]")
-```
-In this example, the string `x` is shared (eq) between all 3 objects.
+* Safety
+* Correctness
+* Simplicity
+* Interoperability
+* Performance
 
 ## Unambiguous values
 
@@ -258,6 +277,21 @@ You call `parse`, and you get a reasonable standard CL object back.
 * No worrying about dynamic variables affecting a parse as in cl-json, jonathan, jsown. Everything affecting `parse` is given at the call-site.
 
 `parse` also accepts either a string, or a stream for simpler usage over libraries requiring one or the other, or having separate parse functions.
+
+## Object key pooling
+
+`jzon` will use a key pool per-parse, causing shared keys in a nested JSON object to share keys:
+
+``` common-lisp
+(parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]")
+```
+In this example, the string `x` is shared (eq) between all 3 objects.
+
+This optimizes for the common case of reading a JSON payload containing many duplicate keys.
+
+# Dependencies
+
+* [closer-mop](https://github.com/pcostanza/closer-mop/commits/master)
 
 # License
 
