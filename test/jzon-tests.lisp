@@ -2,6 +2,7 @@
   (:use #:cl)
   (:import-from
    #:alexandria
+   #:hash-table-keys
    #:plist-hash-table)
   (:import-from
    #:com.inuoe.jzon
@@ -137,6 +138,21 @@
 
   (is (equalp (ph "lambdaλlambda" "poop💩poop")
               (parse "{\"lambda\\u03BBlambda\":\"poop\\ud83d\\udca9poop\"}"))))
+
+(test parse-pools-keys
+  (let* ((objects (parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]"))
+         (keys (map 'list #'hash-table-keys objects))
+         (xs (mapcar #'first keys))
+         (x1 (first xs))
+         (x2 (second xs))
+         (x3 (third xs)))
+    (is (eq x1 x2))
+    (is (eq x2 x3))))
+
+(test parse-uses-custom-pool
+  (let ((keys ()))
+    (parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]" :pool-key (lambda (key) (push key keys) key))
+    (is (equalp '("x" "x" "x") keys))))
 
 (test stringify-to-nil-returns-string
   (is (string= "42" (stringify 42))))

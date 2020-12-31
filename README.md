@@ -65,6 +65,19 @@ There's a single entry point: `parse`:
 `parse` accepts the follwing keyword arguments:
 * `:allow-comments` This allows the given JSON to contain `//cpp-style comments`
 * `:maximum-depth` This controls the maximum depth to allow arrays/objects to nest. Can be a positive integer, or `nil` to disable depth tests.
+* `:pool-key` A function of one argument responsible for 'interning' object keys. Should accept a `simple-string` and return the 'interned' key
+
+**Tip**: `pool-key` can be supplied as `#'identity` in order to disable [key pooling](#object-key-pooling):
+
+``` common-lisp
+(parse "[ { \"x\": 1, \"y\": 1 }, { \"x\": 1, \"y\": 1 } ]" :pool-key #'identity)
+```
+
+**Tip**: `alexandria:make-keyword` or equivalent can be used to make object keys into symbols:
+
+``` common-lisp
+(jzon:parse "[ { \"x\": 1, \"y\": 1 }, { \"x\": 1, \"y\": 1 } ]" :pool-key #'alexandria:make-keyword)
+```
 
 ## Writing
 
