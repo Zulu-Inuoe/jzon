@@ -1,31 +1,25 @@
-@setlocal EnableDelayedExpansion
+@setlocal
 
-@set failed=0
+@set RUN_EXP=^
+(handler-case (sb-ext:exit :code (apply #'com.inuoe.json-test-suite-runner:main (rest sb-ext:*posix-argv*)))^
+  (error ()^
+    (sb-ext:exit :code 2 :abort t))^
+  (sb-sys:interactive-interrupt ()^
+    (sb-ext:exit :code #x-3FFFFEC6 :abort t)))
 
-@for /r %%i in (test_parsing\*) do @(
-  set "name=%%~ni"
-  echo|set /p="%%~nxi ... "
-  "%~dp0bin\jzon-parsing" "%%i"
-
-  if !ERRORLEVEL! EQU 0 (
-    if "!name:~0,1!" == "n" (
-      set failed=1
-      echo ERROR PASSED
-    ) else (
-      echo OK
-    )
-  ) else if !ERRORLEVEL! EQU 1 (
-    if "!name:~0,1!" == "y" (
-      set failed=1
-      echo ERROR FAILED
-    ) else (
-      echo OK
-    )
-  ) else (
-    echo ERROR !errlvl!
-  )
-)
-
-@if %failed% neq 0 exit /b %failed%
+@sbcl^
+ --noinform^
+ --end-runtime-options^
+ --no-sysinit^
+ --no-userinit^
+ --disable-debugger^
+ --eval "(require '#:uiop)"^
+ --load "%~dp0json-test-suite-runner.lisp"^
+ --eval "%RUN_EXP%"^
+ --end-toplevel-options^
+ "%~dp0bin\jzon-parsing.exe"^
+ "%~dp0test_parsing"^
+ %*
+@if %errorlevel% neq 0 exit /b %errorlevel%
 
 @endlocal

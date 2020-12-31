@@ -29,6 +29,10 @@
  --eval "(load """"~/quicklisp/setup.lisp"""")"^
  --eval "(asdf:load-asd #p""%JZON_ASD_E%\"")"^
  --eval "(ql:quickload '#:com.inuoe.jzon)"^
+ --eval "(ql:quickload '#:cl-json)"^
+ --eval "(ql:quickload '#:jonathan)"^
+ --eval "(ql:quickload '#:jsown)"^
+ --eval "(ql:quickload '#:yason)"^
  --load "%~dp0jzon-parsing.lisp"^
  --eval "%BUILD_EXP%"
 @if %errorlevel% neq 0 exit /b %errorlevel%
