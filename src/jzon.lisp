@@ -23,6 +23,9 @@
 
 (in-package #:com.inuoe.jzon)
 
+#++
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
+
 (define-condition json-error (simple-error) ())
 (define-condition json-parse-error (json-error) ())
 (define-condition json-eof-error (json-parse-error) ())
@@ -430,19 +433,103 @@
             step
             read-string)))
 
+(defun %coerce-into (value type)
+  (cond
+    ((and (subtypep type 'nil) (subtypep 'nil type))
+     (error "Cannot coerce to empty type ~A" type))
+    ((and (subtypep type t) (subtypep t type))
+     value)
+    ((subtypep type 'null)
+     (ecase value
+       (null nil)))
+    ((subtypep type 'boolean)
+     (ecase value
+       ((nil t) value)))
+    ((subtypep type 'integer)
+     (if (typep value type)
+         value
+         (error "The value '~A' is not ~A" value type)))
+    ((subtypep type 'single-float)
+     (etypecase value
+       ((or integer double-float) (float value single-float-epsilon))))
+    ((subtypep type 'float)
+     (etypecase value
+       (integer (float value double-float-epsilon))
+       (double-float value)))
+    ((subtypep type 'number)
+     (etypecase value
+       ((or integer double-float) (coerce value type))))
+    ((subtypep type 'string)
+     (etypecase value
+       (string (coerce value type))))
+    ((subtypep type 'sequence)
+     (etypecase value
+       ((and vector (not string)) (coerce value type))))
+    ((subtypep type 'hash-table)
+     (etypecase value
+       (hash-table value)))
+    ((symbolp type)
+     (let ((class (find-class type)))
+       (etypecase value
+         (hash-table
+          (let (;; plist of :initarg form slot/values for `make-instance'
+                (initarg-slots-plist ())
+                ;; alist of (slotd . value) for `(setf cmop:slot-value-using-class)'
+                (set-value-slots-alist ()))
+            (declare (dynamic-extent initarg-slots-plist set-value-slots-alist))
+            (c2mop:ensure-finalized class)
+            (dolist (slot (c2mop:class-slots class))
+              (let* ((name (symbol-name (c2mop:slot-definition-name slot)))
+                     (name (if (some #'lower-case-p name) name (string-downcase name))))
+                (multiple-value-bind (value value-p) (gethash name value)
+                  (when value-p
+                    (let ((coerce-value (%coerce-into value (c2cl:slot-definition-type slot)))
+                          (slot-initargs (c2mop:slot-definition-initargs slot)))
+                      (cond
+                        (slot-initargs
+                         (push coerce-value initarg-slots-plist)
+                         (push (first slot-initargs) initarg-slots-plist))
+                        (t
+                         (push (cons slot coerce-value) set-value-slots-alist))))))))
+            (let ((instance (apply #'make-instance class initarg-slots-plist)))
+              (loop :for (slot . value) :in set-value-slots-alist
+                    :do (setf (c2mop:slot-value-using-class class instance slot) value))
+              instance))))))
+    ((listp type)
+     (ecase (first type)
+       (or
+        (let ((types (rest type)))
+          (dolist (type types (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value types))
+            (multiple-value-bind (value errorp) (ignore-errors (%coerce-into value type))
+              (unless errorp
+                (return value))))))
+       (and
+        (let* ((types (rest type))
+               (main-type (first types))
+               (coerced (%coerce-into value main-type))
+               (rest-types (rest types))
+               (no-fits (remove coerced rest-types :test #'typep)))
+          (when no-fits
+            (error "Coercing 'and' - Value '~A' coerced to '~A' via '~A' fails constraint for ~A" value coerced main-type no-fits))
+          (values coerced no-fits)))))
+    (t
+     (error "Don't know how to coerce into '~A'" type))))
+
 (defun parse (in &key
                    (maximum-depth 128)
                    (allow-comments nil)
+                   (type t)
                    pool-key)
   "Read a JSON value from `in', which may be a string, a stream, or a pathname.
  `:maximum-depth' controls the maximum depth of the object/array nesting
  `:allow-comments' controls whether or not single-line // comments are allowed.
- `:pool-key' is a function of one value which 'pools' object keys, or null for the default pool"
+ `:pool-key' is a function of one value which 'pools' object keys, or null for the default pool
+ `:type' is the expected type of object to parse"
   (check-type maximum-depth (or (integer 1) null))
   (check-type pool-key (or null symbol function))
   (if (pathnamep in)
       (with-open-file (in in :direction :input :external-format :utf-8)
-        (parse in :maximum-depth maximum-depth :allow-comments allow-comments :pool-key pool-key))
+        (parse in :maximum-depth maximum-depth :allow-comments allow-comments :pool-key pool-key :type type))
       (multiple-value-bind (peek step read-string)
           (etypecase in
             (simple-string (%make-fns-simple-string in))
@@ -460,9 +547,11 @@
                                           (setf (gethash key pool) key))))))
               (*%current-depth* 0))
           (declare (dynamic-extent *%string-accum* *%pool-key-fn* *%current-depth*))
-          (prog1 (%read-json-element peek step read-string)
-            (or (null (%skip-whitespace-np step))
-                (%raise 'json-parse-error "Content after reading object.")))))))
+          (%coerce-into
+           (prog1 (%read-json-element peek step read-string)
+             (or (null (%skip-whitespace-np step))
+                 (%raise 'json-parse-error "Content after reading object.")))
+           type)))))
 
 (defgeneric coerced-fields (element)
   (:documentation "Return a list of key definitions for `element'.
@@ -542,6 +631,7 @@
   (:method ((element vector) coerce-key)
     element)
   (:method ((element sequence) coerce-key)
+    (declare (type (and (not list) (not vector)) element))
     (coerce element 'simple-vector))
   (:method ((element cons) coerce-key)
     ;; Try and guess alist/plist
@@ -578,6 +668,7 @@
          (coerce element 'simple-vector))))))
 
 (defun %stringify-atom (atom stream)
+  (declare (type stream stream))
   (etypecase atom
     ((eql t)      (write-string "true" stream))
     (null         (write-string "false" stream))
@@ -618,6 +709,8 @@
 
 (defun %stringify (element stream coerce-element coerce-key)
   "Stringify non-pretty."
+  (declare (type stream stream)
+           (type function coerce-element coerce-key))
   (typecase element
     (json-atom (%stringify-atom element stream))
     (vector
@@ -675,6 +768,8 @@
 
 (defun %stringifyp (element stream depth coerce-element coerce-key)
   "Stringify Pretty."
+  (declare (type stream stream)
+           (type function coerce-element coerce-key))
   (typecase element
     (json-atom (%stringify-atom element stream))
     ((and vector (not string))
