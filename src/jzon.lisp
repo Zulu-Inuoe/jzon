@@ -331,8 +331,9 @@
            (if (and (not exp-p) (zerop frac-len))
                (* int-sign int-val)
                (let ((exp-mult (expt 10d0 (* exp-sign exp-val))))
-                 (+ (* int-sign int-val exp-mult)
-                    (/ (* exp-mult frac-val) (expt 10.d0 frac-len))))))
+                 (* int-sign
+                    (+ (* int-val exp-mult)
+                       (/ (* exp-mult frac-val) (expt 10.d0 frac-len)))))))
        :fail
          (return nil)))))
 

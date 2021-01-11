@@ -67,6 +67,9 @@
 (test parses-decimals-with-exponent
   (is (= 42.0d0 (parse "0.42e2"))))
 
+(test parse-negative-decimal
+  (is (= -0.1d0 (parse "-0.1"))))
+
 (test disallows-leading-zeros
   (signals (com.inuoe.jzon:json-parse-error)
     (parse "01"))
