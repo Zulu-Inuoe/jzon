@@ -308,3 +308,229 @@
 
 (test stringify-pretty-argorder-bugfix
   (is (string= "[ { \"x\": 0 } ]" (stringify (vector (ph "x" 0)) :pretty t))))
+
+(def-suite jzon.json-checker :in jzon)
+
+(in-suite jzon.json-checker)
+
+;; fail1 in json-checker goes against RFC
+;; (test fail1
+;;   (signals jzon:json-parse-error (parse "\"A JSON payload should be an object or array, not a string.\"")))
+
+(test fail2
+  (signals jzon:json-parse-error (parse "[\"Unclosed array\"")))
+
+(test fail3
+  (signals jzon:json-parse-error (parse "{unquoted_key: \"keys must be quoted\"}")))
+
+(test fail4
+  (signals jzon:json-parse-error (parse "[\"extra comma\",]")))
+
+(test fail5
+  (signals jzon:json-parse-error (parse "[\"double extra comma\",,]")))
+
+(test fail6
+  (signals jzon:json-parse-error (parse "[   , \"<-- missing value\"]")))
+
+(test fail7
+  (signals jzon:json-parse-error (parse "[\"Comma after the close\"],")))
+
+(test fail8
+  (signals jzon:json-parse-error (parse "[\"Extra close\"]]")))
+
+(test fail9
+  (signals jzon:json-parse-error (parse "{\"Extra comma\": true,}")))
+
+(test fail10
+  (signals jzon:json-parse-error (parse "{\"Extra value after close\": true} \"misplaced quoted value\"")))
+
+(test fail11
+  (signals jzon:json-parse-error (parse "{\"Illegal expression\": 1 + 2}")))
+
+(test fail12
+  (signals jzon:json-parse-error (parse "{\"Illegal invocation\": alert()}")))
+
+(test fail13
+  (signals jzon:json-parse-error (parse "{\"Numbers cannot have leading zeroes\": 013}")))
+
+(test fail14
+  (signals jzon:json-parse-error (parse "{\"Numbers cannot be hex\": 0x14}")))
+
+(test fail15
+  (signals jzon:json-parse-error (parse "[\"Illegal backslash escape: \\x15\"]")))
+
+(test fail16
+  (signals jzon:json-parse-error (parse "[\\naked]")))
+
+(test fail17
+  (signals jzon:json-parse-error (parse "[\"Illegal backslash escape: \\017\"]")))
+
+(test fail18
+  (signals jzon:json-parse-error (parse "[[[[[[[[[[[[[[[[[[[[\"Too deep\"]]]]]]]]]]]]]]]]]]]]" :maximum-depth 20)))
+
+(test fail19
+  (signals jzon:json-parse-error (parse "{\"Missing colon\" null}")))
+
+(test fail20
+  (signals jzon:json-parse-error (parse "{\"Double colon\":: null}")))
+
+(test fail21
+  (signals jzon:json-parse-error (parse "{\"Comma instead of colon\", null}")))
+
+(test fail22
+  (signals jzon:json-parse-error (parse "[\"Colon instead of comma\": false]")))
+
+(test fail23
+  (signals jzon:json-parse-error (parse "[\"Bad value\", truth]")))
+
+(test fail24
+  (signals jzon:json-parse-error (parse "['single quote']")))
+
+(test fail25
+  (signals jzon:json-parse-error (parse "[\"	tab	character	in	string	\"]")))
+
+(test fail26
+  (signals jzon:json-parse-error (parse "[\"tab\\   character\\   in\\  string\\  \"]")))
+
+(test fail27
+  (signals jzon:json-parse-error (parse "[\"line
+break\"]")))
+
+(test fail28
+  (signals jzon:json-parse-error (parse "[\"line\\
+break\"]")))
+
+(test fail29
+  (signals jzon:json-parse-error (parse "[0e]")))
+
+(test fail30
+  (signals jzon:json-parse-error (parse "[0e+]")))
+
+(test fail31
+  (signals jzon:json-parse-error (parse "[0e+-1]")))
+
+(test fail32
+  (signals jzon:json-parse-error (parse "{\"Comma instead if closing brace\": true,")))
+
+(test fail33
+  (signals jzon:json-parse-error (parse "[\"mismatch\"}")))
+
+(test pass1
+  (is (equalp
+       (vector "JSON Test Pattern pass1"
+               (ph "object with 1 member" (vector "array with 1 element"))
+               (ph)
+               (vector)
+               -42
+               t
+               nil
+               'null
+               (ph "integer" 1234567890
+                   "real" -9876.54321d0
+                   "e" 1.23456789d-13
+                   "E" 1.23456789d34
+                   "" 2.3456789011999997d76
+                   "zero" 0
+                   "one" 1
+                   "space" " "
+                   "quote" "\""
+                   "backslash" "\\"
+                   "controls" "
+	"
+                   "slash" "/ & /"
+                   "alpha" "abcdefghijklmnopqrstuvwyz"
+                   "ALPHA" "ABCDEFGHIJKLMNOPQRSTUVWYZ"
+                   "digit" "0123456789"
+                   "0123456789" "digit"
+                   "special" "`1~!@#$%^&*()_+-={':[,]}|;.</>?"
+                   "hex" "ģ䕧覫췯ꯍ"
+                   "true" t
+                   "false" nil
+                   "null" 'null
+                   "array" (vector)
+                   "object" (ph)
+                   "address" "50 St. James Street"
+                   "url" "http://www.JSON.org/"
+                   "comment" "// /* <!-- --"
+                   "# -- --> */" " "
+                   " s p a c e d " #(1 2 3 4 5 6 7)
+                   "compact" #(1 2 3 4 5 6 7)
+                   "jsontext" "{\"object with 1 member\":[\"array with 1 element\"]}"
+                   "quotes" "&#34; \" %22 0x22 034 &#x22;"
+                   "/\\\"쫾몾ꮘﳞ볚
+	`1~!@#$%^&*()_+-=[]{}|;:',./<>?" "A key can be any string")
+         0.5d0 98.6d0 99.44d0 1066 10.0d0 1.0d0 0.1d0 1.0d0 2.0d0 2.0d0 "rosebud")
+       (parse "[
+    \"JSON Test Pattern pass1\",
+    {\"object with 1 member\":[\"array with 1 element\"]},
+    {},
+    [],
+    -42,
+    true,
+    false,
+    null,
+    {
+        \"integer\": 1234567890,
+        \"real\": -9876.543210,
+        \"e\": 0.123456789e-12,
+        \"E\": 1.234567890E+34,
+        \"\":  23456789012E66,
+        \"zero\": 0,
+        \"one\": 1,
+        \"space\": \" \",
+        \"quote\": \"\\\"\",
+        \"backslash\": \"\\\\\",
+        \"controls\": \"\\b\\f\\n\\r\\t\",
+        \"slash\": \"/ & \\/\",
+        \"alpha\": \"abcdefghijklmnopqrstuvwyz\",
+        \"ALPHA\": \"ABCDEFGHIJKLMNOPQRSTUVWYZ\",
+        \"digit\": \"0123456789\",
+        \"0123456789\": \"digit\",
+        \"special\": \"`1~!@#$%^&*()_+-={':[,]}|;.</>?\",
+        \"hex\": \"\\u0123\\u4567\\u89AB\\uCDEF\\uabcd\\uef4A\",
+        \"true\": true,
+        \"false\": false,
+        \"null\": null,
+        \"array\":[  ],
+        \"object\":{  },
+        \"address\": \"50 St. James Street\",
+        \"url\": \"http://www.JSON.org/\",
+        \"comment\": \"// /* <!-- --\",
+        \"# -- --> */\": \" \",
+        \" s p a c e d \" :[1,2 , 3
+
+,
+
+4 , 5        ,          6           ,7        ],\"compact\":[1,2,3,4,5,6,7],
+        \"jsontext\": \"{\\\"object with 1 member\\\":[\\\"array with 1 element\\\"]}\",
+        \"quotes\": \"&#34; \\u0022 %22 0x22 034 &#x22;\",
+        \"\\/\\\\\\\"\\uCAFE\\uBABE\\uAB98\\uFCDE\\ubcda\\uef4A\\b\\f\\n\\r\\t`1~!@#$%^&*()_+-=[]{}|;:',./<>?\"
+: \"A key can be any string\"
+    },
+    0.5 ,98.6
+,
+99.44
+,
+
+1066,
+1e1,
+0.1e1,
+1e-1,
+1e00,2e+00,2e-00
+,\"rosebud\"]"))))
+
+(test pass2
+  (is (equalp #(#(#(#(#(#(#(#(#(#(#(#(#(#(#(#(#(#(#("Not too deep")))))))))))))))))))
+              (parse "[[[[[[[[[[[[[[[[[[[\"Not too deep\"]]]]]]]]]]]]]]]]]]]"))))
+
+(test pass3
+  (is (equalp (ph "JSON Test Pattern pass3"
+                  (ph "The outermost value" "must be an object or array."
+                      "In this test" "It is an object.")) 
+              (parse "{
+    \"JSON Test Pattern pass3\": {
+        \"The outermost value\": \"must be an object or array.\",
+        \"In this test\": \"It is an object.\"
+    }
+}
+"))))
