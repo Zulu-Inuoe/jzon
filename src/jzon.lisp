@@ -300,7 +300,7 @@
              (setf frac-len 1)))
 
        :parse-frac-loop
-         (let ((c (takec :done)))
+         (let ((c (takec :done-frac)))
            (when (or (char= c #\e)
                      (char= c #\E))
              (go :parse-exp))
@@ -309,6 +309,9 @@
              (setf frac-val (+ (* frac-val 10) digit))
              (incf frac-len)))
          (go :parse-frac-loop)
+
+       :done-frac
+         (return (* int-sign (+ int-val (/ frac-val (expt 10.d0 frac-len)))))
 
        :parse-exp
          (let ((c (takec :fail)))
@@ -335,7 +338,7 @@
            (let ((exp-mult (expt 10d0 (* exp-sign exp-val))))
              (* int-sign
                 (+ (* int-val exp-mult)
-                   (/ (* exp-mult frac-val) (expt 10.d0 frac-len))))))
+                   (/ (* frac-val exp-mult) (expt 10.d0 frac-len))))))
        :fail
          (return nil)))))
 
