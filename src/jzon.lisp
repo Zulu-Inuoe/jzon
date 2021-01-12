@@ -254,7 +254,6 @@
              (int-val 0)
              (frac-val 0)
              (frac-len 0)
-             (exp-p nil)
              (exp-sign 1)
              (exp-val 0))
          (declare (type (integer 0) int-val frac-val exp-val frac-len)
@@ -265,7 +264,7 @@
              (setf c (takec :fail)))
 
            (when (char= c #\0)
-             (case (takec :done)
+             (case (takec :done-0)
                (#\.       (go :parse-frac))
                ((#\e #\E) (go :parse-exp))
                (t         (go :fail))))
@@ -275,8 +274,11 @@
              (setf int-val digit)
              (go :parse-int)))
 
+       :done-0
+         (return 0)
+
        :parse-int
-         (let ((c (takec :done)))
+         (let ((c (takec :done-int)))
            (when (char= c #\.)
              (go :parse-frac))
            (when (or (char= c #\e)
@@ -286,6 +288,9 @@
              (unless digit (go :fail))
              (setf int-val (+ (* int-val 10) digit))))
          (go :parse-int)
+
+       :done-int
+         (return (* int-sign int-val))
 
        :parse-frac
          (let ((c (takec :fail)))
@@ -307,7 +312,6 @@
 
        :parse-exp
          (let ((c (takec :fail)))
-           (setf exp-p t)
            (case c
              (#\-
               (setf exp-sign -1)
@@ -328,12 +332,10 @@
 
        :done
          (return
-           (if (and (not exp-p) (zerop frac-len))
-               (* int-sign int-val)
-               (let ((exp-mult (expt 10d0 (* exp-sign exp-val))))
-                 (* int-sign
-                    (+ (* int-val exp-mult)
-                       (/ (* exp-mult frac-val) (expt 10.d0 frac-len)))))))
+           (let ((exp-mult (expt 10d0 (* exp-sign exp-val))))
+             (* int-sign
+                (+ (* int-val exp-mult)
+                   (/ (* exp-mult frac-val) (expt 10.d0 frac-len))))))
        :fail
          (return nil)))))
 
