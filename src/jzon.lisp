@@ -388,19 +388,6 @@
         (#\{   (%read-json-object peek step read-string))
         (t     (%read-json-atom peek step c))))))
 
-(defun %read-top-json-element (*%maximum-depth* *%allow-comments* pool-key-fn peek step read-string)
-  (let ((*%string-accum* (make-array 32 :element-type 'character :adjustable t :fill-pointer 0))
-        (*%pool-key-fn* (or pool-key-fn
-                            (let ((pool (make-hash-table :test 'equal)))
-                              (lambda (key)
-                                (or (gethash key pool)
-                                    (setf (gethash key pool) key))))))
-        (*%current-depth* 0))
-    (declare (dynamic-extent *%string-accum* *%pool-key-fn* *%current-depth*))
-    (prog1 (%read-json-element peek step read-string)
-      (or (null (%skip-whitespace-np step))
-          (%raise 'json-parse-error "Content after reading object.")))))
-
 (macrolet ((def-make-string-fns (name type)
              `(defun ,name (in)
                 "Create peek, step, and read-string functions for the string `in'."
@@ -456,10 +443,19 @@
         (string (%make-fns-string in))
         (stream (%make-fns-stream in)))
     (declare (dynamic-extent peek step read-string))
-    (%read-top-json-element maximum-depth
-                            (and allow-comments t)
-                            (and pool-key (if (functionp pool-key) pool-key (fdefinition pool-key)))
-                            peek step read-string)))
+    (let ((*%maximum-depth* maximum-depth)
+          (*%allow-comments* (and allow-comments t))
+          (*%string-accum* (make-array 32 :element-type 'character :adjustable t :fill-pointer 0))
+          (*%pool-key-fn* (or (and pool-key (if (functionp pool-key) pool-key (fdefinition pool-key)))
+                              (let ((pool (make-hash-table :test 'equal)))
+                                (lambda (key)
+                                  (or (gethash key pool)
+                                      (setf (gethash key pool) key))))))
+          (*%current-depth* 0))
+      (declare (dynamic-extent *%string-accum* *%pool-key-fn* *%current-depth*))
+      (prog1 (%read-json-element peek step read-string)
+        (or (null (%skip-whitespace-np step))
+            (%raise 'json-parse-error "Content after reading object."))))))
 
 (defgeneric coerced-fields (element)
   (:documentation "Return a list of key definitions for `element'.
