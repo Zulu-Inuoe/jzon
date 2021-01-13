@@ -12,7 +12,7 @@ A correct and safe JSON [RFC 8259][JSONRFC] parser.
   * [Writing](#writing)
     * [Symbol key case](#symbol-key-case)
     * [Custom Serialization](#custom-serialization)
-      * [coerced-fields][#coerced-fields]
+      * [coerced-fields](#coerced-fields)
   * [Features](#features)
     * [Unambiguous values](#unambiguous-values)
     * [Strict spec compliance](#string-spec-compliance)
