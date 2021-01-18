@@ -8,4 +8,5 @@
   :depends-on
   (#:alexandria
    #:fiveam
-   #:com.inuoe.jzon))
+   #:com.inuoe.jzon
+   #:uiop))
