@@ -200,6 +200,19 @@
       (#(1 2 3)          (parse "[1,2,3]"))
       ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
 
+(test parse-accepts-non-simple-string
+  (flet ((parse (str)
+           (parse (make-array (length str) :element-type 'character :fill-pointer t :initial-contents str))))
+    (is-every equalp
+      (nil               (parse "false"))
+      (t                 (parse "true"))
+      ('null             (parse "null"))
+      (42                (parse "42"))
+      (42.0d0            (parse "42e0"))
+      ("Hello, world!"   (parse "\"Hello, world!\""))
+      (#(1 2 3)          (parse "[1,2,3]"))
+      ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
+
 (test stringify-to-nil-returns-string
   (is (string= "42" (stringify 42))))
 
