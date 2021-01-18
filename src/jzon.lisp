@@ -471,6 +471,16 @@
  name is the key name and will be coerced if not already a string
  value is the value, and will be coerced if not a `json-element'
  type is a type for the key, in order to handle ambiguous `nil' interpretations")
+  #+(or ccl clisp sbcl)
+  (:method ((element structure-object))
+    (let* ((class (class-of element))
+           (slots (remove-if-not (lambda (s) (c2mop:slot-boundp-using-class class element s))
+                                 (c2mop:class-slots class))))
+      (mapcar (lambda (s)
+                (list (c2mop:slot-definition-name s)
+                      (c2mop:slot-value-using-class class element s)
+                      (c2mop:slot-definition-type s)))
+              slots)))
   (:method ((element standard-object))
     (let* ((class (class-of element))
            (slots (remove-if-not (lambda (s) (c2mop:slot-boundp-using-class class element s))
