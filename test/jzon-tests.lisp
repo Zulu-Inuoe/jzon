@@ -153,9 +153,9 @@
     (is (eq x1 x2))
     (is (eq x2 x3))))
 
-(test parse-uses-custom-pool
+(test parse-uses-custom-key-fn
   (let ((keys ()))
-    (parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]" :pool-key (lambda (key) (push key keys) key))
+    (parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]" :key-fn (lambda (key) (push key keys) key))
     (is (equalp '("x" "x" "x") keys))))
 
 (test parse-ignores-pre-post-whitespace

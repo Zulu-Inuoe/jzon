@@ -197,13 +197,13 @@
                   (t (%raise 'json-parse-error "Expected comma in array.")))))
       'simple-vector))))
 
-(declaim (type function *%pool-key-fn*))
-(defvar *%pool-key-fn*)
+(declaim (type function *%key-fn*))
+(defvar *%key-fn*)
 
 (defun %read-json-object (peek step read-string)
   (declare (type function read-string))
   (let ((accum (make-hash-table :test 'equal))
-        (pool-key-fn *%pool-key-fn*))
+        (key-fn *%key-fn*))
     (flet ((read-key-value ()
              ;; Read quote
              (case (%skip-whitespace-np step)
@@ -213,7 +213,7 @@
                 (return-from read-key-value nil))
                (t (%raise 'json-parse-error "Expected key in object.")))
 
-             (let ((key (funcall pool-key-fn (funcall read-string))))
+             (let ((key (funcall key-fn (funcall read-string))))
                (case (%skip-whitespace-np step)
                  ((nil) (%raise 'json-eof-error "End of input in object. Expected colon after key '~A'." key))
                  (#\: nil)
@@ -433,16 +433,16 @@
 (defun parse (in &key
                    (maximum-depth 128)
                    (allow-comments nil)
-                   pool-key)
+                   key-fn)
   "Read a JSON value from `in', which may be a string, a stream, or a pathname.
  `:maximum-depth' controls the maximum depth of the object/array nesting
  `:allow-comments' controls whether or not single-line // comments are allowed.
- `:pool-key' is a function of one value which 'pools' object keys, or null for the default pool"
+ `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool"
   (check-type maximum-depth (or (integer 1) null))
-  (check-type pool-key (or null symbol function))
+  (check-type key-fn (or null symbol function))
   (if (pathnamep in)
       (with-open-file (in in :direction :input :external-format :utf-8)
-        (parse in :maximum-depth maximum-depth :allow-comments allow-comments :pool-key pool-key))
+        (parse in :maximum-depth maximum-depth :allow-comments allow-comments :key-fn key-fn))
       (multiple-value-bind (peek step read-string)
           (etypecase in
             (simple-string (%make-fns-simple-string in))
@@ -452,14 +452,14 @@
         (let ((*%maximum-depth* maximum-depth)
               (*%allow-comments* (and allow-comments t))
               (*%string-accum* (make-array 32 :element-type 'character :adjustable t :fill-pointer 0))
-              (*%pool-key-fn* (or (and pool-key (if (functionp pool-key) pool-key (fdefinition pool-key)))
+              (*%key-fn* (or (and key-fn (if (functionp key-fn) key-fn (fdefinition key-fn)))
                                   (let ((pool nil))
                                     (lambda (key)
                                       (unless pool (setf pool (make-hash-table :test 'equal)))
                                       (or (gethash key pool)
                                           (setf (gethash key pool) key))))))
               (*%current-depth* 0))
-          (declare (dynamic-extent *%string-accum* *%pool-key-fn* *%current-depth*))
+          (declare (dynamic-extent *%string-accum* *%key-fn* *%current-depth*))
           (prog1 (%read-json-element peek step read-string)
             (or (null (%skip-whitespace-np step))
                 (%raise 'json-parse-error "Content after reading object.")))))))
