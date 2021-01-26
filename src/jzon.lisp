@@ -537,8 +537,6 @@
     element)
   (:method ((element vector) coerce-key)
     element)
-  (:method ((element sequence) coerce-key)
-    (coerce element 'simple-vector))
   (:method ((element cons) coerce-key)
     ;; Try and guess alist/plist
     ;; TODO - this might be too hacky/brittle to have on by default
@@ -571,7 +569,10 @@
                :finally (return ret)))
         (t
          ;; Otherwise treat it as a sequence
-         (coerce element 'simple-vector))))))
+         (coerce element 'simple-vector)))))
+  (:method ((element sequence) coerce-key)
+    (declare (type (and (not list) (not vector)) element))
+    (coerce element 'simple-vector)))
 
 (defun %stringify-atom (atom stream)
   (etypecase atom
