@@ -575,6 +575,7 @@
     (coerce element 'simple-vector)))
 
 (defun %stringify-atom (atom stream)
+  (declare (type stream stream))
   (etypecase atom
     ((eql t)      (write-string "true" stream))
     (null         (write-string "false" stream))
@@ -615,6 +616,8 @@
 
 (defun %stringify (element stream coerce-element coerce-key)
   "Stringify non-pretty."
+  (declare (type stream stream)
+           (type function coerce-element coerce-key))
   (typecase element
     (json-atom (%stringify-atom element stream))
     (vector
@@ -672,6 +675,8 @@
 
 (defun %stringifyp (element stream depth coerce-element coerce-key)
   "Stringify Pretty."
+  (declare (type stream stream)
+           (type function coerce-element coerce-key))
   (typecase element
     (json-atom (%stringify-atom element stream))
     ((and vector (not string))
