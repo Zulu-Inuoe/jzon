@@ -1,9 +1,9 @@
 (defpackage #:com.inuoe.jzon
   (:use #:cl)
   (:export
-   ;; Serialize
-   #:parse
    ;; Deserialize
+   #:parse
+   ;; Serialize
    #:stringify
 
    ;; Extensible serialization
