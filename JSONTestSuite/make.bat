@@ -16,7 +16,7 @@
                 (error ()^
                   (sb-ext:exit :code 2 :abort t))^
                 (sb-sys:interactive-interrupt ()^
-                  (sb-ext:exit :code #x-3FFFFEC6 :abort t))))^
+                  (sb-ext:exit :code -1073741510 :abort t))))^
   :executable t)
 
 @mkdir "%BIN_DIR%"
