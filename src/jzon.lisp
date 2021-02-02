@@ -367,13 +367,12 @@
              `(defun ,name (in)
                 "Create peek, step, and read-string functions for the string `in'."
                 (declare (type ,type in))
-                (let ((i 0)
-                      (len (length in)))
-                  (declare (type (integer 0 #.array-dimension-limit) i len))
-                  (let* ((peek (lambda () (when (< i len) (aref in i))))
-                         (step (lambda () (when (< i len) (prog1 (aref in i) (incf i)))))
+                (let ((i 0))
+                  (declare (type (integer 0 #.array-dimension-limit) i))
+                  (let* ((peek (lambda () (when (< i (length in)) (aref in i))))
+                         (step (lambda () (when (< i (length in)) (prog1 (aref in i) (incf i)))))
                          (read-string (lambda ()
-                                        (let ((q-pos (position #\" in :start i :end len)))
+                                        (let ((q-pos (position #\" in :start i)))
                                           (unless q-pos (%raise 'json-eof-error "Unexpected end of input reading string."))
                                           (cond
                                             ((null (position #\\ in :start i :end q-pos))
