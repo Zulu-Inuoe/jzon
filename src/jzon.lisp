@@ -438,13 +438,13 @@
 
 
 (macrolet ((%coerced-fields-slots (element)
-             `(let ((class (class-of element)))
+             `(let ((class (class-of ,element)))
                 (c2mop:ensure-finalized class)
                 (mapcar (lambda (s)
                           (list (c2mop:slot-definition-name s)
-                                (c2mop:slot-value-using-class class element s)
+                                (c2mop:slot-value-using-class class ,element s)
                                 (c2mop:slot-definition-type s)))
-                        (remove-if-not (lambda (s) (c2mop:slot-boundp-using-class class element s))
+                        (remove-if-not (lambda (s) (c2mop:slot-boundp-using-class class ,element s))
                                        (c2mop:class-slots class))))))
   (defgeneric coerced-fields (element)
     (:documentation "Return a list of key definitions for `element'.
