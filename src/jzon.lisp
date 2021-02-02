@@ -353,15 +353,20 @@
 (defun %read-json-element (peek step read-string c)
   (declare (type function peek step read-string)
            (type (or null character) c))
-  (let ((*%current-depth* (1+ *%current-depth*)))
-    (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
-      (%raise 'json-parse-error "Maximum depth exceeded."))
-    (case c
-      ((nil) (%raise 'json-eof-error "Unexpected end of input."))
-      (#\"   (funcall read-string))
-      (#\[   (%read-json-array peek step read-string))
-      (#\{   (%read-json-object peek step read-string))
-      (t     (%read-json-atom peek step c)))))
+  (case c
+    ((nil) (%raise 'json-eof-error "Unexpected end of input."))
+    (#\"   (funcall read-string))
+    (#\[
+     (let ((*%current-depth* (1+ *%current-depth*)))
+       (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
+         (%raise 'json-parse-error "Maximum depth exceeded."))
+       (%read-json-array peek step read-string)))
+    (#\{
+     (let ((*%current-depth* (1+ *%current-depth*)))
+       (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
+         (%raise 'json-parse-error "Maximum depth exceeded."))
+       (%read-json-object peek step read-string)))
+    (t     (%read-json-atom peek step c))))
 
 (macrolet ((def-make-string-fns (name type)
              `(defun ,name (in)
