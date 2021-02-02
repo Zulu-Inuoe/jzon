@@ -1,11 +1,11 @@
 @setlocal
 
 @set RUN_EXP=^
-(handler-case (sb-ext:exit :code (apply #'com.inuoe.json-test-suite-runner:main (rest sb-ext:*posix-argv*)))^
+(handler-case (sb-ext:exit :code (apply #'com.inuoe.json-test-suite-runner:main sb-ext:*posix-argv*))^
   (error ()^
     (sb-ext:exit :code 2 :abort t))^
   (sb-sys:interactive-interrupt ()^
-    (sb-ext:exit :code #x-3FFFFEC6 :abort t)))
+    (sb-ext:exit :code -1073741510 :abort t)))
 
 @sbcl^
  --noinform^

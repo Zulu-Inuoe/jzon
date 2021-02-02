@@ -47,9 +47,9 @@
     (not any-failed)))
 
 (defun main (&rest argv)
-  (prog ((tester (first argv))
-         (test-dir (second argv))
-         (rest-args (cddr argv)))
+  (prog ((tester (second argv))
+         (test-dir (third argv))
+         (rest-args (cdddr argv)))
      (unless (and tester (ignore-errors (uiop:run-program (list tester "--help"))
                                         t))
        (format *error-output* "First argument must be a program to test with.")
