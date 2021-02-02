@@ -60,34 +60,7 @@
   (and (member char '(#\Space #\Linefeed #\Return #\Tab))
        t))
 
-(defun %skip-whitespace (peek step)
-  "Skip whitespace, and optionally comments, depending on `%*allow-comments*'.
- Returns the next character."
-  (flet ((skip-cpp-comment ()
-           ;; Skip the first slash.
-           (%step step)
-           ;; Skip the second slash.
-           (let ((c (%step step)))
-             (case c
-               ((nil)(%raise 'json-eof-error "End of input reading comment exepecting second slash."))
-               (#\/ nil)
-               (t (%raise 'json-parse-error "Unexpected input '/~A'." c))))
-
-           ;; Skip rest of line or until EOF
-           (loop :until (member (%step step) '(nil #\Linefeed #\Return)))))
-    (loop :for char := (%peek peek)
-          :do
-             (cond
-               ((null char)
-                (return nil))
-               ((%whitespace-p char)
-                (%step step))
-               ((and (char= #\/ char) *%allow-comments*)
-                (skip-cpp-comment))
-               (t
-                (return char))))))
-
-(defun %skip-whitespace-np (step)
+(defun %skip-whitespace (step)
   "Skip whitespace, and optionally comments, depending on `%*allow-comments*'
  Returns the next character."
   (flet ((skip-cpp-comment ()
@@ -179,23 +152,22 @@
 (defun %read-json-array (peek step read-string)
   "Reads a JSON array of elements until finding a closing brace.
  Returns a `simple-vector' of JSON values."
-  (case (%skip-whitespace peek step)
-    ((nil) (%raise 'json-eof-error "End of input reading first array element."))
-    (#\]
-     (%step step)
-     (vector))
-    (t
-     (coerce
-      (the list
-           (loop
-             :collect (%read-json-element peek step read-string)
-             :do
-                (case (%skip-whitespace-np step)
-                  ((nil) (%raise 'json-eof-error "End of input inside list expecting comma ','."))
-                  (#\, nil)
-                  (#\] (loop-finish))
-                  (t (%raise 'json-parse-error "Expected comma in array.")))))
-      'simple-vector))))
+  (let ((c (%skip-whitespace step)))
+    (case c
+      ((nil) (%raise 'json-eof-error "End of input reading first array element."))
+      (#\] (vector))
+      (t
+       (coerce
+        (cons (%read-json-element peek step read-string c)
+              (loop
+                :do (let ((c (%skip-whitespace step)))
+                      (case c
+                        (#\, nil)
+                        (#\] (loop-finish))
+                        ((nil) (%raise 'json-parse-error "End of input in array."))
+                        (t (%raise 'json-parse-error "Expected comma or ] in array, got '~A'." c))))
+                :collect (%read-json-element peek step read-string (%skip-whitespace step))))
+        'simple-vector)))))
 
 (declaim (type function *%key-fn*))
 (defvar *%key-fn*)
@@ -206,7 +178,7 @@
         (key-fn *%key-fn*))
     (flet ((read-key-value ()
              ;; Read quote
-             (case (%skip-whitespace-np step)
+             (case (%skip-whitespace step)
                ((nil) (%raise 'json-eof-error "End of input in object. Expected key."))
                (#\" nil)
                (#\}
@@ -214,16 +186,16 @@
                (t (%raise 'json-parse-error "Expected key in object.")))
 
              (let ((key (funcall key-fn (funcall read-string))))
-               (case (%skip-whitespace-np step)
+               (case (%skip-whitespace step)
                  ((nil) (%raise 'json-eof-error "End of input in object. Expected colon after key '~A'." key))
                  (#\: nil)
                  (t (%raise 'json-parse-error "Expected colon after object key '~A'." key)))
 
-               (setf (gethash key accum) (%read-json-element peek step read-string)))
+               (setf (gethash key accum) (%read-json-element peek step read-string (%skip-whitespace step))))
              t))
       (when (read-key-value)
         (loop
-          (case (%skip-whitespace-np step)
+          (case (%skip-whitespace step)
             ((nil) (%raise 'json-eof-error "End of input in object. Expecting comma."))
             (#\, nil)
             (#\} (return))
@@ -378,18 +350,18 @@
 (declaim (type (or null (integer 1)) *%maximum-depth*))
 (defvar *%maximum-depth*)
 
-(defun %read-json-element (peek step read-string)
-  (declare (type function peek step read-string))
+(defun %read-json-element (peek step read-string c)
+  (declare (type function peek step read-string)
+           (type (or null character) c))
   (let ((*%current-depth* (1+ *%current-depth*)))
     (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
       (%raise 'json-parse-error "Maximum depth exceeded."))
-    (let ((c (%skip-whitespace-np step)))
-      (case c
-        ((nil) (%raise 'json-eof-error "Unexpected end of input."))
-        (#\"   (funcall read-string))
-        (#\[   (%read-json-array peek step read-string))
-        (#\{   (%read-json-object peek step read-string))
-        (t     (%read-json-atom peek step c))))))
+    (case c
+      ((nil) (%raise 'json-eof-error "Unexpected end of input."))
+      (#\"   (funcall read-string))
+      (#\[   (%read-json-array peek step read-string))
+      (#\{   (%read-json-object peek step read-string))
+      (t     (%read-json-atom peek step c)))))
 
 (macrolet ((def-make-string-fns (name type)
              `(defun ,name (in)
@@ -460,8 +432,8 @@
                                      (setf (gethash key pool) key))))))
               (*%current-depth* 0))
           (declare (dynamic-extent *%string-accum* *%key-fn* *%current-depth*))
-          (prog1 (%read-json-element peek step read-string)
-            (or (null (%skip-whitespace-np step))
+          (prog1 (%read-json-element peek step read-string (%skip-whitespace step))
+            (or (null (%skip-whitespace step))
                 (%raise 'json-parse-error "Content after reading object.")))))))
 
 
