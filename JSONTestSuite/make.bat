@@ -12,7 +12,7 @@
 @set BUILD_EXP=^
 (sb-ext:save-lisp-and-die \"%JZON_EXE_E%\"^
   :toplevel (lambda ()^
-              (handler-case (sb-ext:exit :code (apply #'com.inuoe.jzon-parsing:main rest sb-ext:*posix-argv*))^
+              (handler-case (sb-ext:exit :code (apply #'com.inuoe.jzon-parsing:main sb-ext:*posix-argv*))^
                 (error ()^
                   (sb-ext:exit :code 2 :abort t))^
                 (sb-sys:interactive-interrupt ()^
