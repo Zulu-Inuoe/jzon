@@ -411,7 +411,7 @@
   (signals jzon:json-parse-error (parse "[\"Illegal backslash escape: \\017\"]")))
 
 (test fail18
-  (signals jzon:json-parse-error (parse "[[[[[[[[[[[[[[[[[[[[\"Too deep\"]]]]]]]]]]]]]]]]]]]]" :maximum-depth 20)))
+  (signals jzon:json-parse-error (parse "[[[[[[[[[[[[[[[[[[[[\"Too deep\"]]]]]]]]]]]]]]]]]]]]" :maximum-depth 19)))
 
 (test fail19
   (signals jzon:json-parse-error (parse "{\"Missing colon\" null}")))
