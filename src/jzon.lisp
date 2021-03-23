@@ -101,7 +101,7 @@
                 (let ((escaped (%step step)))
                   (case escaped
                     ((nil) (%raise 'json-eof-error "Unexpected end of input after '\\' in string."))
-                    ((#\" #\\ #\/) escaped)
+                    ((#.(char "\"" 0) #\\ #\/) escaped)
                     (#\b #\Backspace)
                     (#\f #\Formfeed)
                     (#\n #\Linefeed)
@@ -145,7 +145,7 @@
     (let ((accum *%string-accum*))
       (setf (fill-pointer accum) 0)
       (loop :for next character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant."))
-            :until (char= #\" next)
+            :until (char= #.(char "\"" 0) next)
             :do (vector-push-extend (interpret next) accum))
       (subseq accum 0))))
 
@@ -180,7 +180,7 @@
              ;; Read quote
              (case (%skip-whitespace step)
                ((nil) (%raise 'json-eof-error "End of input in object. Expected key."))
-               (#\" nil)
+               (#.(char "\"" 0) nil)
                (#\}
                 (return-from read-key-value nil))
                (t (%raise 'json-parse-error "Expected key in object.")))
@@ -355,7 +355,7 @@
            (type (or null character) c))
   (case c
     ((nil) (%raise 'json-eof-error "Unexpected end of input."))
-    (#\"   (funcall read-string))
+    (#.(char "\"" 0)   (funcall read-string))
     (#\[
      (let ((*%current-depth* (1+ *%current-depth*)))
        (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
@@ -377,7 +377,7 @@
                   (let* ((peek (lambda () (when (< i (length in)) (aref in i))))
                          (step (lambda () (when (< i (length in)) (prog1 (aref in i) (incf i)))))
                          (read-string (lambda ()
-                                        (let ((q-pos (position #\" in :start i)))
+                                        (let ((q-pos (position #.(char "\"" 0) in :start i)))
                                           (unless q-pos (%raise 'json-eof-error "Unexpected end of input reading string."))
                                           (cond
                                             ((null (position #\\ in :start i :end q-pos))
@@ -560,11 +560,11 @@
     ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
     (real         (format stream "~F" atom))
     (string
-     (write-char #\" stream)
+     (write-char #.(char "\"" 0) stream)
      (loop :for c :across atom
            :do
               (case c
-                ((#\" #\\)
+                ((#.(char "\"" 0) #\\)
                  (write-char #\\ stream)
                  (write-char c stream))
                 (#\Backspace
@@ -588,7 +588,7 @@
                     (format stream "\\u~4,'0X" (char-code c)))
                    (t
                     (write-char c stream))))))
-     (write-char #\" stream))))
+     (write-char #.(char "\"" 0) stream))))
 
 (defun %stringify (element stream coerce-element coerce-key)
   "Stringify non-pretty."
