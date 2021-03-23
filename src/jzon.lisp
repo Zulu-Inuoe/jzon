@@ -440,7 +440,6 @@
             (or (null (%skip-whitespace step))
                 (%raise 'json-parse-error "Content after reading object.")))))))
 
-
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
                 (c2mop:ensure-finalized class)
@@ -457,6 +456,8 @@
  name is the key name and will be coerced if not already a string
  value is the value, and will be coerced if not a `json-element'
  type is a type for the key, in order to handle ambiguous `nil' interpretations")
+    (:method (element)
+      nil)
     #+(or ccl clisp sbcl)
     (:method ((element structure-object))
       (%coerced-fields-slots element))
