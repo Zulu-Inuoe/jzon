@@ -467,7 +467,7 @@
 (defgeneric coerce-key (key)
   (:documentation "Coerce `key' into a string designator, or `nil' if `key' is an unsuitable key.")
   (:method (key)
-    nil)
+    (format nil "~A" key))
   (:method ((key symbol))
     (let ((name (symbol-name key)))
       (if (some #'lower-case-p name)

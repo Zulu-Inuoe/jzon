@@ -354,6 +354,12 @@
 (test stringify-pretty-argorder-bugfix
   (is (string= "[ { \"x\": 0 } ]" (stringify (vector (ph "x" 0)) :pretty t))))
 
+(test stringify-no-slots-on-unknown-object ()
+  (is (string= "{}" (stringify (make-array '(2 2))))))
+
+(test stringify-pretty-prints-keys
+  (is (string= "{\"#(1 2)\":0}" (stringify (ph #(1 2) 0)))))
+
 (def-suite jzon.json-checker :in jzon)
 
 (in-suite jzon.json-checker)
