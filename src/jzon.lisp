@@ -380,7 +380,7 @@
                                         (let ((q-pos (position #.(char "\"" 0) in :start i)))
                                           (unless q-pos (%raise 'json-eof-error "Unexpected end of input reading string."))
                                           (cond
-                                            ((null (position #\\ in :start i :end q-pos))
+                                            ((null (find #\\ in :start i :end q-pos))
                                              ;; Fast path, just need to check for control chars
                                              (let ((control-char (find-if #'%control-char-p in :start i :end q-pos)))
                                                (when control-char
