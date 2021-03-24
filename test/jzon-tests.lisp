@@ -360,6 +360,21 @@
 (test stringify-pretty-prints-keys
   (is (string= "{\"#(1 2)\":0}" (stringify (ph #(1 2) 0)))))
 
+(test stringify-survives-circular-references
+  (finishes (let ((ht (ph "x" 0)))
+              (setf (gethash "self" ht) ht)
+              (stringify ht))))
+
+(test stringify-survives-circular-reference-during-pretty-print
+  (finishes (let ((ht (ph "x" 0)))
+              (setf (gethash "self" ht) ht)
+              (stringify ht :pretty t))))
+
+(test stringify-survives-circular-reference-vector-during-pretty-print
+  (finishes (let ((v (vector 0 1 2)))
+              (setf (aref v 0) v)
+              (stringify v :pretty t))))
+
 (def-suite jzon.json-checker :in jzon)
 
 (in-suite jzon.json-checker)
