@@ -351,6 +351,9 @@
       (101.1d0 (gethash "bar" coerced))
       (#(192 168 1 1) (gethash "baz" coerced)))))
 
+(test coerce-element-returns-null-on-null
+  (is (eq 'null (coerce-element 'null #'coerce-key))))
+
 (test stringify-pretty-argorder-bugfix
   (is (string= "[ { \"x\": 0 } ]" (stringify (vector (ph "x" 0)) :pretty t))))
 

@@ -29,7 +29,7 @@
 
 (deftype json-atom ()
   `(or (eql t)
-       null
+       (eql nil)
        (eql null)
        real
        string))
@@ -505,14 +505,16 @@
                            'null)))
                        (t value))))
           :finally (return ret)))
+  (:method ((element (eql t)) coerce-key)
+    t)
   (:method ((element null) coerce-key)
     nil)
+  (:method ((element (eql 'null)) coerce-key)
+    'null)
   (:method ((element number) coerce-key)
     element)
   (:method ((element symbol) coerce-key)
     (string element))
-  (:method ((element (eql t)) coerce-key)
-    t)
   (:method ((element real) coerce-key)
     element)
   (:method ((element vector) coerce-key)
@@ -558,7 +560,7 @@
   (declare (type stream stream))
   (etypecase atom
     ((eql t)      (write-string "true" stream))
-    (null         (write-string "false" stream))
+    ((eql nil)    (write-string "false" stream))
     ((eql null)   (write-string "null" stream))
     (integer      (format stream "~D" atom))
     ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
