@@ -239,6 +239,34 @@ The `value` can be any value - it'll be coerced if necessary.
 
 The `type` is used as `:type` above, in order to resolve ambiguities with `nil`.
 
+##### Including only some slots
+
+If the default `coerced-fields` gives you most of what you want, you can exclude/rename/add fields by specializing an `:around` method as follows:
+
+``` common-lisp
+(defmethod coerced-fields :around ((coordinate coordinate))
+  (let* (;; Grab default fields
+         (fields (call-next-method))
+         ;; All fields except "children"
+         (fields (remove 'children fields :key #'first))
+         ;; Include a 'fake' field "name"
+         (fields (cons (list 'name "Mary") fields)))
+    fields))
+```
+
+This would result in the following:
+
+``` json
+{
+  "name": "Mary",
+  "alive": false,
+  "coordinate": {
+    "x": 0,
+    "y": 0
+  }
+}
+```
+
 # Features
 
 This section notes some of jzon's more noteworthy features.
