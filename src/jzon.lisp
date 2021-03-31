@@ -653,7 +653,7 @@
             (%stringify coerced-element stream coerce-element coerce-key path (acons nil element stack)))))))))
 
 (defun %needs-lf-separator (element stack)
-  "For pretty-prenting. Returns true if `element' should have a lf separator."
+  "For pretty-printing. Returns true if `element' should have a lf separator."
   (unless (position element stack)
     (let ((stack (cons element stack)))
       (declare (dynamic-extent stack))
