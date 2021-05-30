@@ -53,6 +53,9 @@
        vector
        hash-table))
 
+(declaim (type function *%pos-fn*))
+(defvar *%pos-fn*)
+
 (declaim (inline %raise))
 (defun %raise (type format &rest args)
   (if (subtypep type 'json-parse-error)
@@ -62,9 +65,6 @@
 
 (declaim (type boolean *%allow-comments*))
 (defvar *%allow-comments*)
-
-(declaim (type function *%pos-fn*))
-(defvar *%pos-fn*)
 
 (declaim (ftype (function (function) (values (or null character) &optional)) %peek %step)
          (inline %peek %step))
