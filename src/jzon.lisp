@@ -267,7 +267,7 @@
              (go :parse-int)))
 
        :done-0
-         (return 0)
+         (return (if (plusp int-sign) 0 -0.0d0))
 
        :parse-int
          (let ((c (takec :done-int)))

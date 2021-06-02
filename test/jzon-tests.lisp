@@ -93,6 +93,12 @@
   (signals (com.inuoe.jzon:json-parse-error)
     (parse "0e")))
 
+(test parses-negative-zero.0
+  (is (= -0.0d0 (parse "-0.0"))))
+
+(test parses-negative-zero
+  (is (= -0.0d0 (parse "-0"))))
+
 (test parses-arrays
   (is (equalp #() (parse "[]")))
   (is (equalp #(1 2 3) (parse "[1, 2, 3]"))))
