@@ -651,7 +651,7 @@
 
 (declaim (inline %ensure-linear-stringify))
 (defun %ensure-linear-stringify (element path stack)
-  (if (position element stack :key #'cdr :test #'eq)
+  (if (rassoc element stack)
       (format nil "@recursive-ref__ROOT~{->~A~}" (cdr (nreverse (delete nil (cons path (mapcar #'car stack))))))
       element))
 
