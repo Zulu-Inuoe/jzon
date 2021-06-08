@@ -109,6 +109,7 @@ In addition to the mappings defined in [Type Mappings](#type-mappings), `stringi
 | structure-object† | object                                                              |
 
 \*: Heuristic depending on the key values - Detects alists/plists by testing each key to be a character, string, symbol, or integer
+
 †: On supported implementations where structure slots are available via the MOP.
 
 These coercion rules only apply when using the default `:coerce-element` and `:coerce-key`.
