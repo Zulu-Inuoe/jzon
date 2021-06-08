@@ -91,8 +91,27 @@ There's a single entry point: `parse`:
 `stringify` accepts the following keyword arguments:
 * `:stream` A stream designator, or `nil`. if `nil`, stringify will serialize to a string and return it (as `format`)
 * `:pretty` If true, output pretty-formatted JSON
-* `:coerce-value` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
+* `:coerce-element` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
 * `:coerce-key` A function for coercing key values to strings. See [Custom Serialization](#custom-serialization)
+
+In addition to the mappings defined in [Type Mappings](#type-mappings), `stringify` accepts the following types of values:
+
+
+| CL                | JSON                                                                |
+|-------------------|---------------------------------------------------------------------|
+| symbol            | string (`symbol-name`), but see [Symbol key case](#symbol-key-case) |
+| real              | number                                                              |
+| alist\*           | object                                                              |
+| plist\*           | object                                                              |
+| list              | array                                                               |
+| sequence          | array                                                               |
+| standard-object   | object                                                              |
+| structure-object† | object                                                              |
+
+\*: Heuristic depending on the key values - Detects alists/plists by testing each key to be a character, string, symbol, or integer
+†: On supported implementations where structure slots are available via the MOP.
+
+These coercion rules only apply when using the default `:coerce-element` and `:coerce-key`.
 
 ### Symbol key case
 
