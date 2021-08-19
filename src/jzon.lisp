@@ -164,7 +164,7 @@
                       code-point))))))
     (let ((accum *%string-accum*))
       (setf (fill-pointer accum) 0)
-      (loop :for next character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
+      (loop :for next :of-type character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
             :until (char= #.(char "\"" 0) next)
             :do (vector-push-extend (interpret next) accum))
       (subseq accum 0))))
