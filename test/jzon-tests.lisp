@@ -262,7 +262,7 @@
 (test string-expands-special-escapes
   (is-every string=
     (#\Backspace (parse "\"\\b\""))
-    (#\Formfeed  (parse "\"\\f\""))
+    (#\Page  (parse "\"\\f\""))
     (#\Linefeed  (parse "\"\\n\""))
     (#\Return    (parse "\"\\r\""))
     (#\Tab       (parse "\"\\t\""))))
@@ -284,7 +284,7 @@
 (test stringify-string-handles-special-escapes
   (is-every string=
     ("\"\\b\"" (stringify (string #\Backspace)))
-    ("\"\\f\"" (stringify (string #\Formfeed)))
+    ("\"\\f\"" (stringify (string #\Page)))
     ("\"\\n\"" (stringify (string #\Linefeed)))
     ("\"\\r\"" (stringify (string #\Return)))
     ("\"\\t\"" (stringify (string #\Tab)))))
