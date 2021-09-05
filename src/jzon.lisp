@@ -123,7 +123,7 @@
                     ((nil) (%raise 'json-eof-error "Unexpected end of input after '\\' in string"))
                     ((#.(char "\"" 0) #\\ #\/) escaped)
                     (#\b #\Backspace)
-                    (#\f #\Formfeed)
+                    (#\f #\Page)
                     (#\n #\Linefeed)
                     (#\r #\Return)
                     (#\t #\Tab)
@@ -629,7 +629,7 @@
                 (#\Backspace
                  (write-char #\\ stream)
                  (write-char #\b stream))
-                (#\Formfeed
+                (#\Page
                  (write-char #\\ stream)
                  (write-char #\f stream))
                 (#\Linefeed
