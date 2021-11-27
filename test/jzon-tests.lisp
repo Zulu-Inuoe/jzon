@@ -260,6 +260,11 @@
   (is (string= "42" (with-output-to-string (stream)
                       (stringify 42 :stream stream)))))
 
+(test stringify-works-on-binary-streams
+  (is (string= "42" (let ((stream (fs:make-in-memory-output-stream)))
+                      (stringify 42 :stream stream)
+                      (fs:octets-to-string (fs:get-output-stream-sequence stream))))))
+
 (test stringify-pretty-array-spaces-elements
   (is (string= "[ 1, 2, 3 ]" (stringify #(1 2 3) :pretty t))))
 
