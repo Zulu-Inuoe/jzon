@@ -19,7 +19,8 @@
    #:json-error
    #:json-parse-error
    #:json-eof-error)
-  (:import-from #:closer-mop))
+  (:import-from #:closer-mop)
+  (:import-from #:flexi-streams))
 
 (in-package #:com.inuoe.jzon)
 
@@ -433,69 +434,76 @@
 (defun %make-fns-stream (in)
   "Create peek, step, and read-string functions for the stream `in'."
   (declare (type stream in))
-  (let* ((peek (lambda () (peek-char nil in nil)))
-         (step (lambda () (read-char in nil)))
-         (read-string (lambda () (%read-json-string step)))
-         (pos (lambda ()
-                (block nil
-                  (let ((pos (ignore-errors (file-position in))))
-                    (unless (and pos (ignore-errors (file-position in 0)))
-                      (return (values nil nil)))
+  (if (subtypep (stream-element-type in) 'character)
+      (let* ((peek (lambda () (peek-char nil in nil)))
+             (step (lambda () (read-char in nil)))
+             (read-string (lambda () (%read-json-string step)))
+             (pos (lambda ()
+                    (block nil
+                      (let ((pos (ignore-errors (file-position in))))
+                        (unless (and pos (ignore-errors (file-position in 0)))
+                          (return (values nil nil)))
 
-                    (loop :with line := 1
-                          :with col := 1
-                          :with cr := nil
-                          :for p :from 0 :below (1- pos)
-                          :for c := (read-char in)
-                          :do (case c
-                                (#\Linefeed (incf line) (setf col 1))
-                                (t (incf col)))
-                          :finally
-                             (file-position in pos)
-                             (return (values line col))))))))
-    (values peek
-            step
-            read-string
-            pos)))
+                        (loop :with line := 1
+                              :with col := 1
+                              :with cr := nil
+                              :for p :from 0 :below (1- pos)
+                              :for c := (read-char in)
+                              :do (case c
+                                    (#\Linefeed (incf line) (setf col 1))
+                                    (t (incf col)))
+                              :finally
+                                 (file-position in pos)
+                                 (return (values line col))))))))
+        (values peek
+                step
+                read-string
+                pos))
+      (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8))))
 
 (defun parse (in &key
                    (maximum-depth 128)
                    (allow-comments nil)
                    key-fn)
-  "Read a JSON value from `in', which may be a string, a stream, or a pathname.
+  "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:maximum-depth' controls the maximum depth of the object/array nesting
  `:allow-comments' controls whether or not single-line // comments are allowed.
  `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool"
   (check-type maximum-depth (or (integer 1) null))
   (check-type key-fn (or null symbol function))
-  (if (pathnamep in)
-      (with-open-file (in in :direction :input :external-format :utf-8)
-        (parse in :maximum-depth maximum-depth :allow-comments allow-comments :key-fn key-fn))
-      (multiple-value-bind (peek step read-string pos)
-          (etypecase in
-            (simple-string (%make-fns-simple-string in))
-            (string (%make-fns-string in))
-            (stream (%make-fns-stream in)))
-        (declare (dynamic-extent peek step read-string pos))
-        (let ((*%maximum-depth* maximum-depth)
-              (*%allow-comments* (and allow-comments t))
-              (*%string-accum* (make-array 32 :element-type 'character :adjustable t :fill-pointer 0))
-              (*%key-fn* (or (and key-fn (if (functionp key-fn) key-fn (fdefinition key-fn)))
-                             (let ((pool nil))
-                               (declare (type list pool))
-                               (lambda (key)
-                                 (declare (type simple-string key))
-                                 (or (find key pool :test (lambda (s1 s2)
-                                                            (declare (type simple-string s1 s2))
-                                                            (string= s1 s2)))
-                                     (progn (push key pool)
-                                            key))))))
-              (*%current-depth* 0)
-              (*%pos-fn* pos))
-          (declare (dynamic-extent *%string-accum* *%key-fn* *%current-depth* *%pos-fn*))
-          (prog1 (%read-json-element peek step read-string (%skip-whitespace step))
-            (or (null (%skip-whitespace step))
-                (%raise 'json-parse-error "Content after reading element")))))))
+  (typecase in
+    (pathname
+     (with-open-file (in in :direction :input :external-format :utf-8)
+       (parse in :maximum-depth maximum-depth :allow-comments allow-comments :key-fn key-fn)))
+    ((vector (unsigned-byte 8))
+     (let ((str (flexi-streams:octets-to-string in :external-format :utf-8)))
+       (parse str :maximum-depth maximum-depth :allow-comments allow-comments :key-fn key-fn)))
+    (t
+     (multiple-value-bind (peek step read-string pos)
+         (etypecase in
+           (simple-string (%make-fns-simple-string in))
+           (string (%make-fns-string in))
+           (stream (%make-fns-stream in)))
+       (declare (dynamic-extent peek step read-string pos))
+       (let ((*%maximum-depth* maximum-depth)
+             (*%allow-comments* (and allow-comments t))
+             (*%string-accum* (make-array 32 :element-type 'character :adjustable t :fill-pointer 0))
+             (*%key-fn* (or (and key-fn (if (functionp key-fn) key-fn (fdefinition key-fn)))
+                            (let ((pool nil))
+                              (declare (type list pool))
+                              (lambda (key)
+                                (declare (type simple-string key))
+                                (or (find key pool :test (lambda (s1 s2)
+                                                           (declare (type simple-string s1 s2))
+                                                           (string= s1 s2)))
+                                    (progn (push key pool)
+                                           key))))))
+             (*%current-depth* 0)
+             (*%pos-fn* pos))
+         (declare (dynamic-extent *%string-accum* *%key-fn* *%current-depth* *%pos-fn*))
+         (prog1 (%read-json-element peek step read-string (%skip-whitespace step))
+           (or (null (%skip-whitespace step))
+               (%raise 'json-parse-error "Content after reading element"))))))))
 
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
@@ -814,8 +822,11 @@
          (stringify-to stream))
        nil)
       (t
-       (let ((stream (etypecase stream
-                       ((eql t) *standard-output*)
-                       (stream stream))))
+       (let* ((stream (etypecase stream
+                        ((eql t) *standard-output*)
+                        (stream stream)))
+              (stream (cond
+                        ((subtypep (stream-element-type stream) 'character) stream)
+                        (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
          (stringify-to stream))
        nil))))

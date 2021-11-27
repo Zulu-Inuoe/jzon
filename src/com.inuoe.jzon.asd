@@ -3,5 +3,6 @@
   :description "JSON read/write"
   :author "Wilfredo Velázquez-Rodríguez <zulu.inuoe@gmail.com>"
   :license "MIT"
-  :depends-on (#:closer-mop)
+  :depends-on (#:closer-mop
+               #:flexi-streams)
   :components ((:file "jzon")))

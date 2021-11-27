@@ -8,5 +8,6 @@
   :depends-on
   (#:alexandria
    #:fiveam
+   #:flexi-streams
    #:com.inuoe.jzon
    #:uiop))

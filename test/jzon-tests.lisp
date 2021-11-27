@@ -21,9 +21,11 @@
    #:is-every
    #:signals
    #:test)
+  (:import-from #:flexi-streams)
   (:import-from #:uiop)
   (:local-nicknames
-   (#:jzon #:com.inuoe.jzon))
+   (#:jzon #:com.inuoe.jzon)
+   (#:fs #:flexi-streams))
   (:export
    #:jzon
    #:run
@@ -47,6 +49,9 @@
 (defun ph (&rest plist)
   "Shorthand for plist-hash-table."
   (plist-hash-table plist :test 'equal))
+
+(defun utf-8 (string)
+  (fs:string-to-octets string :external-format :utf-8))
 
 (test parses-atoms
   (is (eq 'null (parse "null")))
@@ -209,6 +214,31 @@
 (test parse-accepts-non-simple-string
   (flet ((parse (str)
            (parse (make-array (length str) :element-type 'character :fill-pointer t :initial-contents str))))
+    (is-every equalp
+      (nil               (parse "false"))
+      (t                 (parse "true"))
+      ('null             (parse "null"))
+      (42                (parse "42"))
+      (42.0d0            (parse "42e0"))
+      ("Hello, world!"   (parse "\"Hello, world!\""))
+      (#(1 2 3)          (parse "[1,2,3]"))
+      ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
+
+(test parse-accepts-octet-vector
+  (is-every equalp
+    (nil               (parse (utf-8 "false")))
+    (t                 (parse (utf-8 "true")))
+    ('null             (parse (utf-8 "null")))
+    (42                (parse (utf-8 "42")))
+    (42.0d0            (parse (utf-8 "42e0")))
+    ("Hello, world!"   (parse (utf-8 "\"Hello, world!\"")))
+    (#(1 2 3)          (parse (utf-8 "[1,2,3]")))
+    ((ph "x" 10 "y" 0) (parse (utf-8 "{ \"x\": 10, \"y\": 0}")))))
+
+
+(test parse-accepts-binary-stream
+  (flet ((parse (str)
+           (parse (fs:make-in-memory-input-stream (fs:string-to-octets str)))))
     (is-every equalp
       (nil               (parse "false"))
       (t                 (parse "true"))

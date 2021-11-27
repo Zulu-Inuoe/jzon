@@ -60,9 +60,15 @@ There's a single entry point: `parse`:
 }")
 ```
 
-`parse` accepts either a string, or a stream, and returns a parsed value per [Type Mappings](#type-mappings)
+`parse` reads input from its single argument and returns a parsed value per [Type Mappings](#type-mappings).
 
-`parse` accepts the follwing keyword arguments:
+`in` can be any of the following:
+* string
+* (vector (unsigned-byte 8)) - octets in utf-8
+* stream - character or binary in utf-8
+* pathname - `parse` will open the file for reading
+
+`parse` also accepts the follwing keyword arguments:
 * `:allow-comments` This allows the given JSON to contain `//cpp-style comments`
 * `:maximum-depth` This controls the maximum depth to allow arrays/objects to nest. Can be a positive integer, or `nil` to disable depth tests.
 * `:key-fn` A function of one argument responsible for 'interning' object keys. Should accept a `simple-string` and return the 'interned' key
@@ -337,7 +343,7 @@ You call `parse`, and you get a reasonable standard CL object back.
 * No worrying about what package symbols are interned in (no symbols).
 * No worrying about dynamic variables affecting a parse as in cl-json, jonathan, jsown. Everything affecting `parse` is given at the call-site.
 
-`parse` also accepts either a string, or a stream for simpler usage over libraries requiring one or the other, or having separate parse functions.
+`parse` also accepts either a string, octet vector, stream, or pathname for simpler usage over libraries requiring one or the other, or having separate parse functions.
 
 ## Object key pooling
 
@@ -352,7 +358,8 @@ This optimizes for the common case of reading a JSON payload containing many dup
 
 # Dependencies
 
-* [closer-mop](https://github.com/pcostanza/closer-mop/commits/master)
+* [closer-mop](https://github.com/pcostanza/closer-mop)
+* [flexi-streams](https://github.com/edicl/flexi-streams)
 
 # License
 
