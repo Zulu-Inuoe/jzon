@@ -419,6 +419,35 @@
               (setf (aref v 0) v)
               (stringify v :pretty t))))
 
+(test stringify-errors-on-non-symbol-coerce-element
+  (signals (type-error) (stringify 42 :coerce-element 0)))
+
+(test stringify-errors-on-non-symbol-coerce-key
+  (signals (type-error) (stringify 42 :coerce-key 0)))
+
+(test stringify-allows-symbols-on-coerce-element
+  (finishes (stringify 42 :coerce-element (constantly 42))))
+
+(test stringify-allows-symbols-on-coerce-key
+  (finishes (stringify 42 :coerce-key (constantly "42"))))
+
+(test stringify-coerce-element-calls-fn
+  (is (string= "42" (stringify #'stringify :coerce-element (constantly 42)))))
+
+(test stringify-coerce-element-does-not-call-calls-fn-on-known-values
+  (is-every string=
+    ("null"        (stringify 'null :coerce-element (constantly "unexpected value")))
+    ("true"        (stringify t :coerce-element (constantly "unexpected value")))
+    ("false"       (stringify nil :coerce-element (constantly "unexpected value")))
+    ("42"          (stringify 42 :coerce-element (constantly "unexpected value")))
+    ("42.0"        (stringify 42.0 :coerce-element (constantly "unexpected value")))
+    ("\"42\""      (stringify "42" :coerce-element (constantly "unexpected value")))
+    ("[42]"        (stringify #(42) :coerce-element (constantly "unexpected value")))
+    ("{\"42\":42}" (stringify (ph "42" 42) :coerce-element (constantly "unexpected value")))))
+
+(test stringify-coerce-key-calls-fn
+  (is (string= "{\"something-else\":42}" (stringify (ph "something" 42) :coerce-key (constantly "something-else")))))
+
 (def-suite jzon.json-checker :in jzon)
 
 (in-suite jzon.json-checker)

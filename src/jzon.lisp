@@ -57,6 +57,10 @@
 (declaim (type function *%pos-fn*))
 (defvar *%pos-fn*)
 
+(declaim (inline %ensure-function))
+(defun %ensure-function (x)
+  (if (functionp x) x (fdefinition x)))
+
 (declaim (inline %raise))
 (defun %raise (type format &rest args)
   (if (subtypep type 'json-parse-error)
@@ -488,7 +492,7 @@
        (let ((*%maximum-depth* maximum-depth)
              (*%allow-comments* (and allow-comments t))
              (*%string-accum* (make-array 32 :element-type 'character :adjustable t :fill-pointer 0))
-             (*%key-fn* (or (and key-fn (if (functionp key-fn) key-fn (fdefinition key-fn)))
+             (*%key-fn* (or (and key-fn (%ensure-function key-fn))
                             (let ((pool nil))
                               (declare (type list pool))
                               (lambda (key)
@@ -807,26 +811,30 @@
 
  see `coerce-element'
  see `coerce-key'"
-  (flet ((stringify-to (stream)
-           (if pretty
-               (%stringifyp element stream 0 coerce-element coerce-key element nil)
-               (%stringify element stream coerce-element coerce-key element nil))))
-    (cond
-      ((null stream)
-       (with-output-to-string (stream)
-         (stringify-to stream)))
-      ((stringp stream)
-       (unless (array-has-fill-pointer-p stream)
-         (error 'type-error :datum stream :expected-type '(and vector (satisfies array-has-fill-pointer-p))))
-       (with-output-to-string (stream stream)
-         (stringify-to stream))
-       nil)
-      (t
-       (let* ((stream (etypecase stream
-                        ((eql t) *standard-output*)
-                        (stream stream)))
-              (stream (cond
-                        ((subtypep (stream-element-type stream) 'character) stream)
-                        (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
-         (stringify-to stream))
-       nil))))
+  (check-type coerce-element (or symbol function))
+  (check-type coerce-key (or symbol function))
+  (let ((coerce-element (%ensure-function coerce-element))
+        (coerce-key (%ensure-function coerce-key)))
+    (flet ((stringify-to (stream)
+             (if pretty
+                 (%stringifyp element stream 0 coerce-element coerce-key element nil)
+                 (%stringify element stream coerce-element coerce-key element nil))))
+      (cond
+        ((null stream)
+         (with-output-to-string (stream)
+           (stringify-to stream)))
+        ((stringp stream)
+         (unless (array-has-fill-pointer-p stream)
+           (error 'type-error :datum stream :expected-type '(and vector (satisfies array-has-fill-pointer-p))))
+         (with-output-to-string (stream stream)
+           (stringify-to stream))
+         nil)
+        (t
+         (let* ((stream (etypecase stream
+                          ((eql t) *standard-output*)
+                          (stream stream)))
+                (stream (cond
+                          ((subtypep (stream-element-type stream) 'character) stream)
+                          (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
+           (stringify-to stream))
+         nil)))))
