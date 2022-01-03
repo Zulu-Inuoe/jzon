@@ -18,7 +18,16 @@
    ;; conditions
    #:json-error
    #:json-parse-error
-   #:json-eof-error)
+   #:json-eof-error
+
+   ;; Streaming IO
+   #:make-json-writer
+   #:write-value
+   #:begin-object
+   #:write-key
+   #:end-object
+   #:begin-array
+   #:end-array)
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
   (:import-from #:uiop))
@@ -805,3 +814,97 @@
                           (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
            (stringify-to stream))
          nil)))))
+
+(defclass %json-writer ()
+  ((%write-char :initarg :write-char)
+   (%stack :initform nil)
+   (%coerce-key :initarg :coerce-key)
+   (%coerce-element :initarg :coerce-element))
+  (:default-initargs
+   :write-char (lambda (_) (declare (ignore _)))
+   :coerce-key #'coerce-key
+   :coerce-element #'coerce-element))
+
+(defun make-json-writer (&key (stream (make-broadcast-stream)) (coerce-element #'coerce-element) (coerce-key #'coerce-key))
+  "Create a writer for subsequent `write-value', `begin-object', et al calls.
+  `:stream' like the `destination' in `format', except `nil' is unsupported
+  `:coerce-element' is a function of two arguments, and is used to coerce an unknown value to a `json-element'
+  `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
+
+ see `coerce-element'
+ see `coerce-key'"
+  (flet ((make-writer-to (write-char)
+           (make-instance '%json-writer :write-char write-char :coerce-element (%ensure-function coerce-element) :coerce-key (%ensure-function coerce-key))))
+      (cond
+        ((stringp stream)
+         (unless (array-has-fill-pointer-p stream)
+           (error 'type-error :datum stream :expected-type '(and vector (satisfies array-has-fill-pointer-p))))
+         (make-writer-to (lambda (c) (vector-push-extend c stream))))
+        (t
+         (let* ((stream (etypecase stream
+                          ((eql t) *standard-output*)
+                          (stream stream)))
+                (stream (cond
+                          ((subtypep (stream-element-type stream) 'character) stream)
+                          (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
+           (make-writer-to (lambda (c) (write-char c stream))))))))
+
+(defun write-value (writer value)
+  (with-slots (%write-char %stack %coerce-element %coerce-key) writer
+    (let ((context (car %stack)))
+      (when (eq context :object-key)
+        )
+      (case context
+        (:object-key (pop %stack))
+        ((nil :array))
+        (:object     (error "Expecting object key"))
+        (t           (error "Not expecting value")))
+      (loop :for c :across (with-output-to-string (stream)
+                             (%stringify value stream %coerce-element %coerce-key nil nil))
+            :do (funcall %write-char c))))
+  writer)
+
+(defun begin-object (writer)
+  (with-slots (%write-char %stack) writer
+    (push :object %stack)
+    (funcall %write-char #\{))
+  writer)
+
+(defun write-key (writer key)
+  (with-slots (%write-char %stack %coerce-key) writer
+    (unless (eq (car %stack) :object)
+      (error "Not in object"))
+    (push :object-key %stack)
+    (let ((key-str (funcall %coerce-key key)))
+      (unless (typep key-str '(or string character (and (not null) symbol)))
+        (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
+      (loop :for c :across (with-output-to-string (stream)
+                             (%write-json-string (string key-str) stream))
+            :do (funcall %write-char c)))
+    (funcall %write-char #\:))
+  writer)
+
+(defun end-object (writer)
+  (with-slots (%write-char %stack) writer
+    (let ((context (car %stack)))
+      (case context
+        (:object)
+        (:object-key (error "Attempting to close object before fully writing key value"))
+        (t           (error "Attempting to close object while in ~A" context))))
+    (funcall %write-char #\})
+    (pop %stack))
+  writer)
+
+(defun begin-array (writer)
+  (with-slots (%write-char %stack) writer
+    (push :array %stack)
+    (funcall %write-char #\[))
+  writer)
+
+(defun end-array (writer)
+  (with-slots (%write-char %stack) writer
+    (unless (eq (car %stack) :array)
+      (error "Not in array"))
+    (funcall %write-char #\])
+    (pop %stack))
+  writer)
