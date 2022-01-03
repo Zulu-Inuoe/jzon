@@ -622,6 +622,37 @@
     (declare (type (and (not list) (not vector)) element))
     (coerce element 'simple-vector)))
 
+(defun %write-json-string (string stream)
+  (write-char #.(char "\"" 0) stream)
+  (loop :for c :across string
+        :do
+           (case c
+             ((#.(char "\"" 0) #\\)
+              (write-char #\\ stream)
+              (write-char c stream))
+             (#\Backspace
+              (write-char #\\ stream)
+              (write-char #\b stream))
+             (#\Page
+              (write-char #\\ stream)
+              (write-char #\f stream))
+             (#\Linefeed
+              (write-char #\\ stream)
+              (write-char #\n stream))
+             (#\Return
+              (write-char #\\ stream)
+              (write-char #\r stream))
+             (#\Tab
+              (write-char #\\ stream)
+              (write-char #\t stream))
+             (t
+              (cond
+                ((%control-char-p c)
+                 (format stream "\\u~4,'0X" (char-code c)))
+                (t
+                 (write-char c stream))))))
+  (write-char #.(char "\"" 0) stream))
+
 (defun %stringify-atom (atom stream)
   (declare (type stream stream))
   (etypecase atom
@@ -631,36 +662,7 @@
     (integer      (format stream "~D" atom))
     ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
     (real         (format stream "~F" atom))
-    (string
-     (write-char #.(char "\"" 0) stream)
-     (loop :for c :across atom
-           :do
-              (case c
-                ((#.(char "\"" 0) #\\)
-                 (write-char #\\ stream)
-                 (write-char c stream))
-                (#\Backspace
-                 (write-char #\\ stream)
-                 (write-char #\b stream))
-                (#\Page
-                 (write-char #\\ stream)
-                 (write-char #\f stream))
-                (#\Linefeed
-                 (write-char #\\ stream)
-                 (write-char #\n stream))
-                (#\Return
-                 (write-char #\\ stream)
-                 (write-char #\r stream))
-                (#\Tab
-                 (write-char #\\ stream)
-                 (write-char #\t stream))
-                (t
-                 (cond
-                   ((%control-char-p c)
-                    (format stream "\\u~4,'0X" (char-code c)))
-                   (t
-                    (write-char c stream))))))
-     (write-char #.(char "\"" 0) stream))))
+    (string       (%write-json-string atom stream))))
 
 (declaim (inline %ensure-linear-stringify))
 (defun %ensure-linear-stringify (element path stack)
@@ -701,7 +703,7 @@
                            (let ((key-str (funcall coerce-key key)))
                              (unless (typep key-str '(or string character (and (not null) symbol)))
                                (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
-                             (%stringify-atom (string key-str) stream)
+                             (%write-json-string (string key-str) stream)
                              (write-char #\: stream)
                              (%stringify value stream coerce-element coerce-key key-str stack))))
                     (stringify-key-value key val)
