@@ -339,36 +339,33 @@
        :fail
          (return nil)))))
 
-(defun %read-until-space (step)
-  (coerce (loop :for c := (%step step)
-                :while c
-                :collect c)
-          'string))
-
 (defun %read-json-atom (peek step c)
   "Parse a non-string JSON atom and return its value.
  `c' is the lookahead character already read."
-  (macrolet ((expect (string value)
-               `(loop :for i :from 1 :below (length ,string)
-                      :for expect-c := (aref ,string i)
-                      :for c := (or (%step step)
-                                    (%raise 'json-eof-error (format nil "End of input reading token '~A'. Expected '~A'" ,string expect-c)))
-                      :unless (char= c expect-c)
-                        :do (let ((token (concatenate 'string
-                                                      (subseq ,string 0 i)
-                                                      (string c)
-                                                      (%read-until-space step))))
-                              (%raise 'json-parse-error (format nil "Unexpected token '~A'" token)))
-                      :finally
-                      (return ,value))))
-    (case c
-      (#\f (expect "false" nil))
-      (#\t (expect "true" t))
-      (#\n (expect "null" 'null))
-      (t
-       ;; Try to read a number
-       (or (%read-json-number peek step c)
-           (%raise 'json-parse-error "Unrecognized character in JSON data"))))))
+  (flet ((read-until-separator ()
+           (loop :for c := (%peek peek)
+                 :until (or (null c) (%whitespace-p c) (member c '(#\{ #\} #\[ #\] #\, #\-)))
+                 :collect c
+                 :do (%step step))))
+    (macrolet ((expect (string value)
+                 `(loop :for i :from 1 :below (length ,string)
+                        :for expect-c := (aref ,string i)
+                        :for c := (or (%step step)
+                                      (%raise 'json-eof-error (format nil "End of input reading token '~A'. Expected '~A'" ,string expect-c)))
+                        :unless (char= c expect-c)
+                          :do (let ((token (concatenate 'string
+                                                        (subseq ,string 0 i)
+                                                        (cons c (read-until-separator)))))
+                                (%raise 'json-parse-error (format nil "Unexpected token '~A'" token)))
+                        :finally (return ,value))))
+      (case c
+        (#\f (expect "false" nil))
+        (#\t (expect "true" t))
+        (#\n (expect "null" 'null))
+        (t
+         ;; Try to read a number
+         (or (%read-json-number peek step c)
+             (%raise 'json-parse-error "Unrecognized character in JSON data")))))))
 
 (declaim (type (integer 0) *%current-depth*))
 (defvar *%current-depth*)
