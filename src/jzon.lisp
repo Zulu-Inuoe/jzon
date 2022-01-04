@@ -589,16 +589,17 @@
     ;; TODO - this might be too hacky/brittle to have on by default
     (let* ((alist-keys (and (every #'consp element)
                             (loop :for (k . v) :in element
-                                  :for key := (funcall coerce-key k)
+                                  :for key := (and (or (characterp k) (symbolp k) (stringp k))
+                                                   (funcall coerce-key k))
                                   :unless key
                                     :return nil
                                   :collect key)))
            (plist-keys (and (null alist-keys)
                             (evenp (length element))
                             (loop :for k :in element :by #'cddr
-                                  :for key := (funcall coerce-key k)
-                                  :unless (and (or (symbolp k) (stringp k))
-                                               key)
+                                  :for key := (and (or (characterp k) (stringp k) (symbolp k))
+                                                   (funcall coerce-key k))
+                                  :unless key
                                     :return nil
                                   :collect key))))
       (cond

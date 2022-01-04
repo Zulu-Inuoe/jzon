@@ -448,6 +448,30 @@
 (test stringify-coerce-key-calls-fn
   (is (string= "{\"something-else\":42}" (stringify (ph "something" 42) :coerce-key (constantly "something-else")))))
 
+(test stringify-detects-alist-when-characters
+  (is (string= "{\"a\":5,\"b\":42}" (stringify '((#\a . 5) (#\b . 42))))))
+
+(test stringify-detects-alist-when-strings
+  (is (string= "{\"a\":5,\"b\":42}" (stringify '(("a" . 5) ("b" . 42))))))
+
+(test stringify-detects-alist-when-symbols
+  (is (string= "{\"a\":5,\"b\":42}" (stringify '((#:a . 5) (#:b . 42))))))
+
+(test stringify-no-alist-when-integers
+  (is (string= "[[1,5],[2,42]]" (stringify '((1 5) (2 42))))))
+
+(test stringify-detects-plist-when-characters
+  (is (string= "{\"a\":5,\"b\":42}" (stringify '(#\a 5 #\b 42)))))
+
+(test stringify-detects-plist-when-strings
+  (is (string= "{\"a\":5,\"b\":42}" (stringify '("a" 5 "b" 42)))))
+
+(test stringify-detects-plist-when-symbols
+  (is (string= "{\"a\":5,\"b\":42}" (stringify '(#:a 5 #:b 42)))))
+
+(test stringify-no-plist-when-integers
+  (is (string= "[1,5,2,42]" (stringify '(1 5 2 42)))))
+
 (def-suite jzon.json-checker :in jzon)
 
 (in-suite jzon.json-checker)

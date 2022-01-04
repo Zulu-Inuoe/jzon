@@ -114,7 +114,7 @@ In addition to the mappings defined in [Type Mappings](#type-mappings), `stringi
 | standard-object   | object                                                              |
 | structure-object† | object                                                              |
 
-\*: Heuristic depending on the key values - Detects alists/plists by testing each key to be a character, string, symbol, or integer
+\*: Heuristic depending on the key values - Detects alists/plists by testing each key to be a character, string, or symbol.
 
 †: On supported implementations where structure slots are available via the MOP.
 
