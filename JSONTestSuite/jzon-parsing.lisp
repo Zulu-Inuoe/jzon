@@ -8,6 +8,7 @@
    #:read-stream-content-into-string)
   (:import-from #:cl-json)
   (:import-from #:jonathan)
+  (:import-from #:json-streams)
   (:import-from #:jsown)
   (:import-from #:yason)
   (:export
@@ -21,6 +22,7 @@
     ("jzon" #'jzon:parse)
     ("jonathan" (lambda (s) (jonathan:parse (read-stream-content-into-string s))))
     ("jsown" (lambda (s) (jsown:parse (read-stream-content-into-string s))))
+    ("json-streams" #'json-streams:json-parse)
     ("yason" #'yason:parse)))
 
 (defun main (&rest argv)

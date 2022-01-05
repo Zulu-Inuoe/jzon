@@ -31,6 +31,7 @@
  --eval "(ql:quickload '#:com.inuoe.jzon)"^
  --eval "(ql:quickload '#:cl-json)"^
  --eval "(ql:quickload '#:jonathan)"^
+ --eval "(ql:quickload '#:json-streams)"^
  --eval "(ql:quickload '#:jsown)"^
  --eval "(ql:quickload '#:yason)"^
  --load "%~dp0jzon-parsing.lisp"^
