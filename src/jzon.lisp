@@ -852,29 +852,36 @@
 (defun write-value (writer value)
   (with-slots (%write-char %stack %coerce-element %coerce-key) writer
     (let ((context (car %stack)))
-      (when (eq context :object-key)
-        )
       (case context
-        (:object-key (pop %stack))
-        ((nil :array))
-        (:object     (error "Expecting object key"))
-        (t           (error "Not expecting value")))
+        (:object-key             (setf (car %stack) :object-value))
+        (:array-value            (funcall %write-char #\,))
+        (:array                  (setf (car %stack) :array-value))
+        ((:object :object-value) (error "Expecting object key"))
+        ((nil)                   nil)
+        (t                       (error "Attempting to write value while in ~A" context)))
       (loop :for c :across (with-output-to-string (stream)
-                             (%stringify value stream %coerce-element %coerce-key nil nil))
+                             (%stringify value stream %coerce-element %coerce-key nil))
             :do (funcall %write-char c))))
   writer)
 
 (defun begin-object (writer)
   (with-slots (%write-char %stack) writer
+    (case (car %stack)
+      ((:array-value :object-value) (funcall %write-char #\,))
+      ((:object-key)                (setf (car %stack) :object-value))
+      ((:object :object-value)      (error "Expecting object key")))
     (push :object %stack)
     (funcall %write-char #\{))
   writer)
 
 (defun write-key (writer key)
   (with-slots (%write-char %stack %coerce-key) writer
-    (unless (eq (car %stack) :object)
-      (error "Not in object"))
-    (push :object-key %stack)
+    (let ((context (car %stack)))
+      (case context
+        (:object       (setf (car %stack) :object-key))
+        (:object-value (funcall %write-char #\,)
+                       (setf (car %stack) :object-key))
+        (t             (error "Attempting to write object key while in ~A" context))))
     (let ((key-str (funcall %coerce-key key)))
       (unless (typep key-str '(or string character (and (not null) symbol)))
         (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
@@ -888,7 +895,7 @@
   (with-slots (%write-char %stack) writer
     (let ((context (car %stack)))
       (case context
-        (:object)
+        ((:object :object-value))
         (:object-key (error "Attempting to close object before fully writing key value"))
         (t           (error "Attempting to close object while in ~A" context))))
     (funcall %write-char #\})
@@ -897,14 +904,20 @@
 
 (defun begin-array (writer)
   (with-slots (%write-char %stack) writer
+    (case (car %stack)
+      ((:array-value :object-value) (funcall %write-char #\,))
+      ((:object-key)                (setf (car %stack) :object-value))
+      ((:object :object-value)      (error "Expecting object key")))
     (push :array %stack)
     (funcall %write-char #\[))
   writer)
 
 (defun end-array (writer)
   (with-slots (%write-char %stack) writer
-    (unless (eq (car %stack) :array)
-      (error "Not in array"))
+    (let ((context (car %stack)))
+      (case context
+        ((:array :array-value))
+        (t (error "Attempting to close array while in ~A" context))))
     (funcall %write-char #\])
     (pop %stack))
   writer)
