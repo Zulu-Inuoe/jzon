@@ -24,6 +24,7 @@
         (any-failed nil))
     (dolist (file (directory json-files))
       (format t "~A.~A ... " (pathname-name file) (pathname-type file))
+      (finish-output)
       (let ((result (test-file tester file rest-args (* 2 internal-time-units-per-second))))
         (case (char (pathname-name file) 0)
           (#\y
@@ -43,7 +44,8 @@
              (0     (format t "OK~%"))
              (1     (format t "FAILED~%"))
              ((nil) (format t "TIMEOUT~%"))
-             (t     (format t "OTHER (0x~4,'0X)~%" result)))))))
+             (t     (format t "OTHER (0x~4,'0X)~%" result))))))
+      (finish-output))
     (not any-failed)))
 
 (defun main (&rest argv)
