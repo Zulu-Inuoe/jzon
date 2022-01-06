@@ -577,11 +577,11 @@
                                     :return nil
                                   :collect key)))
            (plist-keys (and (null alist-keys)
-                            (evenp (length element))
-                            (loop :for k :in element :by #'cddr
+                            (loop :for cell :on element :by #'cddr
+                                  :for (k . rest) := cell
                                   :for key := (and (or (characterp k) (stringp k) (symbolp k))
                                                    (funcall coerce-key k))
-                                  :unless key
+                                  :unless (and (consp rest) key)
                                     :return nil
                                   :collect key))))
       (cond
@@ -597,9 +597,12 @@
                :for key :in plist-keys
                :do (setf (gethash key ret) v)
                :finally (return ret)))
+        ((listp (cdr element))
+         ;; If it looks like a proper list, then consider it a list
+         (coerce element 'simple-vector))
         (t
-         ;; Otherwise treat it as a sequence
-         (coerce element 'simple-vector)))))
+         ;; Otherwise consider it a 2-element tuple
+         (vector (car element) (cdr element))))))
   (:method ((element sequence) coerce-key)
     (declare (type (and (not list) (not vector)) element))
     (coerce element 'simple-vector)))
