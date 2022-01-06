@@ -26,12 +26,10 @@
 
 (define-condition json-error (simple-error) ())
 (define-condition json-parse-error (json-error)
-  ((%line
-    :initarg :line
-    :reader %json-parse-error-line)
-   (%column
-    :initarg :column
-    :reader %json-parse-error-column))
+  ((%line :initarg :line
+          :reader %json-parse-error-line)
+   (%column :initarg :column
+            :reader %json-parse-error-column))
   (:report
    (lambda (c stream)
      (apply #'format stream (simple-condition-format-control c) (simple-condition-format-arguments c))
@@ -99,15 +97,13 @@
            ;; Skip rest of line or until EOF
            (loop :until (member (%step step) '(nil #\Linefeed #\Return)))))
     (loop :for char := (%step step)
-          :do
-             (cond
-               ((null char)
-                (return nil))
-               ((%whitespace-p char))
-               ((and (char= #\/ char) *%allow-comments*)
-                (skip-cpp-comment))
-               (t
-                (return char))))))
+          :do (cond
+                ((null char)
+                 (return nil))
+                ((and (char= #\/ char) *%allow-comments*)
+                 (skip-cpp-comment))
+                ((not (%whitespace-p char))
+                 (return char))))))
 
 (defun %control-char-p (c)
   "Returns true if `c' is a control character per RFC 8259."
@@ -231,15 +227,12 @@
 
 (defun %read-json-number (peek step c)
   "Reads an RFC 8259 number, starting with `c'."
-  (flet ((digit09-p (c)
-           (let ((val (- (char-code c) (char-code #\0))))
-             (and (<= 0 val 9) val)))
-         (digit19-p (c)
-           (let ((val (- (char-code c) (char-code #\0))))
-             (and (<= 1 val 9) val)))
+  (flet ((digit09-p (c &aux (val (- (char-code c) (char-code #\0))))
+           (and (<= 0 val 9) val))
+         (digit19-p (c &aux (val (- (char-code c) (char-code #\0))))
+           (and (<= 1 val 9) val))
          (ends-number-p (c)
-           (or (%whitespace-p c)
-               (member c '(#\) #\] #\} #\,)))))
+           (or (%whitespace-p c) (find c "]},"))))
     (macrolet ((takec (on-eof)
                  "Take the next character, `go'ing to `label' on EOF or end of token"
                  `(let ((c (%peek peek)))
@@ -276,11 +269,9 @@
 
        :parse-int
          (let ((c (takec :done-int)))
-           (when (char= c #\.)
-             (go :parse-frac))
-           (when (or (char= c #\e)
-                     (char= c #\E))
-             (go :parse-exp))
+           (case c
+             (#\.       (go :parse-frac))
+             ((#\e #\E) (go :parse-exp)))
            (let ((digit (digit09-p c)))
              (unless digit (go :fail))
              (setf int-val (+ (* int-val 10) digit))))
@@ -290,16 +281,15 @@
          (return (* int-sign int-val))
 
        :parse-frac
-         (let ((c (takec :fail)))
-           (let ((digit (digit09-p c)))
-             (unless digit (go :fail))
-             (setf frac-val digit)
-             (setf frac-len 1)))
+         (let* ((c (takec :fail))
+                (digit (digit09-p c)))
+           (unless digit (go :fail))
+           (setf frac-val digit)
+           (setf frac-len 1))
 
        :parse-frac-loop
          (let ((c (takec :done-frac)))
-           (when (or (char= c #\e)
-                     (char= c #\E))
+           (when (or (char= c #\e) (char= c #\E))
              (go :parse-exp))
            (let ((digit (digit09-p c)))
              (unless digit (go :fail))
@@ -318,16 +308,15 @@
               (setf c (takec :fail)))
              (#\+
               (setf c (takec :fail))))
-
            (let ((digit (digit09-p c)))
              (unless digit (go :fail))
              (setf exp-val digit)))
 
        :parse-exp-loop
-         (let ((c (takec :done)))
-           (let ((digit (digit09-p c)))
-             (unless digit (go :fail))
-             (setf exp-val (+ (* exp-val 10) digit))))
+         (let* ((c (takec :done))
+                (digit (digit09-p c)))
+           (unless digit (go :fail))
+           (setf exp-val (+ (* exp-val 10) digit)))
          (go :parse-exp-loop)
 
        :done
@@ -344,7 +333,7 @@
  `c' is the lookahead character already read."
   (flet ((read-until-separator ()
            (loop :for c := (%peek peek)
-                 :until (or (null c) (%whitespace-p c) (member c '(#\{ #\} #\[ #\] #\, #\-)))
+                 :until (or (null c) (%whitespace-p c) (find c "{}[],-"))
                  :collect c
                  :do (%step step))))
     (macrolet ((expect (string value)
@@ -378,7 +367,7 @@
            (type (or null character) c))
   (case c
     ((nil) (%raise 'json-eof-error "Unexpected end of input"))
-    (#.(char "\"" 0)   (funcall read-string))
+    (#.(char "\"" 0) (funcall read-string))
     (#\[
      (let ((*%current-depth* (1+ *%current-depth*)))
        (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
@@ -389,7 +378,7 @@
        (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
          (%raise 'json-parse-error "Maximum depth exceeded"))
        (%read-json-object peek step read-string)))
-    (t     (%read-json-atom peek step c))))
+    (t (%read-json-atom peek step c))))
 
 (macrolet ((def-make-string-fns (name type)
              `(defun ,name (in)
@@ -419,10 +408,9 @@
                                       :with cr := nil
                                       :for p :from 0 :below (1- i)
                                       :for c := (aref in p)
-                                      :do
-                                         (case c
-                                           (#\Linefeed (incf line) (setf col 1))
-                                           (t (incf col)))
+                                      :do (case c
+                                            (#\Linefeed (incf line) (setf col 1))
+                                            (t (incf col)))
                                       :finally
                                          (return (values line col))))))
                     (values peek
@@ -435,32 +423,32 @@
 (defun %make-fns-stream (in)
   "Create peek, step, and read-string functions for the stream `in'."
   (declare (type stream in))
-  (if (subtypep (stream-element-type in) 'character)
-      (let* ((peek (lambda () (peek-char nil in nil)))
-             (step (lambda () (read-char in nil)))
-             (read-string (lambda () (%read-json-string step)))
-             (pos (lambda ()
-                    (block nil
-                      (let ((pos (ignore-errors (file-position in))))
-                        (unless (and pos (ignore-errors (file-position in 0)))
-                          (return (values nil nil)))
+  (unless (subtypep (stream-element-type in) 'character)
+    (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8))))
+  (let* ((peek (lambda () (peek-char nil in nil)))
+         (step (lambda () (read-char in nil)))
+         (read-string (lambda () (%read-json-string step)))
+         (pos (lambda ()
+                (block nil
+                  (let ((pos (ignore-errors (file-position in))))
+                    (unless (and pos (ignore-errors (file-position in 0)))
+                      (return (values nil nil)))
 
-                        (loop :with line := 1
-                              :with col := 1
-                              :with cr := nil
-                              :for p :from 0 :below (1- pos)
-                              :for c := (read-char in)
-                              :do (case c
-                                    (#\Linefeed (incf line) (setf col 1))
-                                    (t (incf col)))
-                              :finally
-                                 (file-position in pos)
-                                 (return (values line col))))))))
-        (values peek
-                step
-                read-string
-                pos))
-      (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8))))
+                    (loop :with line := 1
+                          :with col := 1
+                          :with cr := nil
+                          :for p :from 0 :below (1- pos)
+                          :for c := (read-char in)
+                          :do (case c
+                                (#\Linefeed (incf line) (setf col 1))
+                                (t (incf col)))
+                          :finally
+                             (file-position in pos)
+                             (return (values line col))))))))
+    (values peek
+            step
+            read-string
+            pos)))
 
 (defun parse (in &key
                    (maximum-depth 128)
@@ -553,19 +541,16 @@
           :for (name value . type-cell) :in (coerced-fields element)
           :for type := (if type-cell (car type-cell) t)
           :for key := (funcall coerce-key name)
-          :do
-             (when key ; TODO - Should we error instead?
-               (setf (gethash key ret)
-                     (typecase value
-                       (null
-                        (cond
-                          ((and (subtypep 'boolean type) (subtypep type 'boolean))
-                           nil)
-                          ((and (subtypep 'list type) (subtypep type 'list))
-                           #())
-                          (t
-                           'null)))
-                       (t value))))
+          :do (when key ; TODO - Should we error instead?
+                (setf (gethash key ret)
+                      (if (null value)
+                          (cond
+                            ((and (subtypep 'boolean type) (subtypep type 'boolean))
+                             nil)
+                            ((and (subtypep 'list type) (subtypep type 'list))
+                             #())
+                            (t 'null))
+                          value)))
           :finally (return ret)))
   (:method ((element (eql t)) coerce-key)
     t)
@@ -675,8 +660,7 @@
       (declare (dynamic-extent stack))
       (typecase element
         ((and vector (not string))
-         (some (lambda (elt) (%needs-lf-separator elt stack))
-               element))
+         (some (lambda (elt) (%needs-lf-separator elt stack)) element))
         (hash-table
          (or (> (hash-table-count element) 1)
              (block nil
@@ -689,8 +673,8 @@
 (defun %indent (stream separator depth)
   "Indent `stream' by outputting `separator' and then spaces for `depth'."
   (write-char separator stream)
-  (dotimes (_ (* depth 2))
-    (write-char #\Space stream)))
+  (loop :repeat (* depth 2)
+        :do (write-char #\Space stream)))
 
 (defun %stringify (element stream coerce-element coerce-key pretty)
   (declare (type stream stream)
