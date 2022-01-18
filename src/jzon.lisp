@@ -891,6 +891,11 @@
     (funcall %write-char #\:))
   writer)
 
+(defun write-property (writer key value)
+  "Write an object property/key value pair."
+  (write-key writer key)
+  (write-value writer value))
+
 (defun end-object (writer)
   (with-slots (%write-char %stack) writer
     (let ((context (car %stack)))
