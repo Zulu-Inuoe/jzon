@@ -163,11 +163,16 @@
                              (ash (- utf-16-high-surrogate-pair #xD800) 10)
                              (- utf-16-low-surrogate-pair #xDC00))))
                       code-point))))))
-    (let ((accum *%string-accum*))
+    (let ((accum *%string-accum*)
+          (max-string-length *%max-string-length*))
       (setf (fill-pointer accum) 0)
       (loop :for next :of-type character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
+            :for i :from 0
             :until (char= #.(char "\"" 0) next)
-            :do (vector-push-extend (interpret next) accum))
+            :do
+               (when (= i max-string-length)
+                 (%raise 'json-parse-error "Maximum string length exceeded"))
+               (vector-push-extend (interpret next) accum))
       (subseq accum 0))))
 
 (defun %read-json-array (peek step read-string)
@@ -362,6 +367,9 @@
 (declaim (type (or null (integer 1)) *%maximum-depth*))
 (defvar *%maximum-depth*)
 
+(declaim (type (integer 1 (#.array-dimension-limit)) *%max-string-length*))
+(defvar *%max-string-length*)
+
 (defun %read-json-element (peek step read-string c)
   (declare (type function peek step read-string)
            (type (or null character) c))
@@ -397,6 +405,9 @@
                                              (let ((control-char (find-if #'%control-char-p in :start i :end q-pos)))
                                                (when control-char
                                                  (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" control-char (char-name control-char))))
+                                             (when (< *%max-string-length* (- q-pos i))
+                                               (setf i (+ i (1+ *%max-string-length*)))
+                                               (%raise 'json-parse-error "Maximum string length exceeded"))
                                              (prog1 (subseq in i q-pos)
                                                (setf i (1+ q-pos))))
                                             (t
@@ -453,6 +464,7 @@
 (defun parse (in &key
                    (maximum-depth 128)
                    (allow-comments nil)
+                   (max-string-length (min #x100000 array-dimension-limit))
                    key-fn)
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:maximum-depth' controls the maximum depth of the object/array nesting
@@ -460,6 +472,7 @@
  `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool"
   (check-type maximum-depth (or (integer 1) null))
   (check-type key-fn (or null symbol function))
+  (check-type max-string-length (integer 1 (#.array-dimension-limit)))
   (typecase in
     (pathname
      (with-open-file (in in :direction :input :external-format :utf-8)
@@ -476,7 +489,8 @@
        (declare (dynamic-extent peek step read-string pos))
        (let ((*%maximum-depth* maximum-depth)
              (*%allow-comments* (and allow-comments t))
-             (*%string-accum* (make-array 32 :element-type 'character :adjustable t :fill-pointer 0))
+             (*%max-string-length* max-string-length)
+             (*%string-accum* (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0))
              (*%key-fn* (or (and key-fn (%ensure-function key-fn))
                             (let ((pool nil))
                               (declare (type list pool))
@@ -489,7 +503,7 @@
                                            key))))))
              (*%current-depth* 0)
              (*%pos-fn* pos))
-         (declare (dynamic-extent *%string-accum* *%key-fn* *%current-depth* *%pos-fn*))
+         (declare (dynamic-extent *%key-fn* *%current-depth* *%pos-fn*))
          (prog1 (%read-json-element peek step read-string (%skip-whitespace step))
            (or (null (%skip-whitespace step))
                (%raise 'json-parse-error "Content after reading element"))))))))

@@ -249,6 +249,30 @@
       (#(1 2 3)          (parse "[1,2,3]"))
       ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
 
+(test parse-allows-strings-below-max-string-length
+  (finishes (parse "\"This is a string that is not long\"" :max-string-length 45)))
+
+(test parse-allows-strings-at-max-string-length
+  (finishes (parse "\"This is a string that is exactly not too long\"" :max-string-length 45)))
+
+(test parse-limits-max-string-length
+  (signals (jzon:json-parse-error)
+    (parse "\"This is a string that is too long\"" :max-string-length 5)))
+
+(test parse-limits-max-string-length-with-escape-codes
+  (signals (jzon:json-parse-error)
+    (parse "\"This is a string that is too long\bwith some special codes \\u00f8\"" :max-string-length 5)))
+
+(test parse-max-string-length-respects-escape-codes-1
+  (finishes (parse "\"\\u00f8\"" :max-string-length 1)))
+
+(test parse-max-string-length-respects-escape-codes-2
+  (finishes (parse "\"\\n\"" :max-string-length 1)))
+
+(test parse-errors-on-too-large-string-length
+  (signals (type-error)
+    (parse "\"Doesn't matter\"" :max-string-length (* array-dimension-limit 2))))
+
 (test stringify-to-nil-returns-string
   (is (string= "42" (stringify 42))))
 
