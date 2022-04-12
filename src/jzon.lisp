@@ -113,6 +113,9 @@
 (declaim (type (and string (not simple-string)) *%string-accum*))
 (defvar *%string-accum*)
 
+(declaim (type (integer 1 (#.array-dimension-limit)) *%max-string-length*))
+(defvar *%max-string-length*)
+
 (defun %read-json-string (step)
   "Reads a JSON string step-wise using `step' until an unescaped double-quote.
  Returns a `simple-string' representing the string."
@@ -366,9 +369,6 @@
 
 (declaim (type (or null (integer 1)) *%maximum-depth*))
 (defvar *%maximum-depth*)
-
-(declaim (type (integer 1 (#.array-dimension-limit)) *%max-string-length*))
-(defvar *%max-string-length*)
 
 (defun %read-json-element (peek step read-string c)
   (declare (type function peek step read-string)
