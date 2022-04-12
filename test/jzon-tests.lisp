@@ -496,6 +496,9 @@
 (test stringify-no-plist-when-integers
   (is (string= "[1,5,2,42]" (stringify '(1 5 2 42)))))
 
+(test stringify-coerces-pathname-to-namestring
+  (is (string= "\"hello.lisp\""(stringify #p"hello.lisp"))))
+
 (def-suite jzon.json-checker :in jzon)
 
 (in-suite jzon.json-checker)

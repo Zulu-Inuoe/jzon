@@ -20,7 +20,8 @@
    #:json-parse-error
    #:json-eof-error)
   (:import-from #:closer-mop)
-  (:import-from #:flexi-streams))
+  (:import-from #:flexi-streams)
+  (:import-from #:uiop))
 
 (in-package #:com.inuoe.jzon)
 
@@ -576,6 +577,8 @@
     element)
   (:method ((element symbol) coerce-key)
     (string element))
+  (:method ((element pathname) coerce-key)
+    (uiop:native-namestring element))
   (:method ((element real) coerce-key)
     element)
   (:method ((element vector) coerce-key)

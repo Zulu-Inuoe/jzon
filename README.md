@@ -361,6 +361,7 @@ This optimizes for the common case of reading a JSON payload containing many dup
 
 * [closer-mop](https://github.com/pcostanza/closer-mop)
 * [flexi-streams](https://github.com/edicl/flexi-streams)
+* [uiop](https://gitlab.common-lisp.net/asdf/asdf)
 
 # License
 
