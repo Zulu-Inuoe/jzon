@@ -367,8 +367,8 @@
 (declaim (type (integer 0) *%current-depth*))
 (defvar *%current-depth*)
 
-(declaim (type (or null (integer 1)) *%maximum-depth*))
-(defvar *%maximum-depth*)
+(declaim (type (or null (integer 1)) *%max-depth*))
+(defvar *%max-depth*)
 
 (defun %read-json-element (peek step read-string c)
   (declare (type function peek step read-string)
@@ -378,12 +378,12 @@
     (#.(char "\"" 0) (funcall read-string))
     (#\[
      (let ((*%current-depth* (1+ *%current-depth*)))
-       (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
+       (when (and *%max-depth* (> *%current-depth* *%max-depth*))
          (%raise 'json-parse-error "Maximum depth exceeded"))
        (%read-json-array peek step read-string)))
     (#\{
      (let ((*%current-depth* (1+ *%current-depth*)))
-       (when (and *%maximum-depth* (> *%current-depth* *%maximum-depth*))
+       (when (and *%max-depth* (> *%current-depth* *%max-depth*))
          (%raise 'json-parse-error "Maximum depth exceeded"))
        (%read-json-object peek step read-string)))
     (t (%read-json-atom peek step c))))
@@ -462,24 +462,24 @@
             pos)))
 
 (defun parse (in &key
-                   (maximum-depth 128)
+                   (max-depth 128)
                    (allow-comments nil)
                    (max-string-length (min #x100000 array-dimension-limit))
                    key-fn)
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
- `:maximum-depth' controls the maximum depth of the object/array nesting
+ `:max-depth' controls the maximum depth of the object/array nesting
  `:allow-comments' controls whether or not single-line // comments are allowed.
  `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool"
-  (check-type maximum-depth (or (integer 1) null))
+  (check-type max-depth (or (integer 1) null))
   (check-type key-fn (or null symbol function))
   (check-type max-string-length (integer 1 (#.array-dimension-limit)))
   (typecase in
     (pathname
      (with-open-file (in in :direction :input :external-format :utf-8)
-       (parse in :maximum-depth maximum-depth :allow-comments allow-comments :key-fn key-fn)))
+       (parse in :max-depth max-depth :allow-comments allow-comments :key-fn key-fn)))
     ((vector (unsigned-byte 8))
      (let ((str (flexi-streams:octets-to-string in :external-format :utf-8)))
-       (parse str :maximum-depth maximum-depth :allow-comments allow-comments :key-fn key-fn)))
+       (parse str :max-depth max-depth :allow-comments allow-comments :key-fn key-fn)))
     (t
      (multiple-value-bind (peek step read-string pos)
          (etypecase in
@@ -487,7 +487,7 @@
            (string (%make-fns-string in))
            (stream (%make-fns-stream in)))
        (declare (dynamic-extent peek step read-string pos))
-       (let ((*%maximum-depth* maximum-depth)
+       (let ((*%max-depth* max-depth)
              (*%allow-comments* (and allow-comments t))
              (*%max-string-length* max-string-length)
              (*%string-accum* (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0))
