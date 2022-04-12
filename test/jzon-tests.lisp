@@ -8,7 +8,6 @@
    #:com.inuoe.jzon
    #:coerced-fields
    #:coerce-key
-   #:coerce-element
    #:json-parse-error
    #:parse
    #:stringify)
@@ -290,10 +289,16 @@
                       (fs:octets-to-string (fs:get-output-stream-sequence stream))))))
 
 (test stringify-pretty-array-spaces-elements
-  (is (string= "[ 1, 2, 3 ]" (stringify #(1 2 3) :pretty t))))
+  (is (string= "[
+  1,
+  2,
+  3
+]" (stringify #(1 2 3) :pretty t))))
 
 (test stringify-pretty-object-spaces-kv
-  (is (string= "{ \"x\": 0 }" (stringify (ph "x" 0) :pretty t))))
+  (is (string= "{
+  \"x\": 0
+}" (stringify (ph "x" 0) :pretty t))))
 
 (test stringify-pretty-object-newlines-multiple-kv
   (is (string= "{
@@ -409,18 +414,12 @@
         (list "bar" 101.1d0)
         (list "baz" #(192 168 1 1))))
 
-(test coerce-element-uses-coerced-fields-spec
-  (let ((coerced (coerce-element (make-instance 'test-class/stringify-coerced-fields) #'coerce-key)))
-    (is-every equalp
-      (42 (gethash "foo" coerced))
-      (101.1d0 (gethash "bar" coerced))
-      (#(192 168 1 1) (gethash "baz" coerced)))))
-
-(test coerce-element-returns-null-on-null
-  (is (eq 'null (coerce-element 'null #'coerce-key))))
-
 (test stringify-pretty-argorder-bugfix
-  (is (string= "[ { \"x\": 0 } ]" (stringify (vector (ph "x" 0)) :pretty t))))
+  (is (string= "[
+  {
+    \"x\": 0
+  }
+]" (stringify (vector (ph "x" 0)) :pretty t))))
 
 (test stringify-no-slots-on-unknown-object ()
   (is (string= "{}" (stringify (make-array '(2 2))))))
@@ -443,31 +442,11 @@
               (setf (aref v 0) v)
               (stringify v :pretty t))))
 
-(test stringify-errors-on-non-symbol-coerce-element
-  (signals (type-error) (stringify 42 :coerce-element 0)))
-
 (test stringify-errors-on-non-symbol-coerce-key
   (signals (type-error) (stringify 42 :coerce-key 0)))
 
-(test stringify-allows-symbols-on-coerce-element
-  (finishes (stringify 42 :coerce-element (constantly 42))))
-
 (test stringify-allows-symbols-on-coerce-key
   (finishes (stringify 42 :coerce-key (constantly "42"))))
-
-(test stringify-coerce-element-calls-fn
-  (is (string= "42" (stringify #'stringify :coerce-element (constantly 42)))))
-
-(test stringify-coerce-element-does-not-call-calls-fn-on-known-values
-  (is-every string=
-    ("null"        (stringify 'null :coerce-element (constantly "unexpected value")))
-    ("true"        (stringify t :coerce-element (constantly "unexpected value")))
-    ("false"       (stringify nil :coerce-element (constantly "unexpected value")))
-    ("42"          (stringify 42 :coerce-element (constantly "unexpected value")))
-    ("42.0"        (stringify 42.0 :coerce-element (constantly "unexpected value")))
-    ("\"42\""      (stringify "42" :coerce-element (constantly "unexpected value")))
-    ("[42]"        (stringify #(42) :coerce-element (constantly "unexpected value")))
-    ("{\"42\":42}" (stringify (ph "42" 42) :coerce-element (constantly "unexpected value")))))
 
 (test stringify-coerce-key-calls-fn
   (is (string= "{\"something-else\":42}" (stringify (ph "something" 42) :coerce-key (constantly "something-else")))))
