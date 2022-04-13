@@ -1,41 +1,41 @@
 (defpackage #:com.inuoe.jzon
   (:use #:cl)
   (:export
-   ;; Deserialize
+   ;;; Read
    #:parse
-   ;; Serialize
+   ;;; Write
    #:stringify
 
-   ;; Extensible serialization
-   #:coerced-fields
-   #:coerce-key
-
-   #:json-writer
-   #:write-value
-   #:begin-object
-   #:write-key
-   #:write-property
-   #:end-object
-   #:begin-array
-   #:end-array
-
-   ;; Types
+   ;;; Types
    #:json-atom
    #:json-element
 
-   ;; conditions
+   ;;; Conditions
    #:json-error
    #:json-parse-error
    #:json-eof-error
 
-   ;; Streaming IO
-   #:make-json-writer
+   ;;; Simple extensible writing
+   #:coerced-fields
+   #:coerce-key
+
+   ;;; Streaming Writer
+   #:json-writer
+
+   ;; Extensible serialization
    #:write-value
+
+   ;; Writer operations
    #:begin-object
    #:write-key
+   #:write-property
    #:end-object
+   #:with-object
+
    #:begin-array
-   #:end-array)
+   #:end-array
+   #:with-array
+   #:write-values)
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
   (:import-from #:uiop))
