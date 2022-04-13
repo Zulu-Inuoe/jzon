@@ -726,6 +726,13 @@ Example return value:
     (write-char #\} %stream))
   writer)
 
+(defmacro with-object ((writer) &body body)
+  (let ((writer-sym (gensym "WRITER")))
+    `(let ((,writer-sym ,writer))
+       (begin-object ,writer-sym)
+       (unwind-protect (progn ,@body)
+         (end-object ,writer-sym)))))
+
 (defun begin-array (writer)
   (check-type writer json-writer)
   (with-slots (%stream %stack) writer
@@ -752,6 +759,13 @@ Example return value:
     (write-char #\] %stream))
   writer)
 
+(defmacro with-array ((writer) &body body)
+  (let ((writer-sym (gensym "WRITER")))
+    `(let ((,writer-sym ,writer))
+       (begin-array ,writer-sym)
+       (unwind-protect (progn ,@body)
+         (end-array ,writer-sym)))))
+
 (defgeneric write-value (writer value)
   (:method :around ((writer json-writer) value)
     (with-slots (%stack %ref-stack %pretty) writer
@@ -777,20 +791,19 @@ Example return value:
   (:method ((writer json-writer) value)
     (let ((coerce-key (slot-value writer '%coerce-key))
           (fields (coerced-fields value)))
-      (begin-object writer)
-      (loop :for (name value . type-cell) :in fields
-            :for type := (if type-cell (car type-cell) t)
-            :for key := (funcall coerce-key name)
-            :do (when key ; TODO - Should we error instead?
-                  (write-property writer key (if (null value)
-                                          (cond
-                                            ((and (subtypep 'boolean type) (subtypep type 'boolean))
-                                             nil)
-                                            ((and (subtypep 'list type) (subtypep type 'list))
-                                             #())
-                                            (t 'null))
-                                          value))))
-      (end-object writer)))
+      (with-object (writer)
+        (loop :for (name value . type-cell) :in fields
+              :for type := (if type-cell (car type-cell) t)
+              :for key := (funcall coerce-key name)
+              :when key ; TODO - Should we error instead of omitting the key?
+                :do
+                   (let ((coerced-value (or value (cond
+                                                    ((and (subtypep 'boolean type) (subtypep type 'boolean))
+                                                     nil)
+                                                    ((and (subtypep 'list type) (subtypep type 'list))
+                                                     #())
+                                                    (t 'null)))))
+                     (write-property writer key coerced-value))))))
   (:method ((writer json-writer) (value (eql 't)))
     (%write-atom-value writer value))
   (:method ((writer json-writer) (value (eql 'nil)))
@@ -829,42 +842,60 @@ Example return value:
                                   :collect key))))
       (cond
         (alist-keys
-         (begin-object writer)
-         (loop :for (k . v) :in value
-               :for key :in alist-keys
-               :do (write-property writer key v))
-         (end-object writer))
+         (with-object (writer)
+           (loop :for (k . v) :in value
+                 :for key :in alist-keys
+                 :do
+                    (write-key writer key)
+                    (write-value writer v))))
         (plist-keys
-         (begin-object writer)
-         (loop :for (k v . rest) :on value :by #'cddr
-               :for key :in plist-keys
-               :do (write-property writer key v))
-         (end-object writer))
+         (with-object (writer)
+           (loop :for (k v . rest) :on value :by #'cddr
+                 :for key :in plist-keys
+                 :do
+                    (write-key writer key)
+                    (write-value writer v))))
         ((listp (cdr value))
          ;; If it looks like a proper list, then consider it a list
-         (begin-array writer)
-         (loop :for x :in value
-               :do (write-value writer x))
-         (end-array writer))
+         (with-array (writer)
+           (loop :for x :in value
+                 :do (write-value writer x))))
         (t
          ;; Otherwise consider it a 2-element tuple
-         (begin-array writer)
-         (write-value (car value))
-         (write-value (cdr value))
-         (end-array writer)))))
+         (with-array (writer)
+           (write-value (car value))
+           (write-value (cdr value)))))))
   (:method ((writer json-writer) (value sequence))
-    (begin-array writer)
-    (map nil
-         (lambda (x)
-           (write-value writer x))
-         value)
-    (end-array writer))
+    (with-array (writer)
+      (map nil
+           (lambda (x)
+             (write-value writer x))
+           value)))
   (:method ((writer json-writer) (value hash-table))
-    (begin-object writer)
-    (maphash (lambda (key value)
-               (write-property writer key value))
-             value)
-    (end-object writer)))
+    (with-object (writer)
+      (maphash (lambda (key value)
+                 (write-property writer key value))
+             value))))
+
+(defun write-values (writer sequence)
+  "Convenience function to `write-value' a `sequence' of values to `writer'."
+  (map nil (lambda (x) (write-value writer x)))
+  writer)
+
+(defun write-object (writer &rest kvp)
+  "Convenience function to write an object value from a set of key-value pairs.
+Ex.
+  (write-object writer
+    :speed 10
+    :colour :red)
+"
+  (with-object (writer)
+    (loop
+      :for cell :on kvp :by #'cddr
+      :for (k . rest) := cell
+      :unless (consp rest)
+        :do (error "Malformed property list ~A" kvp)
+      :do (write-property writer k (car rest)))))
 
 (defun write-property (writer key value)
   "Write an object property/key value pair."
