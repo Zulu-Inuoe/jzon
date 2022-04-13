@@ -572,77 +572,6 @@ Example return value:
   (:method ((key integer))
     (format nil "~D" key)))
 
-(defun %write-json-string (string stream)
-  (write-char #.(char "\"" 0) stream)
-  (loop :for c :across string
-        :do
-           (case c
-             ((#.(char "\"" 0) #\\)
-              (write-char #\\ stream)
-              (write-char c stream))
-             (#\Backspace
-              (write-char #\\ stream)
-              (write-char #\b stream))
-             (#\Page
-              (write-char #\\ stream)
-              (write-char #\f stream))
-             (#\Linefeed
-              (write-char #\\ stream)
-              (write-char #\n stream))
-             (#\Return
-              (write-char #\\ stream)
-              (write-char #\r stream))
-             (#\Tab
-              (write-char #\\ stream)
-              (write-char #\t stream))
-             (t
-              (cond
-                ((%control-char-p c)
-                 (format stream "\\u~4,'0X" (char-code c)))
-                (t
-                 (write-char c stream))))))
-  (write-char #.(char "\"" 0) stream))
-
-(defun stringify (element &key stream pretty (coerce-key #'coerce-key))
-  "Serialize `element' into JSON.
- Returns a fresh string if `stream' is nil, nil otherwise.
-  `:stream' like the `destination' in `format', or a `pathname'
-  `:pretty' if true, pretty-format the output
-  `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
-
- see `coerce-key'"
-  (check-type coerce-key (or symbol function))
-  (let ((coerce-key (%ensure-function coerce-key)))
-    (flet ((stringify-to (stream)
-             (let ((writer (make-json-writer :stream stream :coerce-key coerce-key :pretty (and pretty t))))
-               (write-value writer element))))
-      (cond
-        ((null stream)
-         (with-output-to-string (stream)
-           (stringify-to stream)))
-        ((stringp stream)
-         (unless (array-has-fill-pointer-p stream)
-           (error 'type-error :datum stream :expected-type '(and string (satisfies array-has-fill-pointer-p))))
-         (with-output-to-string (stream stream)
-           (stringify-to stream))
-         nil)
-        ((pathnamep stream)
-         (with-open-file (stream stream :direction :output
-                                        :if-does-not-exist :create
-                                        :if-exists :overwrite
-                                        :external-format :utf-8)
-           (stringify-to stream))
-         nil)
-        (t
-         (let* ((stream (etypecase stream
-                          ((eql t) *standard-output*)
-                          (stream stream)))
-                (stream (cond
-                          ((subtypep (stream-element-type stream) 'character) stream)
-                          (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
-           (stringify-to stream))
-         nil)))))
-
 ;;; Stack is
 ;;; (<state> . <prev-states>)
 ;;; where <state> is one of
@@ -674,7 +603,7 @@ Example return value:
    :coerce-key #'coerce-key
    :pretty nil))
 
-(defun make-json-writer (&key
+(defun %make-json-writer (&key
                            (stream (make-broadcast-stream))
                            (coerce-key #'coerce-key)
                            (pretty nil))
@@ -700,6 +629,37 @@ Example return value:
                (write-char #\Space %stream)
                (write-char #\Space %stream)))))
 
+(defun %write-json-string (string stream)
+  (write-char #.(char "\"" 0) stream)
+  (loop :for c :across string
+        :do
+           (case c
+             ((#.(char "\"" 0) #\\)
+              (write-char #\\ stream)
+              (write-char c stream))
+             (#\Backspace
+              (write-char #\\ stream)
+              (write-char #\b stream))
+             (#\Page
+              (write-char #\\ stream)
+              (write-char #\f stream))
+             (#\Linefeed
+              (write-char #\\ stream)
+              (write-char #\n stream))
+             (#\Return
+              (write-char #\\ stream)
+              (write-char #\r stream))
+             (#\Tab
+              (write-char #\\ stream)
+              (write-char #\t stream))
+             (t
+              (cond
+                ((%control-char-p c)
+                 (format stream "\\u~4,'0X" (char-code c)))
+                (t
+                 (write-char c stream))))))
+  (write-char #.(char "\"" 0) stream))
+
 (defun %write-atom-value (writer value)
   (with-slots (%stream %stack) writer
     (case (car %stack)
@@ -717,6 +677,80 @@ Example return value:
       ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
       (real         (format %stream "~F" value))
       (string       (%write-json-string value %stream)))))
+
+(defun begin-object (writer)
+  (check-type writer json-writer)
+  (with-slots (%stream %stack) writer
+    (case (car %stack)
+      ((:array)                     (progn (%write-indentation writer)
+                                           (setf (car %stack) :array-value)))
+      ((:array-value)               (progn (write-char #\, %stream)
+                                           (%write-indentation writer)))
+      ((:object-key)                (setf (car %stack) :object-value))
+      ((:object :object-value)      (error "Expecting object key")))
+    (push :object %stack)
+    (write-char #\{ %stream))
+  writer)
+
+(defun write-key (writer key)
+  (check-type writer json-writer)
+  (with-slots (%stream %coerce-key %stack %pretty) writer
+    (let ((context (car %stack)))
+      (case context
+        (:object       (progn (setf (car %stack) :object-key)
+                              (%write-indentation writer)))
+        (:object-value (progn (write-char #\, %stream)
+                              (%write-indentation writer)
+                              (setf (car %stack) :object-key)))
+        (t             (error "Attempting to write object key while in ~A" context))))
+    (let ((key-str (funcall %coerce-key key)))
+      (unless (typep key-str '(or string character (and (not null) symbol)))
+        (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
+      (%write-json-string (string key-str) %stream))
+    (write-char #\: %stream)
+    (when %pretty
+      (write-char #\Space %stream)))
+  writer)
+
+(defun end-object (writer)
+  (check-type writer json-writer)
+  (with-slots (%stream %stack %pretty) writer
+    (let ((context (car %stack)))
+      (case context
+        ((:object :object-value))
+        (:object-key (error "Attempting to close object before writing key value"))
+        (t           (error "Attempting to close object while in ~A" context)))
+      (pop %stack)
+      (when (eq context :object-value)
+        (%write-indentation writer)))
+    (write-char #\} %stream))
+  writer)
+
+(defun begin-array (writer)
+  (check-type writer json-writer)
+  (with-slots (%stream %stack) writer
+    (case (car %stack)
+      ((:array-value)          (progn
+                                 (write-char #\, %stream)
+                                 (%write-indentation writer)))
+      ((:object-key)           (setf (car %stack) :object-value))
+      ((:object :object-value) (error "Expecting object key")))
+    (push :array %stack)
+    (write-char #\[ %stream))
+  writer)
+
+(defun end-array (writer)
+  (check-type writer json-writer)
+  (with-slots (%stream %stack) writer
+    (let ((context (car %stack)))
+      (case context
+        ((:array :array-value))
+        (t (error "Attempting to close array while in ~A" context)))
+      (pop %stack)
+      (when (eq context :array-value)
+        (%write-indentation writer)))
+    (write-char #\] %stream))
+  writer)
 
 (defgeneric write-value (writer value)
   (:method :around ((writer json-writer) value)
@@ -832,82 +866,49 @@ Example return value:
              value)
     (end-object writer)))
 
-(defun begin-object (writer)
-  (check-type writer json-writer)
-  (with-slots (%stream %stack) writer
-    (case (car %stack)
-      ((:array)                     (progn (%write-indentation writer)
-                                           (setf (car %stack) :array-value)))
-      ((:array-value)               (progn (write-char #\, %stream)
-                                           (%write-indentation writer)))
-      ((:object-key)                (setf (car %stack) :object-value))
-      ((:object :object-value)      (error "Expecting object key")))
-    (push :object %stack)
-    (write-char #\{ %stream))
-  writer)
-
-(defun write-key (writer key)
-  (check-type writer json-writer)
-  (with-slots (%stream %coerce-key %stack %pretty) writer
-    (let ((context (car %stack)))
-      (case context
-        (:object       (progn (setf (car %stack) :object-key)
-                              (%write-indentation writer)))
-        (:object-value (progn (write-char #\, %stream)
-                              (%write-indentation writer)
-                              (setf (car %stack) :object-key)))
-        (t             (error "Attempting to write object key while in ~A" context))))
-    (let ((key-str (funcall %coerce-key key)))
-      (unless (typep key-str '(or string character (and (not null) symbol)))
-        (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
-      (%write-json-string (string key-str) %stream))
-    (write-char #\: %stream)
-    (when %pretty
-      (write-char #\Space %stream)))
-  writer)
-
 (defun write-property (writer key value)
   "Write an object property/key value pair."
   (check-type writer json-writer)
   (write-key writer key)
   (write-value writer value))
 
-(defun end-object (writer)
-  (check-type writer json-writer)
-  (with-slots (%stream %stack %pretty) writer
-    (let ((context (car %stack)))
-      (case context
-        ((:object :object-value))
-        (:object-key (error "Attempting to close object before fully writing key value"))
-        (t           (error "Attempting to close object while in ~A" context)))
-      (pop %stack)
-      (when (eq context :object-value)
-        (%write-indentation writer)))
-    (write-char #\} %stream))
-  writer)
 
-(defun begin-array (writer)
-  (check-type writer json-writer)
-  (with-slots (%stream %stack) writer
-    (case (car %stack)
-      ((:array-value)          (progn
-                                 (write-char #\, %stream)
-                                 (%write-indentation writer)))
-      ((:object-key)           (setf (car %stack) :object-value))
-      ((:object :object-value) (error "Expecting object key")))
-    (push :array %stack)
-    (write-char #\[ %stream))
-  writer)
+(defun stringify (element &key stream pretty (coerce-key #'coerce-key))
+  "Serialize `element' into JSON.
+ Returns a fresh string if `stream' is nil, nil otherwise.
+  `:stream' like the `destination' in `format', or a `pathname'
+  `:pretty' if true, pretty-format the output
+  `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
-(defun end-array (writer)
-  (check-type writer json-writer)
-  (with-slots (%stream %stack) writer
-    (let ((context (car %stack)))
-      (case context
-        ((:array :array-value))
-        (t (error "Attempting to close array while in ~A" context)))
-      (pop %stack)
-      (when (eq context :array-value)
-        (%write-indentation writer)))
-    (write-char #\] %stream))
-  writer)
+ see `coerce-key'"
+  (check-type coerce-key (or symbol function))
+  (let ((coerce-key (%ensure-function coerce-key)))
+    (flet ((stringify-to (stream)
+             (let ((writer (%make-json-writer :stream stream :coerce-key coerce-key :pretty (and pretty t))))
+               (write-value writer element))))
+      (cond
+        ((null stream)
+         (with-output-to-string (stream)
+           (stringify-to stream)))
+        ((stringp stream)
+         (unless (array-has-fill-pointer-p stream)
+           (error 'type-error :datum stream :expected-type '(and string (satisfies array-has-fill-pointer-p))))
+         (with-output-to-string (stream stream)
+           (stringify-to stream))
+         nil)
+        ((pathnamep stream)
+         (with-open-file (stream stream :direction :output
+                                        :if-does-not-exist :create
+                                        :if-exists :overwrite
+                                        :external-format :utf-8)
+           (stringify-to stream))
+         nil)
+        (t
+         (let* ((stream (etypecase stream
+                          ((eql t) *standard-output*)
+                          (stream stream)))
+                (stream (cond
+                          ((subtypep (stream-element-type stream) 'character) stream)
+                          (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
+           (stringify-to stream))
+         nil)))))
