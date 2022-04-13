@@ -539,10 +539,15 @@
   (defgeneric coerced-fields (element)
     (:documentation "Return a list of key definitions for `element'.
  A key definition is a three-element list of the form
-  (name value type)
+  (name value &optional type)
  name is the key name and will be coerced if not already a string
- value is the value, and will be coerced if not a `json-element'
- type is a type for the key, in order to handle ambiguous `nil' interpretations")
+ value is the value, and will be written per `write-value'
+ type is a type for the key, in order to handle ambiguous `nil' interpretations.
+
+Example return value:
+  ((name :zulu)
+   (hobbies nil list))
+")
     (:method (element)
       nil)
     #+(or ccl clisp sbcl)
