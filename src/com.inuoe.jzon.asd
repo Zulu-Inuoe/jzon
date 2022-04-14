@@ -4,5 +4,6 @@
   :author "Wilfredo Velázquez-Rodríguez <zulu.inuoe@gmail.com>"
   :license "MIT"
   :depends-on (#:closer-mop
-               #:flexi-streams)
+               #:flexi-streams
+               #:uiop)
   :components ((:file "jzon")))
