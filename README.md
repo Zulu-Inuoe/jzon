@@ -96,7 +96,7 @@ There's a single entry point: `parse`:
 ```
 
 `stringify` accepts the following keyword arguments:
-* `:stream` A stream designator, or `nil`. if `nil`, stringify will serialize to a string and return it (as `format`)
+* `:stream` A destination like in `format`, or a `pathname`. Like `format`, returns a string if `nil`.
 * `:pretty` If true, output pretty-formatted JSON
 * `:coerce-element` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
 * `:coerce-key` A function for coercing key values to strings. See [Custom Serialization](#custom-serialization)

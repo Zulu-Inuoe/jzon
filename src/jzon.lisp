@@ -765,7 +765,7 @@
 (defun stringify (element &key stream pretty (coerce-element #'coerce-element) (coerce-key #'coerce-key))
   "Serialize `element' into JSON.
  Returns a fresh string if `stream' is nil, nil otherwise.
-  `:stream' like the `destination' in `format'
+  `:stream' like the `destination' in `format', or a `pathname'
   `:pretty' if true, pretty-format the output
   `:coerce-element' is a function of two arguments, and is used to coerce an unknown value to a `json-element'
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
@@ -786,6 +786,13 @@
          (unless (array-has-fill-pointer-p stream)
            (error 'type-error :datum stream :expected-type '(and vector (satisfies array-has-fill-pointer-p))))
          (with-output-to-string (stream stream)
+           (stringify-to stream))
+         nil)
+        ((pathnamep stream)
+         (with-open-file (stream stream :direction :output
+                                        :if-does-not-exist :create
+                                        :if-exists :overwrite
+                                        :external-format :utf-8)
            (stringify-to stream))
          nil)
         (t
