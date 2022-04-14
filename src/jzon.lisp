@@ -784,7 +784,7 @@
            (stringify-to stream)))
         ((stringp stream)
          (unless (array-has-fill-pointer-p stream)
-           (error 'type-error :datum stream :expected-type '(and vector (satisfies array-has-fill-pointer-p))))
+           (error 'type-error :datum stream :expected-type '(and string (satisfies array-has-fill-pointer-p))))
          (with-output-to-string (stream stream)
            (stringify-to stream))
          nil)
