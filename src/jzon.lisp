@@ -479,8 +479,9 @@
      (with-open-file (in in :direction :input :external-format :utf-8)
        (parse in :max-depth max-depth :allow-comments allow-comments :key-fn key-fn)))
     ((vector (unsigned-byte 8))
-     (let ((str (flexi-streams:octets-to-string in :external-format :utf-8)))
-       (parse str :max-depth max-depth :allow-comments allow-comments :key-fn key-fn)))
+     (flexi-streams:with-input-from-sequence (stream in)
+       (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
+         (parse stream :max-depth max-depth :allow-comments allow-comments :key-fn key-fn))))
     (t
      (multiple-value-bind (peek step read-string pos)
          (etypecase in
