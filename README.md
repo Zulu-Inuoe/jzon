@@ -1,6 +1,6 @@
 # jzon
 
-A correct and safe JSON [RFC 8259][JSONRFC] parser.
+A correct and safe(er) JSON [RFC 8259][JSONRFC] parser with batteries-included.
 
 [![Actions Status](https://github.com/Zulu-Inuoe/jzon/workflows/ci/badge.svg)](https://github.com/Zulu-Inuoe/jzon/actions)
 
@@ -433,7 +433,7 @@ CL-USER> (parse 2)
 ```
 .. as in [some](https://github.com/Rudolph-Miller/jonathan) other [libraries](https://github.com/madnificent/jsown).
 
-Additionally, because jzon uses strings for object keys, rather than symbols, there is no risk of running out of memory from unbounded symbol interning over multiple parses.
+jzon also chooses to (by default) keep object keys as strings. This is done rather than using symbols via `intern` because over time, symbols will continue to be allocated and because they are in a package, will not be collected by the garbage collector, causing a memory leak.
 
 ## Simplicity
 
@@ -462,6 +462,20 @@ This optimizes for the common case of reading a JSON payload containing many dup
 * [closer-mop](https://github.com/pcostanza/closer-mop)
 * [flexi-streams](https://github.com/edicl/flexi-streams)
 * [uiop](https://gitlab.common-lisp.net/asdf/asdf)
+
+# Alternatives
+
+There are many CL JSON libraries available, and I defer to Sabra Crolleton's definitive list and comparisons [https://sabracrolleton.github.io/json-review](https://sabracrolleton.github.io/json-review).
+
+But for posterity, included in this repository is a set of tests and results for the following libraries:
+
+* cl-json
+* jonathan
+* json-streams
+* jsown
+* yason
+
+No ill-will is meant for these other libraries. I simply want `jzon` to be better and become a true de-facto library in the world of JSON-in-cl once and for all.
 
 # License
 
