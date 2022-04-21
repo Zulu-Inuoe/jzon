@@ -336,6 +336,11 @@
     (jzon:with-object (writer)
       (is (eq writer (jzon:write-properties writer 0 0))))))
 
+(test write-array-works
+  (is (string= "[1,2,3]"
+       (with-writer-to-string (writer)
+         (jzon:write-array writer 1 2 3)))))
+
 (test stringify-to-nil-returns-string
   (is (string= "42" (stringify 42))))
 

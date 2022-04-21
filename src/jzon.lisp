@@ -943,6 +943,11 @@ see `end-array'"
   (map nil (lambda (x) (write-value writer x)) values)
   writer)
 
+(defun write-array (writer &rest values)
+  "Write an array from a series of `values.'"
+  (with-array (writer)
+    (apply #'write-values writer values)))
+
 (defun write-property (writer key value)
   "Write an object property/key value pair."
   (check-type writer json-writer)
