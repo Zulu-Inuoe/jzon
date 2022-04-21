@@ -1,5 +1,5 @@
 (defsystem #:com.inuoe.jzon
-  :version "0.0.0"
+  :version "1.0.0"
   :description "JSON read/write"
   :author "Wilfredo Velázquez-Rodríguez <zulu.inuoe@gmail.com>"
   :license "MIT"
