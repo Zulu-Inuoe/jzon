@@ -625,6 +625,7 @@ Example return value:
                                  :pretty (and pretty t))))
 
 (defun %write-indentation (writer)
+  "Indent `writer' depending on its depth, if it is set to pretty print."
   (with-slots (%stream %stack %pretty) writer
     (when %pretty
       (write-char #\NewLine %stream)
@@ -634,6 +635,7 @@ Example return value:
                (write-char #\Space %stream)))))
 
 (defun %write-json-string (string stream)
+  "Write `string' to `stream' as a JSON string."
   (write-char #.(char "\"" 0) stream)
   (loop :for c :across string
         :do
@@ -665,6 +667,7 @@ Example return value:
   (write-char #.(char "\"" 0) stream))
 
 (defun %write-atom-value (writer value)
+  "Write a JSON atom per `json-atom'."
   (with-slots (%stream %stack) writer
     (case (car %stack)
       ((:array :object)
@@ -683,6 +686,12 @@ Example return value:
       (string       (%write-json-string value %stream)))))
 
 (defun begin-object (writer)
+  "Begin writing an object to `writer'.
+
+see `write-key'
+see `write-property'
+see `write-properties'
+see `end-object'"
   (check-type writer json-writer)
   (with-slots (%stream %stack) writer
     (case (car %stack)
@@ -697,6 +706,10 @@ Example return value:
   writer)
 
 (defun write-key (writer key)
+  "Write an object `key' to `writer'. Must currently be writing an object.
+
+see `begin-object'
+see `with-object'"
   (check-type writer json-writer)
   (with-slots (%stream %coerce-key %stack %pretty) writer
     (let ((context (car %stack)))
@@ -717,6 +730,7 @@ Example return value:
   writer)
 
 (defun end-object (writer)
+  "Finish writing an object to `writer'. Must match an opening `begin-object'."
   (check-type writer json-writer)
   (with-slots (%stream %stack %pretty) writer
     (let ((context (car %stack)))
@@ -731,6 +745,7 @@ Example return value:
   writer)
 
 (defmacro with-object ((writer) &body body)
+  "Wrapper around `begin-object' and `end-object'."
   (let ((writer-sym (gensym "WRITER")))
     `(let ((,writer-sym ,writer))
        (begin-object ,writer-sym)
@@ -738,6 +753,10 @@ Example return value:
          (end-object ,writer-sym)))))
 
 (defun begin-array (writer)
+  "Begin writing an array to `writer'.
+
+see `write-values'
+see `end-array'"
   (check-type writer json-writer)
   (with-slots (%stream %stack) writer
     (case (car %stack)
@@ -751,6 +770,7 @@ Example return value:
   writer)
 
 (defun end-array (writer)
+  "Finish writing an array to `writer'. Must match an opening `begin-array'."
   (check-type writer json-writer)
   (with-slots (%stream %stack) writer
     (let ((context (car %stack)))
@@ -771,6 +791,7 @@ Example return value:
          (end-array ,writer-sym)))))
 
 (defgeneric write-value (writer value)
+  (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
   (:method :around ((writer json-writer) value)
     (with-slots (%stack %ref-stack %pretty) writer
       (let ((context (car %stack)))
@@ -881,13 +902,14 @@ Example return value:
                  (write-property writer key value))
              value))))
 
+;;; Additional convenience functions/macros
 (defun write-values (writer sequence)
   "Convenience function to `write-value' a `sequence' of values to `writer'."
   (map nil (lambda (x) (write-value writer x)))
   writer)
 
 (defun write-object (writer &rest kvp)
-  "Convenience function to write an object value from a set of key-value pairs.
+  "Write an object value from a set of key-value pairs.
 Ex.
   (write-object writer
     :speed 10
@@ -915,7 +937,8 @@ Ex.
   `:pretty' if true, pretty-format the output
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
- see `coerce-key'"
+ see `coerce-key'
+"
   (check-type coerce-key (or symbol function))
   (let ((coerce-key (%ensure-function coerce-key)))
     (flet ((stringify-to (stream)
