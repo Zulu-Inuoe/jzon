@@ -272,16 +272,26 @@
   (signals (type-error)
     (parse "\"Doesn't matter\"" :max-string-length (* array-dimension-limit 2))))
 
-(defmacro with-writer-to-string ((writer &key pretty) &body body)
+(defmacro with-writer-to-string ((writer &key pretty max-depth) &body body)
   (let ((str-sym (gensym "STR")))
     `(with-output-to-string (,str-sym)
-       (let ((,writer (jzon:make-json-writer :stream ,str-sym :pretty ,pretty)))
+       (let ((,writer (jzon:make-json-writer :stream ,str-sym :pretty ,pretty :max-depth ,max-depth)))
          ,@body))))
 
 (test writer-write-values-works
   (is (string= "[1,2,3]" (with-writer-to-string (writer)
                            (jzon:with-array (writer)
                              (jzon:write-values writer 1 2 3))))))
+
+(test writer-max-depth-works
+  (signals (error)
+    (with-writer-to-string (writer :max-depth 1)
+      (jzon:with-array (writer)
+        (jzon:with-array (writer)))))
+  (finishes
+    (with-writer-to-string (writer :max-depth 1)
+      (jzon:with-array (writer)
+        (jzon:write-value writer 42)))))
 
 (test stringify-to-nil-returns-string
   (is (string= "42" (stringify 42))))

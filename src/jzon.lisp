@@ -603,29 +603,35 @@ Example return value:
    (%coerce-key :initarg :coerce-key)
    (%pretty :initarg :pretty)
    (%stack :initform nil)
-   (%ref-stack :initform nil))
+   (%ref-stack :initform nil)
+   (%depth :type integer :initform 0)
+   (%max-depth :initarg :max-depth))
   (:documentation "A JSON writer on which to call `write-value', `begin-object', etc.")
   (:default-initargs
    :stream (make-broadcast-stream)
    :coerce-key #'coerce-key
-   :pretty nil))
+   :pretty nil
+   :max-depth 128))
 
 (defun make-json-writer (&key
                            (stream (make-broadcast-stream))
                            (coerce-key #'coerce-key)
-                           (pretty nil))
+                           (pretty nil)
+                           (max-depth 128))
   "Create a writer for subsequent `write-value', `begin-object', et al calls.
   `:stream' must be a character or binary `stream'
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-key'"
   (check-type stream stream)
+  (check-type max-depth (or null (integer 1)))
   (let* ((stream (cond
                    ((subtypep (stream-element-type stream) 'character) stream)
                    (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
     (make-instance 'json-writer :stream stream
-                                 :coerce-key (%ensure-function coerce-key)
-                                 :pretty (and pretty t))))
+                                :coerce-key (%ensure-function coerce-key)
+                                :pretty (and pretty t)
+                                :max-depth max-depth)))
 
 (defun %write-indentation (writer)
   "Indent `writer' depending on its depth, if it is set to pretty print."
@@ -696,7 +702,7 @@ see `write-property'
 see `write-properties'
 see `end-object'"
   (check-type writer json-writer)
-  (with-slots (%stream %stack) writer
+  (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array)                     (progn (%write-indentation writer)
                                            (setf (car %stack) :array-value)))
@@ -704,6 +710,8 @@ see `end-object'"
                                            (%write-indentation writer)))
       ((:object-key)                (setf (car %stack) :object-value))
       ((:object :object-value)      (error "Expecting object key")))
+    (when (and %max-depth (> (incf %depth) %max-depth))
+      (error "Exceeded maximum depth in writing object."))
     (push :object %stack)
     (write-char #\{ %stream))
   writer)
@@ -735,13 +743,15 @@ see `with-object'"
 (defun end-object (writer)
   "Finish writing an object to `writer'. Must match an opening `begin-object'."
   (check-type writer json-writer)
-  (with-slots (%stream %stack %pretty) writer
+  (with-slots (%stream %stack %pretty %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
         ((:object :object-value))
         (:object-key (error "Attempting to close object before writing key value"))
         (t           (error "Attempting to close object while in ~A" context)))
       (pop %stack)
+      (when %max-depth
+        (decf %depth))
       (when (eq context :object-value)
         (%write-indentation writer)))
     (write-char #\} %stream))
@@ -761,7 +771,7 @@ see `with-object'"
 see `write-values'
 see `end-array'"
   (check-type writer json-writer)
-  (with-slots (%stream %stack) writer
+  (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array-value)          (progn
                                  (write-char #\, %stream)
@@ -769,18 +779,22 @@ see `end-array'"
       ((:object-key)           (setf (car %stack) :object-value))
       ((:object :object-value) (error "Expecting object key")))
     (push :array %stack)
+    (when (and %max-depth (> (incf %depth) %max-depth))
+      (error "Exceeded maximum depth in writing array."))
     (write-char #\[ %stream))
   writer)
 
 (defun end-array (writer)
   "Finish writing an array to `writer'. Must match an opening `begin-array'."
   (check-type writer json-writer)
-  (with-slots (%stream %stack) writer
+  (with-slots (%stream %stack %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
         ((:array :array-value))
         (t (error "Attempting to close array while in ~A" context)))
       (pop %stack)
+      (when %max-depth
+        (decf %depth))
       (when (eq context :array-value)
         (%write-indentation writer)))
     (write-char #\] %stream))
