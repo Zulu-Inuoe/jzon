@@ -21,6 +21,7 @@
 
    ;;; Streaming Writer
    #:json-writer
+   #:make-json-writer
 
    ;; Extensible serialization
    #:write-value
@@ -609,7 +610,7 @@ Example return value:
    :coerce-key #'coerce-key
    :pretty nil))
 
-(defun %make-json-writer (&key
+(defun make-json-writer (&key
                            (stream (make-broadcast-stream))
                            (coerce-key #'coerce-key)
                            (pretty nil))
@@ -964,7 +965,7 @@ see `write-object'"
   (check-type coerce-key (or symbol function))
   (let ((coerce-key (%ensure-function coerce-key)))
     (flet ((stringify-to (stream)
-             (let ((writer (%make-json-writer :stream stream :coerce-key coerce-key :pretty (and pretty t))))
+             (let ((writer (make-json-writer :stream stream :coerce-key coerce-key :pretty (and pretty t))))
                (write-value writer element))))
       (cond
         ((null stream)
