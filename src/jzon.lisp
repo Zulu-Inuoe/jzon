@@ -831,7 +831,8 @@ see `end-array'"
                                                     ((and (subtypep 'list type) (subtypep type 'list))
                                                      #())
                                                     (t 'null)))))
-                     (write-property writer key coerced-value))))))
+                     (write-key writer key)
+                     (write-value writer coerced-value))))))
   (:method ((writer json-writer) (value (eql 't)))
     (%write-atom-value writer value))
   (:method ((writer json-writer) (value (eql 'nil)))
@@ -902,7 +903,8 @@ see `end-array'"
   (:method ((writer json-writer) (value hash-table))
     (with-object (writer)
       (maphash (lambda (key value)
-                 (write-property writer key value))
+                 (write-key writer key)
+                 (write-value writer value))
              value))))
 
 ;;; Additional convenience functions/macros
