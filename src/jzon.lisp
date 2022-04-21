@@ -587,6 +587,7 @@ Example return value:
 ;;;   - :object-value
 ;;;   - :array
 ;;;   - :array-value
+;;;   - :complete
 ;;; :object means we are at the beginning of an object
 ;;;   so we expect a KEY OR object close
 ;;; :object-key means we have just written a KEY,
@@ -597,6 +598,7 @@ Example return value:
 ;;;   a VALUE OR array close
 ;;; :array-value means we have written an array value, and expect
 ;;;   a VALUE OR array close
+;;; :complete signals we have finished writing a toplevel value
 
 (defclass json-writer ()
   ((%stream :initarg :stream)
@@ -709,7 +711,8 @@ see `end-object'"
       ((:array-value)               (progn (write-char #\, %stream)
                                            (%write-indentation writer)))
       ((:object-key)                (setf (car %stack) :object-value))
-      ((:object :object-value)      (error "Expecting object key")))
+      ((:object :object-value)      (error "Expecting object key"))
+      ((:complete)                  (error "Attempting to write object when value already written to json-writer")))
     (when (and %max-depth (> (incf %depth) %max-depth))
       (error "Exceeded maximum depth in writing object."))
     (push :object %stack)
@@ -754,7 +757,10 @@ see `with-object'"
         (decf %depth))
       (when (eq context :object-value)
         (%write-indentation writer)))
-    (write-char #\} %stream))
+    (write-char #\} %stream)
+
+    (unless %stack
+      (push :complete %stack)))
   writer)
 
 (defmacro with-object ((writer) &body body)
@@ -777,7 +783,8 @@ see `end-array'"
                                  (write-char #\, %stream)
                                  (%write-indentation writer)))
       ((:object-key)           (setf (car %stack) :object-value))
-      ((:object :object-value) (error "Expecting object key")))
+      ((:object :object-value) (error "Expecting object key"))
+      ((:complete)             (error "Attempting to write array when value already written to json-writer")))
     (push :array %stack)
     (when (and %max-depth (> (incf %depth) %max-depth))
       (error "Exceeded maximum depth in writing array."))
@@ -797,7 +804,10 @@ see `end-array'"
         (decf %depth))
       (when (eq context :array-value)
         (%write-indentation writer)))
-    (write-char #\] %stream))
+    (write-char #\] %stream)
+
+    (unless %stack
+      (push :complete %stack)))
   writer)
 
 (defmacro with-array ((writer) &body body)
@@ -813,7 +823,8 @@ see `end-array'"
     (with-slots (%stack %ref-stack %pretty) writer
       (let ((context (car %stack)))
         (case context
-          ((:object :object-value) (error "Expecting object key")))
+          ((:object :object-value) (error "Expecting object key"))
+          ((:complete)             (error "Attempting to write value when value already written to json-writer")))
 
         (let ((prev-stack %ref-stack))
           (let ((path (member value prev-stack :test #'eq)))
@@ -827,7 +838,8 @@ see `end-array'"
           (unwind-protect (progn (call-next-method writer value)
                                  (case context
                                    (:array      (setf (car %stack) :array-value))
-                                   (:object-key (setf (car %stack) :object-value))))
+                                   (:object-key (setf (car %stack) :object-value))
+                                   ((nil)       (push :complete %stack))))
             (setf %ref-stack prev-stack)))))
     writer)
   (:method ((writer json-writer) value)
