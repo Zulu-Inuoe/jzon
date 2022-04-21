@@ -479,6 +479,18 @@
             read-string
             pos)))
 
+(defun %make-string-pool ()
+  "Make a function for 'interning' strings in a pool."
+  (let ((pool nil))
+    (declare (type list pool))
+    (lambda (key)
+      (declare (type simple-string key))
+      (or (find key pool :test (lambda (s1 s2)
+                                 (declare (type simple-string s1 s2))
+                                 (string= s1 s2)))
+          (progn (push key pool)
+                 key)))))
+
 (defun parse (in &key
                    (max-depth 128)
                    (allow-comments nil)
@@ -511,15 +523,7 @@
              (*%max-string-length* max-string-length)
              (*%string-accum* (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0))
              (*%key-fn* (or (and key-fn (%ensure-function key-fn))
-                            (let ((pool nil))
-                              (declare (type list pool))
-                              (lambda (key)
-                                (declare (type simple-string key))
-                                (or (find key pool :test (lambda (s1 s2)
-                                                           (declare (type simple-string s1 s2))
-                                                           (string= s1 s2)))
-                                    (progn (push key pool)
-                                           key))))))
+                            (%make-string-pool)))
              (*%current-depth* 0)
              (*%pos-fn* pos))
          (declare (dynamic-extent *%key-fn* *%current-depth* *%pos-fn*))
