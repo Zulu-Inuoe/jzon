@@ -906,9 +906,13 @@ see `end-array'"
              value))))
 
 ;;; Additional convenience functions/macros
-(defun write-values (writer sequence)
-  "Convenience function to `write-value' a `sequence' of values to `writer'."
-  (map nil (lambda (x) (write-value writer x)))
+(defun write-values (writer &rest values)
+  "Convenience function to write multiple `values' to `writer'. Must be writing an array."
+  (declare (dynamic-extent values))
+  (check-type writer json-writer)
+  (unless (or values (member (slot-value writer '%stack) '(:array :array-value)))
+    (error "Attempting to write multiple values outside of an array."))
+  (map nil (lambda (x) (write-value writer x)) values)
   writer)
 
 (defun write-property (writer key value)
