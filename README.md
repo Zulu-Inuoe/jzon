@@ -294,6 +294,106 @@ This would result in the following:
 }
 ```
 
+#### write-value
+For more fine-grained control, you can specialize a method on `jzon:write-value`.
+
+`jzon:write-value writer value`
+
+`writer` is a [json-writer](#json-writer) on which any of the writer functions may be called to serialize your object in any desired way.
+
+
+``` common-lisp
+(defclass my-point () ())
+
+(defmethod jzon:write-value (writer (value my-point))
+  (jzon:write-array writer 1 2))
+```
+
+See [json-writer](#json-writer) for the available functions.
+
+### json-writer
+
+In addition to `stringify`, jzon also provides an imperative, streaming writer for writing JSON.
+
+The following are the available functions for writing:
+
+#### General
+* `jzon:write-value` - Writes any value to the writer. Usable when writing a toplevel value, object property value, or array element.
+
+#### Object
+* `jzon:with-object`
+* `jzon:begin-object`
+* `jzon:write-key`
+* `json:write-property`
+* `json:write-properties`
+* `json:end-object`
+* `jzon:write-object`
+
+
+#### Array
+* `jzon:with-array`
+* `jzon:begin-array`
+* `jzon:write-values`
+* `json:end-array`
+* `jzon:write-array`
+
+### Example
+``` common-lisp
+(let ((writer (jzon:make-json-writer :stream *standard-output* :pretty t)))
+  (jzon:with-object (writer)
+    (jzon:write-properties writer :age 24 "colour" "blue")
+    (jzon:write-key writer 42)
+    (jzon:write-value writer #(1 2 3))
+
+    (jzon:write-key writer "an-array")
+    (jzon:with-array (writer)
+      (jzon:write-values writer :these :are :array :elements))
+
+    (jzon:write-key writer "another array")
+    (jzon:write-array writer :or "you" "can" "use these" "helpers")))
+```
+
+produces:
+
+``` json
+{
+  "age": 24,
+  "colour": "blue",
+  "42": [
+    1,
+    2,
+    3
+  ],
+  "an-array": [
+    "THESE",
+    "ARE",
+    "ARRAY",
+    "ELEMENTS"
+  ],
+  "another array": [
+    "OR",
+    "you",
+    "can",
+    "use these",
+    "helpers"
+  ]
+}
+```
+
+
+It's worth noting that every function returns the `writer` itself for usage with arrow macros:
+
+``` common-lisp
+(let ((writer (jzon:make-json-writer :stream *standard-output*)))
+  (jzon:with-object writer
+    (-> writer
+        (jzon:write-key "key")
+        (jzon:write-value "value")
+        (jzon:begin-array)
+        (jzon:write-value 1)
+        (jzon:end-array))))`
+```
+
 # Features
 
 This section notes some of jzon's more noteworthy features.
