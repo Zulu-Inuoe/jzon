@@ -340,13 +340,13 @@ The following are the available functions for writing:
 ### Example
 ``` common-lisp
 (let ((writer (jzon:make-json-writer :stream *standard-output* :pretty t)))
-  (jzon:with-object (writer)
+  (jzon:with-object writer
     (jzon:write-properties writer :age 24 "colour" "blue")
     (jzon:write-key writer 42)
     (jzon:write-value writer #(1 2 3))
 
     (jzon:write-key writer "an-array")
-    (jzon:with-array (writer)
+    (jzon:with-array writer
       (jzon:write-values writer :these :are :array :elements))
 
     (jzon:write-key writer "another array")
