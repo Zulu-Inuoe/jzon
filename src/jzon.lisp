@@ -763,7 +763,7 @@ see `with-object'"
       (push :complete %stack)))
   writer)
 
-(defmacro with-object ((writer) &body body)
+(defmacro with-object (writer &body body)
   "Wrapper around `begin-object' and `end-object'."
   (let ((writer-sym (gensym "WRITER")))
     `(let ((,writer-sym ,writer))
@@ -810,7 +810,7 @@ see `end-array'"
       (push :complete %stack)))
   writer)
 
-(defmacro with-array ((writer) &body body)
+(defmacro with-array (writer &body body)
   (let ((writer-sym (gensym "WRITER")))
     `(let ((,writer-sym ,writer))
        (begin-array ,writer-sym)
@@ -845,7 +845,7 @@ see `end-array'"
   (:method ((writer json-writer) value)
     (let ((coerce-key (slot-value writer '%coerce-key))
           (fields (coerced-fields value)))
-      (with-object (writer)
+      (with-object writer
         (loop :for (name value . type-cell) :in fields
               :for type := (if type-cell (car type-cell) t)
               :for key := (funcall coerce-key name)
@@ -897,14 +897,14 @@ see `end-array'"
                                   :collect key))))
       (cond
         (alist-keys
-         (with-object (writer)
+         (with-object writer
            (loop :for (k . v) :in value
                  :for key :in alist-keys
                  :do
                     (write-key writer key)
                     (write-value writer v))))
         (plist-keys
-         (with-object (writer)
+         (with-object writer
            (loop :for (k v . rest) :on value :by #'cddr
                  :for key :in plist-keys
                  :do
@@ -912,22 +912,22 @@ see `end-array'"
                     (write-value writer v))))
         ((listp (cdr value))
          ;; If it looks like a proper list, then consider it a list
-         (with-array (writer)
+         (with-array writer
            (loop :for x :in value
                  :do (write-value writer x))))
         (t
          ;; Otherwise consider it a 2-element tuple
-         (with-array (writer)
+         (with-array writer
            (write-value writer (car value))
            (write-value writer (cdr value)))))))
   (:method ((writer json-writer) (value sequence))
-    (with-array (writer)
+    (with-array writer
       (map nil
            (lambda (x)
              (write-value writer x))
            value)))
   (:method ((writer json-writer) (value hash-table))
-    (with-object (writer)
+    (with-object writer
       (maphash (lambda (key value)
                  (write-key writer key)
                  (write-value writer value))
@@ -945,7 +945,7 @@ see `end-array'"
 
 (defun write-array (writer &rest values)
   "Write an array from a series of `values.'"
-  (with-array (writer)
+  (with-array writer
     (apply #'write-values writer values)))
 
 (defun write-property (writer key value)
@@ -957,12 +957,12 @@ see `end-array'"
 (defun write-properties (writer &rest kvp)
   "Write an set of object properties to `writer'. Must currently be writing an object.
  Ex.
-   (with-object (writer)
+   (with-object writer
      (write-properties writer
                        :speed 10
                        :colour :red)
      (write-key writer :an-array)
-     (with-array (writer)
+     (with-array writer
        (write-value 42))
 
      (write-properties writer :more 0 :after 42))
@@ -988,7 +988,7 @@ see `write-object'"
 "
   (declare (dynamic-extent kvp))
   (check-type writer json-writer)
-  (with-object (writer)
+  (with-object writer
     (apply #'write-properties writer kvp)))
 
 (defun stringify (element &key stream pretty (coerce-key #'coerce-key))

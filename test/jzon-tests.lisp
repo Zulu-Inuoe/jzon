@@ -280,17 +280,17 @@
 
 (test writer-write-values-works
   (is (string= "[1,2,3]" (with-writer-to-string (writer)
-                           (jzon:with-array (writer)
+                           (jzon:with-array writer
                              (jzon:write-values writer 1 2 3))))))
 
 (test writer-max-depth-works
   (signals (error)
     (with-writer-to-string (writer :max-depth 1)
-      (jzon:with-array (writer)
-        (jzon:with-array (writer)))))
+      (jzon:with-array writer
+        (jzon:with-array writer))))
   (finishes
     (with-writer-to-string (writer :max-depth 1)
-      (jzon:with-array (writer)
+      (jzon:with-array writer
         (jzon:write-value writer 42)))))
 
 (test writer-disallows-more-than-one-toplevel-value
@@ -300,40 +300,40 @@
       (jzon:write-value 24)))
   (signals (error)
     (with-writer-to-string (writer)
-      (jzon:with-object (writer))
+      (jzon:with-object writer)
       (jzon:write-value writer 42)))
   (signals (error)
     (with-writer-to-string (writer)
       (jzon:write-value writer 42)
-      (jzon:with-object (writer))))
+      (jzon:with-object writer)))
   (signals (error)
     (with-writer-to-string (writer)
-      (jzon:with-array (writer))
+      (jzon:with-array writer)
       (jzon:write-value writer 42)))
   (signals (error)
     (with-writer-to-string (writer)
       (jzon:write-value writer 42)
-      (jzon:with-array (writer))))
+      (jzon:with-array writer)))
   (signals (error)
     (with-writer-to-string (writer)
-      (jzon:with-array (writer))
-      (jzon:with-array (writer))))
+      (jzon:with-array writer)
+      (jzon:with-array writer)))
   (signals (error)
     (with-writer-to-string (writer)
-      (jzon:with-array (writer))
-      (jzon:with-object (writer))))
+      (jzon:with-array writer)
+      (jzon:with-object writer)))
   (signals (error)
     (with-writer-to-string (writer)
-      (jzon:with-object (writer))
-      (jzon:with-array (writer))))
+      (jzon:with-object writer)
+      (jzon:with-array writer)))
   (signals (error)
     (with-writer-to-string (writer)
-      (jzon:with-object (writer))
-      (jzon:with-object (writer)))))
+      (jzon:with-object writer)
+      (jzon:with-object writer))))
 
 (test write-properties-returns-writer
   (let ((writer (jzon:make-json-writer)))
-    (jzon:with-object (writer)
+    (jzon:with-object writer
       (is (eq writer (jzon:write-properties writer 0 0))))))
 
 (test write-array-works
