@@ -331,6 +331,11 @@
       (jzon:with-object (writer))
       (jzon:with-object (writer)))))
 
+(test write-properties-returns-writer
+  (let ((writer (jzon:make-json-writer)))
+    (jzon:with-object (writer)
+      (is (eq writer (jzon:write-properties writer 0 0))))))
+
 (test stringify-to-nil-returns-string
   (is (string= "42" (stringify 42))))
 

@@ -971,7 +971,8 @@ see `write-object'"
     :for (k . rest) := cell
     :unless (consp rest)
       :do (error "Malformed property list ~A" (copy-list kvp))
-    :do (write-property writer k (car rest))))
+    :do (write-property writer k (car rest)))
+  writer)
 
 (defun write-object (writer &rest kvp)
   "Write an object value from a set of key-value pairs.
