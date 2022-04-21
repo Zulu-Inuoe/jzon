@@ -537,6 +537,9 @@
 (test stringify-coerces-pathname-to-namestring
   (is (string= "\"hello.lisp\""(stringify #p"hello.lisp"))))
 
+(test stringify-writes-cons-as-2-tuple
+  (is (string= "[1,2]" (stringify (cons 1 2)))))
+
 (def-suite jzon.json-checker :in jzon)
 
 (in-suite jzon.json-checker)

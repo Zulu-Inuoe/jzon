@@ -918,8 +918,8 @@ see `end-array'"
         (t
          ;; Otherwise consider it a 2-element tuple
          (with-array (writer)
-           (write-value (car value))
-           (write-value (cdr value)))))))
+           (write-value writer (car value))
+           (write-value writer (cdr value)))))))
   (:method ((writer json-writer) (value sequence))
     (with-array (writer)
       (map nil
