@@ -25,17 +25,19 @@
    ;; Extensible serialization
    #:write-value
 
+   #:begin-array
+   #:write-values
+   #:end-array
+   #:with-array
+   #:write-array
+
    ;; Writer operations
    #:begin-object
    #:write-key
-   #:write-property
+   #:write-properties
    #:end-object
    #:with-object
-
-   #:begin-array
-   #:end-array
-   #:with-array
-   #:write-values)
+   #:write-object)
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
   (:import-from #:uiop))
@@ -908,27 +910,47 @@ see `end-array'"
   (map nil (lambda (x) (write-value writer x)))
   writer)
 
-(defun write-object (writer &rest kvp)
-  "Write an object value from a set of key-value pairs.
-Ex.
-  (write-object writer
-    :speed 10
-    :colour :red)
-"
-  (with-object (writer)
-    (loop
-      :for cell :on kvp :by #'cddr
-      :for (k . rest) := cell
-      :unless (consp rest)
-        :do (error "Malformed property list ~A" kvp)
-      :do (write-property writer k (car rest)))))
-
 (defun write-property (writer key value)
   "Write an object property/key value pair."
   (check-type writer json-writer)
   (write-key writer key)
   (write-value writer value))
 
+(defun write-properties (writer &rest kvp)
+  "Write an set of object properties to `writer'. Must currently be writing an object.
+ Ex.
+   (with-object (writer)
+     (write-properties writer
+                       :speed 10
+                       :colour :red)
+     (write-key writer :an-array)
+     (with-array (writer)
+       (write-value 42))
+
+     (write-properties writer :more 0 :after 42))
+
+see `write-property'
+see `write-object'"
+  (declare (dynamic-extent kvp))
+  (check-type writer json-writer)
+  (loop
+    :for cell :on kvp :by #'cddr
+    :for (k . rest) := cell
+    :unless (consp rest)
+      :do (error "Malformed property list ~A" (copy-list kvp))
+    :do (write-property writer k (car rest))))
+
+(defun write-object (writer &rest kvp)
+  "Write an object value from a set of key-value pairs.
+ Ex.
+   (write-object writer
+                 :speed 10
+                 :colour :red)
+"
+  (declare (dynamic-extent kvp))
+  (check-type writer json-writer)
+  (with-object (writer)
+    (apply #'write-properties writer kvp)))
 
 (defun stringify (element &key stream pretty (coerce-key #'coerce-key))
   "Serialize `element' into JSON.
