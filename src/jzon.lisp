@@ -40,7 +40,24 @@
    #:write-properties
    #:end-object
    #:with-object
-   #:write-object)
+   #:write-object
+
+   ;; Dynavar interface to the writer
+   #:*writer*
+   #:with-writer*
+   #:write-value*
+   #:begin-array*
+   #:write-values*
+   #:end-array*
+   #:with-array*
+   #:write-array*
+   #:begin-object*
+   #:write-key*
+   #:write-property*
+   #:write-properties*
+   #:end-object*
+   #:with-object*
+   #:write-object*)
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
   (:import-from #:uiop))
@@ -1027,6 +1044,73 @@ see `write-object'"
   (check-type writer json-writer)
   (with-object writer
     (apply #'write-properties writer kvp)))
+
+;; dynavar-based write functions
+(defvar *writer*)
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (setf (documentation '*writer* 'variable) "The active `json-write' for the various `write-*' functions."))
+
+(defmacro with-writer* ((&rest args &key &allow-other-keys) &body body)
+  "Create a new `json-writer' using `args' and bind it to `*writer*'
+
+  `args' are a the same as `make-json-writer'"
+  (let ((writer-sym (gensym "WRITER")))
+    `(let* ((,writer-sym (make-json-writer ,@args))
+            (*writer* ,writer-sym))
+       ,@body
+       ,writer-sym)))
+
+(defun write-value* (value)
+  "As `write-value', but using the currently bound `*writer*'."
+  (write-value *writer* value))
+
+(defun begin-array* ()
+  "As `begin-array', but using the currently bound `*writer*'."
+  (begin-array *writer*))
+
+(defun write-values* (&rest values)
+  "As `write-values', but using the currently bound `*writer*'."
+  (apply #'write-values *writer* values))
+
+(defun end-array* ()
+  "As `end-array', but using the currently bound `*writer*'."
+  (end-array *writer*))
+
+(defmacro with-array* (&body body)
+  "As `with-array', but using the currently bound `*writer*'."
+  `(with-array *writer* ,@body))
+
+(defun write-array* (&rest values)
+  "As `write-array', but using the currently bound `*writer*'."
+  (apply #'write-array *writer* values))
+
+(defun begin-object* ()
+  "As `begin-object', but using the currently bound `*writer*'."
+  (begin-object *writer*))
+
+(defun write-key* (key)
+  "As `write-key', but using the currently bound `*writer*'."
+  (write-key *writer* key))
+
+(defun write-property* (key value)
+  "As `write-property', but using the currently bound `*writer*'."
+  (write-property *writer* key value))
+
+(defun write-properties* (&rest kvp)
+  "As `write-properties', but using the currently bound `*writer*'."
+  (apply #'write-properties *writer* kvp))
+
+(defun end-object* ()
+  "As `end-object', but using the currently bound `*writer*'."
+  (end-object *writer*))
+
+(defmacro with-object* (&body body)
+  "As `with-object', but using the currently bound `*writer*'."
+  `(with-object *writer* ,@body))
+
+(defun write-object* (&rest kvp)
+  "As `write-object', but using the currently bound `*writer*'."
+  (apply #'write-object *writer* kvp))
 
 (defun stringify (element &key stream pretty (coerce-key #'coerce-key))
   "Serialize `element' into JSON.

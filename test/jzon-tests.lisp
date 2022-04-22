@@ -45,6 +45,10 @@
 
 (in-suite jzon)
 
+(def-suite parsing :in jzon)
+
+(in-suite parsing)
+
 (defun ph (&rest plist)
   "Shorthand for plist-hash-table."
   (plist-hash-table plist :test 'equal))
@@ -272,6 +276,9 @@
   (signals (type-error)
     (parse "\"Doesn't matter\"" :max-string-length (* array-dimension-limit 2))))
 
+(def-suite writer :in jzon)
+(in-suite writer)
+
 (defmacro with-writer-to-string ((writer &key pretty max-depth) &body body)
   (let ((str-sym (gensym "STR")))
     `(with-output-to-string (,str-sym)
@@ -340,6 +347,35 @@
   (is (string= "[1,2,3]"
        (with-writer-to-string (writer)
          (jzon:write-array writer 1 2 3)))))
+
+(test write-*-functions-use-bound-writer
+  (is (string= "42" (with-writer-to-string (jzon:*writer*) (jzon:write-value* 42))))
+  (is (string= "[42]" (with-writer-to-string (jzon:*writer*) (jzon:write-array* 42))))
+  (is (string= "{\"24\":42}" (with-writer-to-string (jzon:*writer*) (jzon:write-object* 24 42))))
+  (is (string= "[42]" (with-writer-to-string (jzon:*writer*) (jzon:with-array* (jzon:write-value* 42)))))
+  (is (string= "{\"24\":42}"
+               (with-writer-to-string (jzon:*writer*)
+                 (jzon:with-object*
+                   (jzon:write-key* "24")
+                   (jzon:write-value* 42)))))
+  (is (string= "{\"24\":42}"
+               (with-writer-to-string (jzon:*writer*)
+                 (jzon:with-object*
+                   (jzon:write-property* "24" 42)))))
+  (is (string= "{\"24\":42,\"null\":null}"
+               (with-writer-to-string (jzon:*writer*)
+                 (jzon:with-object*
+                   (jzon:write-properties* "24" 42
+                                           "null" 'null))))))
+
+(test with-writer-*-binds-writer
+  (is (string= "\"hello\"" (with-output-to-string (stream)
+                             (jzon:with-writer* (:stream stream)
+                               (jzon:write-value* "hello"))))))
+
+(def-suite stringify :in jzon)
+
+(in-suite stringify)
 
 (test stringify-to-nil-returns-string
   (is (string= "42" (stringify 42))))
