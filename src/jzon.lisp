@@ -47,7 +47,9 @@
 
 (in-package #:com.inuoe.jzon)
 
-(define-condition json-error (simple-error) ())
+(define-condition json-error (simple-error) ()
+  (:documentation "Common error condition for all errors relating to reading/writing JSON."))
+
 (define-condition json-parse-error (json-error)
   ((%line :initarg :line
           :reader %json-parse-error-line)
@@ -60,10 +62,18 @@
            (column (%json-parse-error-column c)))
        (if (and line column)
            (format stream ", at line ~A, column ~A." (%json-parse-error-line c) (%json-parse-error-column c))
-           (format stream ", position unavailable."))))))
-(define-condition json-eof-error (json-parse-error) ())
+           (format stream ", position unavailable.")))))
+  (:documentation "Error occuring while parsing JSON, in some cases with row/col information."))
+
+(define-condition json-eof-error (json-parse-error) ()
+  (:documentation "Error signalled when reaching the end of file while parsing JSON."))
 
 (deftype json-atom ()
+  "A 'native' atomic JSON value one can receive from `parse'.
+  t => true
+  nil => false
+  null => null
+  real => number"
   `(or (eql t)
        (eql nil)
        (eql null)
@@ -71,6 +81,12 @@
        string))
 
 (deftype json-element ()
+  "A 'native' JSON value one can receive from `parse'.
+
+  vector => list
+  hash-table => object
+
+see `json-atom'"
   `(or json-atom
        vector
        hash-table))
@@ -581,7 +597,8 @@ Example return value:
   (:method ((key integer))
     (format nil "~D" key)))
 
-(define-condition json-write-error (json-error) ())
+(define-condition json-write-error (json-error) ()
+  (:documentation "Error signalled when there is an issue during writing JSON."))
 
 (define-condition json-recursive-write-error (json-write-error)
   ((%path :initarg :path
@@ -590,7 +607,9 @@ Example return value:
    (lambda (c stream)
      (apply #'format stream (simple-condition-format-control c) (simple-condition-format-arguments c))
      (let ((*print-circle* t))
-       (format stream ", path until recursion point: ~A" (%json-recursive-write-error-path c))))))
+       (format stream ", path until recursion point: ~A" (%json-recursive-write-error-path c)))))
+  (:documentation "Error signalled when a recursive write is detected.
+  A recursive write is when `write-value' is called from within `write-value' with a value it has 'seen' before."))
 
 ;;; Stack is
 ;;; (<state> . <prev-states>)
@@ -777,7 +796,11 @@ see `with-object'"
   writer)
 
 (defmacro with-object (writer &body body)
-  "Wrapper around `begin-object' and `end-object'."
+  "Wrapper around `begin-object' and `end-object'.
+
+see `write-object'
+see `write-property'
+see `write-properties'"
   (let ((writer-sym (gensym "WRITER")))
     `(let ((,writer-sym ,writer))
        (begin-object ,writer-sym)
@@ -824,6 +847,10 @@ see `end-array'"
   writer)
 
 (defmacro with-array (writer &body body)
+  "Wrapper around `begin-array' and `end-array'
+
+see `write-array'
+see `write-values'"
   (let ((writer-sym (gensym "WRITER")))
     `(let ((,writer-sym ,writer))
        (begin-array ,writer-sym)
