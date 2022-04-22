@@ -14,6 +14,8 @@
    #:json-error
    #:json-parse-error
    #:json-eof-error
+   #:json-write-error
+   #:json-recursive-write-error
 
    ;;; Simple extensible writing
    #:coerced-fields
@@ -579,6 +581,17 @@ Example return value:
   (:method ((key integer))
     (format nil "~D" key)))
 
+(define-condition json-write-error (json-error) ())
+
+(define-condition json-recursive-write-error (json-write-error)
+  ((%path :initarg :path
+          :reader %json-recursive-write-error-path))
+  (:report
+   (lambda (c stream)
+     (apply #'format stream (simple-condition-format-control c) (simple-condition-format-arguments c))
+     (let ((*print-circle* t))
+       (format stream ", path until recursion point: ~A" (%json-recursive-write-error-path c))))))
+
 ;;; Stack is
 ;;; (<state> . <prev-states>)
 ;;; where <state> is one of
@@ -830,10 +843,7 @@ see `end-array'"
           (let ((path (member value prev-stack :test #'eq)))
             (when path
               ;; bail with a ref string
-              (write-value writer
-                           (let ((*print-circle* t))
-                             (format nil "@recursive-ref__ROOT~{->~A~}" (reverse path))))
-              (return-from write-value writer)))
+              (error 'json-recursive-write-error :format-control "Recursion detected printing value" :path (reverse path))))
           (setf %ref-stack (cons value prev-stack))
           (unwind-protect (progn (call-next-method writer value)
                                  (case context
