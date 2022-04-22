@@ -768,8 +768,8 @@ see `with-object'"
   (let ((writer-sym (gensym "WRITER")))
     `(let ((,writer-sym ,writer))
        (begin-object ,writer-sym)
-       (unwind-protect (progn ,@body)
-         (end-object ,writer-sym)))))
+       ,@body
+       (end-object ,writer-sym))))
 
 (defun begin-array (writer)
   "Begin writing an array to `writer'.
@@ -814,8 +814,8 @@ see `end-array'"
   (let ((writer-sym (gensym "WRITER")))
     `(let ((,writer-sym ,writer))
        (begin-array ,writer-sym)
-       (unwind-protect (progn ,@body)
-         (end-array ,writer-sym)))))
+       (progn ,@body)
+       (end-array ,writer-sym))))
 
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
