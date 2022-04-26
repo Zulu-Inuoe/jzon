@@ -655,6 +655,7 @@ Example return value:
    (%pretty :initarg :pretty)
    (%stack :initform nil)
    (%ref-stack :initform nil)
+   (%replacer :initform nil :type (or null vector function))
    (%depth :type integer :initform 0)
    (%max-depth :initarg :max-depth))
   (:documentation "A JSON writer on which to call `write-value', `begin-object', etc.")
@@ -662,26 +663,37 @@ Example return value:
    :stream (make-broadcast-stream)
    :coerce-key #'coerce-key
    :pretty nil
+   :replacer nil
    :max-depth 128))
 
 (defun make-json-writer (&key
                            (stream (make-broadcast-stream))
                            (coerce-key #'coerce-key)
                            (pretty nil)
+                           (replacer nil replacer-specified-p)
                            (max-depth 128))
   "Create a writer for subsequent `write-value', `begin-object', et al calls.
   `:stream' must be a character or binary `stream'
+  `:replacer' can be a function, taking a key and value and returning the value to be stringified, or an array or list of keys to include.
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-key'"
   (check-type stream stream)
   (check-type max-depth (or null (integer 1)))
+  (when replacer-specified-p
+    (check-type replacer (or symbol function list vector)))
   (let* ((stream (cond
                    ((subtypep (stream-element-type stream) 'character) stream)
                    (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
     (make-instance 'json-writer :stream stream
                                 :coerce-key (%ensure-function coerce-key)
                                 :pretty (and pretty t)
+                                :replacer (when replacer-specified-p
+                                            (ctypecase replacer
+                                              ((list (coerce replacer 'vector)) ;; This will also catch an explicitly-passed NIL
+                                               (symbol (%ensure-function replacer))
+                                               (function replacer)
+                                               (vector replacer))))
                                 :max-depth max-depth)))
 
 (defun %write-indentation (writer)
@@ -1112,11 +1124,14 @@ see `write-object'"
   "As `write-object', but using the currently bound `*writer*'."
   (apply #'write-object *writer* kvp))
 
-(defun stringify (element &key stream pretty (coerce-key #'coerce-key))
+(defun stringify (element &key stream replacer pretty (coerce-key #'coerce-key))
   "Serialize `element' into JSON.
  Returns a fresh string if `stream' is nil, nil otherwise.
   `:stream' like the `destination' in `format', or a `pathname'
   `:pretty' if true, pretty-format the output
+  `:replacer' can be either a function or an array.
+       - As a function, it takes two parameters: the key, and the value being stringified, and returns the value
+         to be serialized in the final JSON string.
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-key'
@@ -1124,7 +1139,10 @@ see `write-object'"
   (check-type coerce-key (or symbol function))
   (let ((coerce-key (%ensure-function coerce-key)))
     (flet ((stringify-to (stream)
-             (let ((writer (make-json-writer :stream stream :coerce-key coerce-key :pretty (and pretty t))))
+             (let ((writer (make-json-writer :stream stream
+                                             :coerce-key coerce-key
+                                             :pretty (and pretty t)
+                                             :replacer replacer)))
                (write-value writer element))))
       (cond
         ((null stream)
