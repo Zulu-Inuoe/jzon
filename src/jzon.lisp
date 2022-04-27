@@ -812,6 +812,7 @@ see `with-object'"
       (when (eq context :object-value)
         (%write-indentation writer)))
     (write-char #\} %stream)
+
     (unless %stack
       (push :complete %stack)))
   writer)
