@@ -674,7 +674,7 @@ Example return value:
                            (max-depth 128))
   "Create a writer for subsequent `write-value', `begin-object', et al calls.
   `:stream' must be a character or binary `stream'
-  `:replacer' a function of two arguments, the key and the value of a KV pair.  Returns the value as it should be stringified
+  `:replacer' a function of two arguments, the key and the value of a KV pair.
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-key'"
@@ -988,10 +988,19 @@ see `write-values'"
   (:method ((writer json-writer) (value hash-table))
     (with-object writer
       (maphash (lambda (key value)
-                 (write-key writer key)
-                 (write-value writer (if (slot-value writer '%replacer)
-                                         (funcall (slot-value writer '%replacer) key value)
-                                         value)))
+                 (let ((replacer (slot-value writer '%replacer)))
+                   (if replacer
+                       (multiple-value-call
+                           (lambda (write-pair &optional (new-value nil value-changed-p))
+                             (when write-pair
+                               (write-key writer key)
+                               (if value-changed-p
+                                   (write-value writer new-value)
+                                   (write-value writer value))))
+                         (funcall replacer key value))
+                       (progn
+                         (write-key writer key)
+                         (write-value writer value)))))
              value))))
 
 ;;; Additional convenience functions/macros
@@ -1124,7 +1133,8 @@ see `write-object'"
  Returns a fresh string if `stream' is nil, nil otherwise.
   `:stream' like the `destination' in `format', or a `pathname'
   `:pretty' if true, pretty-format the output
-  `:replacer' a function which takes a key and value as an argument, and returns the value to associate with the key.
+  `:replacer' a function which takes a key and value as an argument, and returns t or nil, indicating whether the KV pair should be written.
+    - Optionally returns a second value, indicating the value to be stringified in place of the given value.
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-key'
