@@ -901,6 +901,17 @@ see `write-values'"
                                    ((nil)       (push :complete %stack))))
             (setf %ref-stack prev-stack)))))
     writer)
+  ;; Calls the replacer on the top-level value, allowing it to be substituted entirely
+  (:method :before ((writer json-writer) value)
+    (let ((replacer (slot-value writer '%replacer)))
+      (if replacer
+          (multiple-value-call
+              (lambda (write-p &optional (new-value nil value-changed-p))
+                (when write-p
+                  (if value-changed-p
+                      (call-next-method writer new-value)
+                      (call-next-method writer value))))
+            (funcall replacer nil value)))))
   (:method ((writer json-writer) value)
     (let ((coerce-key (slot-value writer '%coerce-key))
           (fields (coerced-fields value)))
@@ -981,10 +992,20 @@ see `write-values'"
            (write-value writer (cdr value)))))))
   (:method ((writer json-writer) (value sequence))
     (with-array writer
-      (map nil
-           (lambda (x)
-             (write-value writer x))
-           value)))
+      (let ((replacer (slot-value writer '%replacer)))
+        (if replacer
+            ;; Apply the replacer to each value in the array, with the index as its key
+            (dotimes (i (length value))
+              (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                     (when write-p
+                                       (if value-changed-p
+                                           (write-value writer new-value)
+                                           (write-value writer (aref value i)))))
+                (funcall replacer i (aref value i))))
+            (map nil
+                 (lambda (x)
+                   (write-value writer x))
+                 value)))))
   (:method ((writer json-writer) (value hash-table))
     (with-object writer
       (maphash (lambda (key value)
