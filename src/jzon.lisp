@@ -882,7 +882,7 @@ see `write-values'"
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
   (:method :around ((writer json-writer) value)
-    (with-slots (%stack %ref-stack %pretty) writer
+    (with-slots (%stack %ref-stack %pretty %replacer) writer
       (let ((context (car %stack)))
         (case context
           ((:object :object-value) (error "Expecting object key"))
@@ -894,24 +894,25 @@ see `write-values'"
               ;; bail with a ref string
               (error 'json-recursive-write-error :format-control "Recursion detected printing value" :path (reverse path))))
           (setf %ref-stack (cons value prev-stack))
-          (unwind-protect (progn (call-next-method writer value)
-                                 (case context
-                                   (:array      (setf (car %stack) :array-value))
-                                   (:object-key (setf (car %stack) :object-value))
-                                   ((nil)       (push :complete %stack))))
+
+          ;; Call the replacer on the top-level object first, if applicable
+
+          (unwind-protect (progn
+                            (call-next-method writer (if %replacer
+                                                       (multiple-value-call
+                                                           (lambda (write-p &optional (new-value nil value-changed-p))
+                                                             (when write-p
+                                                               (if value-changed-p
+                                                                   new-value
+                                                                   value)))
+                                                         (funcall %replacer nil value))
+                                                       value))
+                            (case context
+                              (:array      (setf (car %stack) :array-value))
+                              (:object-key (setf (car %stack) :object-value))
+                              ((nil)       (push :complete %stack))))
             (setf %ref-stack prev-stack)))))
     writer)
-  ;; Calls the replacer on the top-level value, allowing it to be substituted entirely
-  (:method :before ((writer json-writer) value)
-    (let ((replacer (slot-value writer '%replacer)))
-      (if replacer
-          (multiple-value-call
-              (lambda (write-p &optional (new-value nil value-changed-p))
-                (when write-p
-                  (if value-changed-p
-                      (call-next-method writer new-value)
-                      (call-next-method writer value))))
-            (funcall replacer nil value)))))
   (:method ((writer json-writer) value)
     (let ((coerce-key (slot-value writer '%coerce-key))
           (fields (coerced-fields value)))

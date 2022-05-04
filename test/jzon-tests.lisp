@@ -826,29 +826,37 @@ break\"]")))
   (is (string= "{}"
                (stringify (ph :x 0)
                           :replacer (lambda (k v)
-                                      (declare (ignore k v))
-                                      nil)))))
+                                      (declare (ignore v))
+                                      (case k
+                                        ((nil) t)
+                                        (t nil)))))))
 
 (test stringify-replacer-filters-some-keys-on-nil
   (is (string= "{\"y\":0}"
                (stringify (ph :x 0 :y 0)
                           :replacer (lambda (k v)
                                       (declare (ignore v))
-                                      (eq k :y))))))
+                                      (case k
+                                        ((nil) t)
+                                        (t (eq k :y))))))))
 
 (test stringify-replacer-replaces-values-using-multiple-values
   (is (string= "{\"x\":42}"
                (stringify (ph :x 0)
                           :replacer (lambda (k v)
-                                      (declare (ignore k v))
-                                      (values t 42))))))
+                                      (declare (ignore v))
+                                      (case k
+                                        ((nil) t)
+                                        (t (values t 42))))))))
 
 (test stringify-replacer-ignores-second-value-on-nil
   (is (string= "{}"
                (stringify (ph :x 0)
                           :replacer (lambda (k v)
-                                      (declare (ignore k v))
-                                      (values nil 42))))))
+                                      (declare (ignore v))
+                                      (case k
+                                        ((nil) t)
+                                        (t (values nil 42))))))))
 
 (test stringify-replacer-is-called-on-sub-objects
   (is (string= "{\"x\":{\"a\":42}}"
@@ -868,3 +876,33 @@ break\"]")))
                                         (:x (values t (ph :y 0)))
                                         (:y (values t(ph :z 0)))
                                         (t t)))))))
+
+(test stringify-replacer-is-called-on-toplevel-value-with-nil-key
+  (5am:is-true
+   (let ((key-is-nil nil))
+     (stringify 0 :replacer (lambda (k v)
+                              (declare (ignore v))
+                              (setf key-is-nil (null k))))
+     key-is-nil))
+  (5am:is-true
+   (let ((value 0)
+         (value-is-same nil))
+     (stringify value :replacer (lambda (k v)
+                                  (declare (ignore k))
+                                  (setf value-is-same (eq value v) )))
+     value-is-same)))
+
+(test stringify-replacer-can-replace-toplevel-value
+  (is (string= "42" (stringify 0 :replacer (lambda (k v)
+                                             (declare (ignore k v))
+                                             (values t 42))))))
+
+(test stringify-replacer-is-called-on-array-elements-with-element-indexes
+  (is (equalp #(0 1 2)
+              (let ((keys (list)))
+                (stringify #(t t t) :replacer (lambda (k v)
+                                                (declare (ignore v))
+                                                (when k
+                                                  (push k keys))
+                                                t)) ;; Gotta return t or it'll remove the elements
+                (coerce (nreverse keys) 'vector)))))
