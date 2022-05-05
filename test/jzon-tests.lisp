@@ -906,3 +906,12 @@ break\"]")))
                                                   (push k keys))
                                                 t)) ;; Gotta return t or it'll remove the elements
                 (coerce (nreverse keys) 'vector)))))
+
+(test stringify-replacer-is-only-called-with-nil-on-toplevel-value
+  (is (equalp '(#(1 2 3))
+              (let ((called-on (list)))
+                (stringify #(1 2 3) :replacer (lambda (k v)
+                                                (when (null k)
+                                                  (push v called-on))
+                                                t))
+                (nreverse called-on)))))
