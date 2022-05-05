@@ -996,13 +996,17 @@ see `write-values'"
       (let ((replacer (slot-value writer '%replacer)))
         (if replacer
             ;; Apply the replacer to each value in the array, with the index as its key
-            (dotimes (i (length value))
-              (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
-                                     (when write-p
-                                       (if value-changed-p
-                                           (write-value writer new-value)
-                                           (write-value writer (aref value i)))))
-                (funcall replacer i (aref value i))))
+            (map nil
+                 (let ((i 0))
+                   (lambda (x)
+                     (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                            (when write-p
+                                              (if value-changed-p
+                                                  (write-value writer new-value)
+                                                  (write-value writer x))))
+                       (funcall replacer i x))
+                     (incf i)))
+                 value)
             (map nil
                  (lambda (x)
                    (write-value writer x))
