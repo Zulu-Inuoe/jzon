@@ -655,6 +655,7 @@ Example return value:
    (%pretty :initarg :pretty)
    (%stack :initform nil)
    (%ref-stack :initform nil)
+   (%replacer :initarg :replacer)
    (%depth :type integer :initform 0)
    (%max-depth :initarg :max-depth))
   (:documentation "A JSON writer on which to call `write-value', `begin-object', etc.")
@@ -662,15 +663,18 @@ Example return value:
    :stream (make-broadcast-stream)
    :coerce-key #'coerce-key
    :pretty nil
+   :replacer nil
    :max-depth 128))
 
 (defun make-json-writer (&key
                            (stream (make-broadcast-stream))
                            (coerce-key #'coerce-key)
                            (pretty nil)
+                           (replacer nil)
                            (max-depth 128))
   "Create a writer for subsequent `write-value', `begin-object', et al calls.
   `:stream' must be a character or binary `stream'
+  `:replacer' a function of two arguments, the key and the value of a KV pair.
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-key'"
@@ -682,6 +686,7 @@ Example return value:
     (make-instance 'json-writer :stream stream
                                 :coerce-key (%ensure-function coerce-key)
                                 :pretty (and pretty t)
+                                :replacer replacer
                                 :max-depth max-depth)))
 
 (defun %write-indentation (writer)
@@ -877,7 +882,7 @@ see `write-values'"
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
   (:method :around ((writer json-writer) value)
-    (with-slots (%stack %ref-stack %pretty) writer
+    (with-slots (%stack %ref-stack %pretty %replacer) writer
       (let ((context (car %stack)))
         (case context
           ((:object :object-value) (error "Expecting object key"))
@@ -889,11 +894,23 @@ see `write-values'"
               ;; bail with a ref string
               (error 'json-recursive-write-error :format-control "Recursion detected printing value" :path (reverse path))))
           (setf %ref-stack (cons value prev-stack))
-          (unwind-protect (progn (call-next-method writer value)
-                                 (case context
-                                   (:array      (setf (car %stack) :array-value))
-                                   (:object-key (setf (car %stack) :object-value))
-                                   ((nil)       (push :complete %stack))))
+
+          ;; Call the replacer on the top-level object first, if applicable
+
+          (unwind-protect (progn
+                            (call-next-method writer (if (and (null context) %replacer)
+                                                       (multiple-value-call
+                                                           (lambda (write-p &optional (new-value nil value-changed-p))
+                                                             (when write-p
+                                                               (if value-changed-p
+                                                                   new-value
+                                                                   value)))
+                                                         (funcall %replacer nil value))
+                                                       value))
+                            (case context
+                              (:array      (setf (car %stack) :array-value))
+                              (:object-key (setf (car %stack) :object-value))
+                              ((nil)       (push :complete %stack))))
             (setf %ref-stack prev-stack)))))
     writer)
   (:method ((writer json-writer) value)
@@ -976,15 +993,36 @@ see `write-values'"
            (write-value writer (cdr value)))))))
   (:method ((writer json-writer) (value sequence))
     (with-array writer
-      (map nil
-           (lambda (x)
-             (write-value writer x))
-           value)))
+      (let ((replacer (slot-value writer '%replacer)))
+        (if replacer
+            ;; Apply the replacer to each value in the array, with the index as its key
+            (dotimes (i (length value))
+              (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                     (when write-p
+                                       (if value-changed-p
+                                           (write-value writer new-value)
+                                           (write-value writer (aref value i)))))
+                (funcall replacer i (aref value i))))
+            (map nil
+                 (lambda (x)
+                   (write-value writer x))
+                 value)))))
   (:method ((writer json-writer) (value hash-table))
     (with-object writer
       (maphash (lambda (key value)
-                 (write-key writer key)
-                 (write-value writer value))
+                 (let ((replacer (slot-value writer '%replacer)))
+                   (if replacer
+                       (multiple-value-call
+                           (lambda (write-pair &optional (new-value nil value-changed-p))
+                             (when write-pair
+                               (write-key writer key)
+                               (if value-changed-p
+                                   (write-value writer new-value)
+                                   (write-value writer value))))
+                         (funcall replacer key value))
+                       (progn
+                         (write-key writer key)
+                         (write-value writer value)))))
              value))))
 
 ;;; Additional convenience functions/macros
@@ -1112,19 +1150,27 @@ see `write-object'"
   "As `write-object', but using the currently bound `*writer*'."
   (apply #'write-object *writer* kvp))
 
-(defun stringify (element &key stream pretty (coerce-key #'coerce-key))
+(defun stringify (element &key stream replacer pretty (coerce-key #'coerce-key))
   "Serialize `element' into JSON.
  Returns a fresh string if `stream' is nil, nil otherwise.
   `:stream' like the `destination' in `format', or a `pathname'
   `:pretty' if true, pretty-format the output
+  `:replacer' a function which takes a key and value as an argument, and returns t or nil, indicating whether the KV pair should be written.
+    - Optionally returns a second value, indicating the value to be stringified in place of the given value.
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-key'
 "
+  (check-type replacer (or symbol function))
+  (when replacer
+    (setf replacer (%ensure-function replacer)))
   (check-type coerce-key (or symbol function))
   (let ((coerce-key (%ensure-function coerce-key)))
     (flet ((stringify-to (stream)
-             (let ((writer (make-json-writer :stream stream :coerce-key coerce-key :pretty (and pretty t))))
+             (let ((writer (make-json-writer :stream stream
+                                             :coerce-key coerce-key
+                                             :pretty (and pretty t)
+                                             :replacer replacer)))
                (write-value writer element))))
       (cond
         ((null stream)
