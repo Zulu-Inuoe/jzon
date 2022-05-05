@@ -898,7 +898,7 @@ see `write-values'"
           ;; Call the replacer on the top-level object first, if applicable
 
           (unwind-protect (progn
-                            (call-next-method writer (if %replacer
+                            (call-next-method writer (if (and (null context) %replacer)
                                                        (multiple-value-call
                                                            (lambda (write-p &optional (new-value nil value-changed-p))
                                                              (when write-p
