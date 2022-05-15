@@ -690,6 +690,28 @@
                                                 t))
                 (nreverse called-on)))))
 
+(test stringify-replacer-is-called-on-plists-as-objects
+  (is (string= "{\"a\":\"b\",\"b\":\"a\"}"
+               ;; As a p-list
+               (stringify '("a" 19 "b" "c")
+                          :replacer (lambda (k v)
+                                      (declare (ignore v))
+                                      (cond
+                                        ((equal k "a") (values t "b"))
+                                        ((equal k "b") (values t "a"))
+                                        (t t)))))))
+
+(test stringify-replacer-is-called-on-alists-as-objects
+  (is (string= "{\"a\":\"b\",\"b\":\"a\"}"
+               ;; as an a-list
+               (stringify '(("a" . 19) ("b" . "c"))
+                          :replacer (lambda (k v)
+                                      (declare (ignore v))
+                                      (cond
+                                        ((equal k "a") (values t "b"))
+                                        ((equal k "b") (values t "a"))
+                                        (t t)))))))
+
 (def-suite jzon.json-checker :in jzon)
 
 (in-suite jzon.json-checker)

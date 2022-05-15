@@ -951,6 +951,7 @@ see `write-values'"
     ;; Try and guess alist/plist
     ;; TODO - this might be too hacky/brittle to have on by default
     (let* ((coerce-key (slot-value writer '%coerce-key))
+           (replacer (slot-value writer '%replacer))
            (alist-keys (and (every #'consp value)
                             (loop :for (k . v) :in value
                                   :for key := (and (or (characterp k) (symbolp k) (stringp k))
@@ -972,15 +973,35 @@ see `write-values'"
            (loop :for (k . v) :in value
                  :for key :in alist-keys
                  :do
-                    (write-key writer key)
-                    (write-value writer v))))
+                    (if replacer
+                      (multiple-value-call
+                          (lambda (write-p &optional (new-value nil value-changed-p))
+                            (when write-p
+                              (write-key writer key)
+                              (if value-changed-p
+                                  (write-value writer new-value)
+                                  (write-value writer v))))
+                        (funcall replacer key v))
+                        (progn
+                          (write-key writer key)
+                          (write-value writer v))))))
         (plist-keys
          (with-object writer
            (loop :for (k v . rest) :on value :by #'cddr
                  :for key :in plist-keys
                  :do
-                    (write-key writer key)
-                    (write-value writer v))))
+                    (if replacer
+                          (multiple-value-call
+                              (lambda (write-p &optional (new-value nil value-changed-p))
+                                (when write-p
+                                  (write-key writer key)
+                                  (if value-changed-p
+                                      (write-value writer new-value)
+                                      (write-value writer v))))
+                            (funcall replacer key v))
+                        (progn
+                          (write-key writer key)
+                          (write-value writer v))))))
         ((listp (cdr value))
          ;; If it looks like a proper list, then consider it a list
          (with-array writer
