@@ -680,9 +680,9 @@ Example return value:
  see `coerce-key'"
   (check-type stream stream)
   (check-type max-depth (or null (integer 1)))
-  (let* ((stream (cond
-                   ((subtypep (stream-element-type stream) 'character) stream)
-                   (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
+  (let ((stream (cond
+                  ((subtypep (stream-element-type stream) 'character) stream)
+                  (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
     (make-instance 'json-writer :stream stream
                                 :coerce-key (%ensure-function coerce-key)
                                 :pretty (and pretty t)
