@@ -232,7 +232,7 @@ see `json-atom'"
                (when (= i max-string-length)
                  (%raise 'json-parse-error "Maximum string length exceeded"))
                (vector-push-extend (interpret next) accum))
-      (subseq accum 0))))
+      (make-array (fill-pointer accum) :element-type (if (every (lambda (c) (typep c 'base-char)) accum) 'base-char 'character) :initial-contents accum))))
 
 (defun %read-json-array (peek step read-string)
   "Reads a JSON array of elements until finding a closing brace.
@@ -464,8 +464,13 @@ see `json-atom'"
                                              (when (< *%max-string-length* (- q-pos i))
                                                (setf i (+ i (1+ *%max-string-length*)))
                                                (%raise 'json-parse-error "Maximum string length exceeded"))
-                                             (prog1 (subseq in i q-pos)
-                                               (setf i (1+ q-pos))))
+                                             ;; Create a base-string if possible, and copy characters over
+                                             (loop :with ret := (make-array (- q-pos i) :element-type (if (find-if (lambda (c) (not (typep c 'base-char))) in :start i :end q-pos) 'character 'base-char))
+                                                   :for j :from 0 :below (length ret)
+                                                   :do (setf (aref ret j) (aref in (+ i j)))
+                                                   :finally 
+                                                   (setf i (1+ q-pos))
+                                                   (return ret)))
                                             (t
                                              ;; Otherwise we need to worry about escape sequences, unicode, etc.
                                              (%read-json-string step))))))

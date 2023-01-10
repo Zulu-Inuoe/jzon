@@ -227,6 +227,10 @@
       (#(1 2 3)          (parse "[1,2,3]"))
       ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
 
+(test parse-returns-base-strings
+  (is (eq 'base-char (array-element-type (parse "\"COMMON-LISP\""))))
+  (is (eq 'base-char (array-element-type (parse "\"\\u0043\\u004F\\u004D\\u004D\\u004F\\u004E\\u002D\\u004C\\u0049\\u0053\\u0050\"")))))
+
 (test parse-accepts-octet-vector
   (is-every equalp
     (nil               (parse (utf-8 "false")))
