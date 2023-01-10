@@ -418,7 +418,7 @@ see `json-atom'"
         (t
          ;; Try to read a number
          (or (%read-json-number peek step c)
-             (%raise 'json-parse-error "Unrecognized character in JSON data")))))))
+             (%raise 'json-parse-error "Unexpected character in JSON data '~A' (~A)" c (char-name c))))))))
 
 (declaim (type (integer 0) *%current-depth*))
 (defvar *%current-depth*)
