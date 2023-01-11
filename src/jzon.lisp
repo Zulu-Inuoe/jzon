@@ -1116,7 +1116,7 @@ see `write-object'"
 ;; dynavar-based write functions
 (defvar *writer*)
 (eval-when (:load-toplevel :compile-toplevel :execute)
-  (setf (documentation '*writer* 'variable) "The active `json-write' for the various `write-*' functions."))
+  (setf (documentation '*writer* 'variable) "The active `json-writer' for the various `write-*' functions."))
 
 (defmacro with-writer* ((&rest args &key &allow-other-keys) &body body)
   "Create a new `json-writer' using `args' and bind it to `*writer*'
