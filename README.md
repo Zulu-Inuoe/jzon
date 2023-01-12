@@ -332,7 +332,6 @@ The following are the available functions for writing:
 * `json:end-object`
 * `jzon:write-object`
 
-
 #### Array
 * `jzon:with-array`
 * `jzon:begin-array`
@@ -340,7 +339,12 @@ The following are the available functions for writing:
 * `json:end-array`
 * `jzon:write-array`
 
+**Note** all functions have `*`-suffixed variants which use the `jzon:*writer*` variable, such as `jzon:write-value*`
+
 ### Example
+
+Using the plain variants:
+
 ``` common-lisp
 (let ((writer (jzon:make-json-writer :stream *standard-output* :pretty t)))
   (jzon:with-object writer
@@ -356,7 +360,23 @@ The following are the available functions for writing:
     (jzon:write-array writer :or "you" "can" "use these" "helpers")))
 ```
 
-produces:
+Using the `*` variants:
+``` common-lisp
+(jzon:with-writer* (:stream *standard-output* :pretty t)
+  (jzon:with-object*
+    (jzon:write-properties* :age 24 "colour" "blue")
+    (jzon:write-key* 42)
+    (jzon:write-value* #(1 2 3))
+
+    (jzon:write-key* "an-array")
+    (jzon:with-array*
+      (jzon:write-values* :these :are :array :elements))
+
+    (jzon:write-key* "another array")
+    (jzon:write-array* :or "you" "can" "use these" "helpers")))
+```
+
+result:
 
 ``` json
 {
@@ -382,7 +402,6 @@ produces:
   ]
 }
 ```
-
 
 It's worth noting that every function returns the `writer` itself for usage with arrow macros:
 
