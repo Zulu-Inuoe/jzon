@@ -129,19 +129,21 @@ When symbols are used as keys in objects, their names will be downcased, unless 
 For example:
 
 ``` common-lisp
-(let ((ht (make-hash-table)))
+(let ((ht (make-hash-table :test 'equal)))
   (setf (gethash 'all-upper ht) 0)
   (setf (gethash '|mixedCase| ht) 0)
+  (setf (gethash "ALL UPPER" ht) 0)
 
   (jzon:stringify ht))
 ```
 
-shall result in:
+result:
 
 ``` json
 {
   "all-upper": 0,
-  "mixedCase": 0
+  "mixedCase": 0,
+  "ALL UPPER": 0
 }
 ```
 
