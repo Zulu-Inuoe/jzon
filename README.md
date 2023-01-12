@@ -77,7 +77,7 @@ There's a single entry point: `parse`:
 **Tip**: `key-fn` can be supplied as `#'identity` in order to disable [key pooling](#object-key-pooling):
 
 ``` common-lisp
-(parse "[ { \"x\": 1, \"y\": 1 }, { \"x\": 1, \"y\": 1 } ]" :key-fn #'identity)
+(jzon:parse "[ { \"x\": 1, \"y\": 1 }, { \"x\": 1, \"y\": 1 } ]" :key-fn #'identity)
 ```
 
 **Tip**: `alexandria:make-keyword` or equivalent can be used to make object keys into symbols:
@@ -91,7 +91,7 @@ There's a single entry point: `parse`:
 `stringify` will serialize an object to JSON:
 
 ``` common-lisp
-(stringify #("Hello, world!" 5 2.2 #(null)))
+(jzon:stringify #("Hello, world!" 5 2.2 #(null)))
 ; => "[\"Hello, world!\",5,2.2,[null]]"
 ```
 
@@ -132,7 +132,7 @@ For example:
   (setf (gethash 'all-upper ht) 0)
   (setf (gethash '|mixedCase| ht) 0)
 
-  (stringify ht))
+  (jzon:stringify ht))
 ```
 
 shall result in:
@@ -182,7 +182,7 @@ Consider the following classes:
     :type list)))
 ```
 
-If we stringify a fresh `coordinate` object via `(stringify (make-instance 'coordinate))`, we'd end up with:
+If we stringify a fresh `coordinate` object via `(jzon:stringify (make-instance 'coordinate))`, we'd end up with:
 
 ``` json
 {
@@ -191,7 +191,7 @@ If we stringify a fresh `coordinate` object via `(stringify (make-instance 'coor
 }
 ```
 
-And if we `(stringify (make-instance 'coordinate :reference "Earth"))`:
+And if we `(jzon:stringify (make-instance 'coordinate :reference "Earth"))`:
 
 ``` json
 {
@@ -201,7 +201,7 @@ And if we `(stringify (make-instance 'coordinate :reference "Earth"))`:
 }
 ```
 
-Similarly if we `(stringify (make-instance 'object))`:
+Similarly if we `(jzon:stringify (make-instance 'object))`:
 
 ``` json
 {
@@ -217,7 +217,7 @@ If no type is provided, `nil` shall serialize as `null`.
 `stringify` recurses, so if we have:
 
 ``` common-lisp
-(stringify (make-instance 'object :coordinate (make-instance 'coordinate)))
+(jzon:stringify (make-instance 'object :coordinate (make-instance 'coordinate)))
 ```
 
 We'll have:
@@ -240,7 +240,7 @@ If you wish more control over how your object is serialized, the most straightfo
 Consider our previous `coordinate` class. If we always wanted to serialize only the `x` and `y` slots, and wanted to rename them, we could specialize `coerced-fields` as follows:
 
 ``` common-lisp
-(defmethod coerced-fields ((coordinate coordinate))
+(defmethod jzon:coerced-fields ((coordinate coordinate))
   (list (list "coord-x" (x coordinate))
         (list "coord-y" (y coordinate))))
 ```
@@ -271,7 +271,7 @@ The `type` is used as `:type` above, in order to resolve ambiguities with `nil`.
 If the default `coerced-fields` gives you most of what you want, you can exclude/rename/add fields by specializing an `:around` method as follows:
 
 ``` common-lisp
-(defmethod coerced-fields :around ((coordinate coordinate))
+(defmethod jzon:coerced-fields :around ((coordinate coordinate))
   (let* (;; Grab default fields
          (fields (call-next-method))
          ;; All fields except "children"
@@ -451,7 +451,7 @@ You call `parse`, and you get a reasonable standard CL object back.
 `jzon` will use a key pool per-parse, causing shared keys in a nested JSON object to share keys:
 
 ``` common-lisp
-(parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]")
+(jzon:parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]")
 ```
 In this example, the string `x` is shared (eq) between all 3 objects.
 
