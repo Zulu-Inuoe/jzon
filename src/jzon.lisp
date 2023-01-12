@@ -310,7 +310,7 @@ see `json-atom'"
          (digit19-p (c &aux (val (- (char-code c) (char-code #\0))))
            (and (<= 1 val 9) val))
          (ends-number-p (c)
-           (or (%whitespace-p c) (find c "]},"))))
+           (or (%whitespace-p c) (find c "]},/"))))
     (macrolet ((takec (on-eof)
                  "Take the next character, `go'ing to `label' on EOF or end of token"
                  `(let ((c (%peek peek)))
@@ -432,7 +432,7 @@ see `json-atom'"
         (t
          ;; Try to read a number
          (or (%read-json-number peek step c)
-             (%raise 'json-parse-error "Unexpected character in JSON data '~A' (~A)" c (char-name c))))))))
+             (%raise 'json-parse-error "Unexpected character in JSON data '~C' (~A)" c (char-name c))))))))
 
 (declaim (type (integer 0) *%current-depth*))
 (defvar *%current-depth*)

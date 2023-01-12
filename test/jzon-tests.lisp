@@ -330,6 +330,22 @@
   (signals (type-error)
     (parse "\"Doesn't matter\"" :max-string-length (* array-dimension-limit 2))))
 
+(test parse-disallows-comments
+  (signals (jzon:json-parse-error)
+    (parse "//Line comment
+    123")))
+
+(test parse-allows-comments-when-asked
+  (is (= 123 (jzon:parse "//Line comment
+  123" :allow-comments t))))
+  
+(test parse-comments-delimit-atoms
+  (is (= 123 (jzon:parse "123//Line comment" :allow-comments t)))
+  (is (eq t (jzon:parse "true//Line comment" :allow-comments t)))
+  (is (eq nil (jzon:parse "false//Line comment" :allow-comments t)))
+  (is (eq 'null (jzon:parse "null//Line comment" :allow-comments t)))
+  (is (string= "123" (jzon:parse "\"123\"//Line comment" :allow-comments t))))
+
 (def-suite writer :in jzon)
 (in-suite writer)
 
