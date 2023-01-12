@@ -134,7 +134,7 @@ For example:
   (setf (gethash '|mixedCase| ht) 0)
   (setf (gethash "ALL UPPER" ht) 0)
 
-  (jzon:stringify ht))
+  (jzon:stringify ht :pretty t :stream t))
 ```
 
 result:
@@ -185,7 +185,7 @@ Consider the following classes:
     :type list)))
 ```
 
-If we stringify a fresh `coordinate` object via `(jzon:stringify (make-instance 'coordinate))`, we'd end up with:
+If we stringify a fresh `coordinate` object via `(jzon:stringify (make-instance 'coordinate) :pretty t :stream t)`, we'd end up with:
 
 ``` json
 {
@@ -194,7 +194,7 @@ If we stringify a fresh `coordinate` object via `(jzon:stringify (make-instance 
 }
 ```
 
-And if we `(jzon:stringify (make-instance 'coordinate :reference "Earth"))`:
+And if we `(jzon:stringify (make-instance 'coordinate :reference "Earth") :pretty t :stream t)`:
 
 ``` json
 {
@@ -204,7 +204,7 @@ And if we `(jzon:stringify (make-instance 'coordinate :reference "Earth"))`:
 }
 ```
 
-Similarly if we `(jzon:stringify (make-instance 'object))`:
+Similarly if we `(jzon:stringify (make-instance 'object) :pretty t :stream t)`:
 
 ``` json
 {
@@ -220,7 +220,7 @@ If no type is provided, `nil` shall serialize as `null`.
 `stringify` recurses, so if we have:
 
 ``` common-lisp
-(jzon:stringify (make-instance 'object :coordinate (make-instance 'coordinate)))
+(jzon:stringify (make-instance 'object :coordinate (make-instance 'coordinate)) :pretty t :stream t)
 ```
 
 We'll have:
