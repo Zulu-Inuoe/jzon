@@ -69,7 +69,8 @@ There's a single entry point: `parse`:
 * pathname - `parse` will open the file for reading
 
 `parse` also accepts the follwing keyword arguments:
-* `:allow-comments` This allows the given JSON to contain `//cpp-style comments`
+* `:allow-comments` This allows the given JSON to contain `//cpp-style comments`.
+* `:allow-trailing-comma` This allows for a single trailing comma after the final element in a JSON array or object.
 * `:max-depth` This controls the maximum depth to allow arrays/objects to nest. Can be a positive integer, or `nil` to disable depth tests.
 * `:max-string-length` This controls the maximum length of strings. This applies for both keys and values. Must be a positive integer no larger than `array-dimension-limit`.
 * `:key-fn` A function of one argument responsible for 'interning' object keys. Should accept a `simple-string` and return the 'interned' key

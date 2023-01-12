@@ -234,6 +234,9 @@ see `json-atom'"
                (vector-push-extend (interpret next) accum))
       (make-array (fill-pointer accum) :element-type (if (every (lambda (c) (typep c 'base-char)) accum) 'base-char 'character) :initial-contents accum))))
 
+(declaim (type boolean *%allow-trailing-comma*))
+(defvar *%allow-trailing-comma*)
+
 (defun %read-json-array (peek step read-string)
   "Reads a JSON array of elements until finding a closing brace.
  Returns a `simple-vector' of JSON values."
@@ -245,13 +248,18 @@ see `json-atom'"
        (coerce
         (cons (%read-json-element peek step read-string c)
               (loop
-                :do (let ((c (%skip-whitespace step)))
-                      (case c
-                        (#\, nil)
-                        (#\] (loop-finish))
-                        ((nil) (%raise 'json-parse-error "End of input in array"))
-                        (t (%raise 'json-parse-error "Expected comma or ] in array, got '~A'" c))))
-                :collect (%read-json-element peek step read-string (%skip-whitespace step))))
+                :collect
+                (let ((c (%skip-whitespace step)))
+                  (case c
+                    (#\,
+                      (let ((c (%skip-whitespace step)))
+                        ;; lookahead to see if this is a trailing comma
+                        (when (and *%allow-trailing-comma* (eql c #\]))
+                          (loop-finish))
+                        (%read-json-element peek step read-string c)))
+                    (#\] (loop-finish))
+                    ((nil) (%raise 'json-parse-error "End of input in array"))
+                    (t (%raise 'json-parse-error "Expected comma or ] in array, got '~C' (~A)" c (char-name c)))))))
         'simple-vector)))))
 
 (declaim (type function *%key-fn*))
@@ -261,14 +269,14 @@ see `json-atom'"
   (declare (type function read-string))
   (let ((accum (make-hash-table :test 'equal))
         (key-fn *%key-fn*))
-    (flet ((read-key-value ()
+    (flet ((read-key-value (c)
              ;; Read quote
-             (case (%skip-whitespace step)
+             (case c
                ((nil) (%raise 'json-eof-error "End of input in object. Expected key"))
                (#.(char "\"" 0) nil)
                (#\}
                 (return-from read-key-value nil))
-               (t (%raise 'json-parse-error "Expected key in object")))
+               (t (%raise 'json-parse-error "Expected key in object, got '~C' (~A)" c (char-name c))))
 
              (let ((key (funcall key-fn (funcall read-string))))
                (case (%skip-whitespace step)
@@ -278,15 +286,21 @@ see `json-atom'"
 
                (setf (gethash key accum) (%read-json-element peek step read-string (%skip-whitespace step))))
              t))
-      (when (read-key-value)
+      (when (read-key-value (%skip-whitespace step))
         (loop
           (case (%skip-whitespace step)
             ((nil) (%raise 'json-eof-error "End of input in object. Expecting comma"))
-            (#\, nil)
+            (#\,
+              (let ((c (%skip-whitespace step)))
+                ;; lookahead to see if this is a trailing comma
+                (when (and *%allow-trailing-comma* (eql c #\}))
+                  (return))
+                (unless (read-key-value c)
+                  (if *%allow-trailing-comma*
+                    (%raise 'json-parse-error "Expected \"key\": value or object close after comma")
+                    (%raise 'json-parse-error "Expected \"key\": value after comma")))))
             (#\} (return))
-            (t (%raise 'json-parse-error "Expected comma in object")))
-          (unless (read-key-value)
-            (%raise 'json-parse-error "Expected \"key\": value after comma"))))
+            (t (%raise 'json-parse-error "Expected comma in object")))))
       accum)))
 
 (defun %read-json-number (peek step c)
@@ -537,11 +551,13 @@ see `json-atom'"
 (defun parse (in &key
                    (max-depth 128)
                    (allow-comments nil)
+                   (allow-trailing-comma nil)
                    (max-string-length (min #x100000 array-dimension-limit))
                    key-fn)
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:max-depth' controls the maximum depth of the object/array nesting
  `:allow-comments' controls whether or not single-line // comments are allowed.
+ `:allow-trailing-comma' controls whether or not a single comma `,' is allowed after all elements of an array or object.
  `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool"
   (check-type max-depth (or (integer 1) null))
   (check-type key-fn (or null symbol function))
@@ -563,6 +579,7 @@ see `json-atom'"
        (declare (dynamic-extent peek step read-string pos))
        (let ((*%max-depth* max-depth)
              (*%allow-comments* (and allow-comments t))
+             (*%allow-trailing-comma* (and allow-trailing-comma t))
              (*%max-string-length* max-string-length)
              (*%string-accum* (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0))
              (*%key-fn* (or (and key-fn (%ensure-function key-fn))
