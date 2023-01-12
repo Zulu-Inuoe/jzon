@@ -339,12 +339,47 @@
   (is (= 123 (jzon:parse "//Line comment
   123" :allow-comments t))))
   
+(test parse-line-comments-do-not-end-on-cr-only-lf
+  (is (= 123 (jzon:parse (format nil "//Comment~C123~C 123" #\Return #\Linefeed) :allow-comments t)))
+  (signals (jzon:json-parse-error)
+    (jzon:parse (format nil "//Comment~C123 123" #\Return) :allow-comments t)))
+  
 (test parse-comments-delimit-atoms
   (is (= 123 (jzon:parse "123//Line comment" :allow-comments t)))
   (is (eq t (jzon:parse "true//Line comment" :allow-comments t)))
   (is (eq nil (jzon:parse "false//Line comment" :allow-comments t)))
   (is (eq 'null (jzon:parse "null//Line comment" :allow-comments t)))
   (is (string= "123" (jzon:parse "\"123\"//Line comment" :allow-comments t))))
+
+(test parse-disallows-block-comments
+  (signals (jzon:json-parse-error)
+    (parse "/*Block comment*/ 123")))
+
+(test parse-allows-block-comments-when-asked
+  (is (= 123 (parse "/*Block comment*/ 123" :allow-comments t))))
+
+(test parse-does-not-nest-block-comments
+  (signals (jzon:json-parse-error)
+    (parse "/*Block comment /*Nested Block Comment */ */ 123" :allow-comments t)))
+
+(test unterminated-block-comment-errors
+  (signals (jzon:json-eof-error)
+    (parse "/* Some stuff" :allow-comments t))
+  (signals (jzon:json-eof-error)
+    (parse "/* Some stuff ** // " :allow-comments t)))
+
+(test miscellaneous-block-comment-tests
+  (is (= 123 (jzon:parse "123/*comment*/" :allow-comments t)))
+  (is (eq t (jzon:parse "true/*comment*/" :allow-comments t)))
+  (is (eq nil (jzon:parse "false/*comment*/" :allow-comments t)))
+  (is (eq 'null (jzon:parse "null/*comment*/" :allow-comments t)))
+  (is (string= "123" (jzon:parse "/*comment before */\"123\"/*comment*/" :allow-comments t)))
+  (is (= 123 (jzon:parse "/*comment before */123/*comment*/" :allow-comments t)))
+  (is (eq t (jzon:parse "/*comment before */true/*comment*/" :allow-comments t)))
+  (is (eq nil (jzon:parse "/*comment before */false/*comment*/" :allow-comments t)))
+  (is (eq 'null (jzon:parse "/*comment before */null/*comment*/" :allow-comments t)))
+  (is (string= "123" (jzon:parse "/*comment before */\"123\"/*comment*/" :allow-comments t)))
+  (is (= 123 (jzon:parse "/*comment before //line comment ignored inside block */123/*comment*/" :allow-comments t))))
 
 (def-suite writer :in jzon)
 (in-suite writer)
