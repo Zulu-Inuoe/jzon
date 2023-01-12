@@ -495,6 +495,7 @@ But for posterity, included in this repository is a set of tests and results for
 * jonathan
 * json-streams
 * jsown
+* shasht
 * yason
 
 No ill-will is meant for these other libraries. I simply want `jzon` to be better and become a true de-facto library in the world of JSON-in-cl once and for all.

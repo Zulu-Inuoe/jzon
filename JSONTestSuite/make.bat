@@ -33,6 +33,7 @@
  --eval "(ql:quickload '#:jonathan)"^
  --eval "(ql:quickload '#:json-streams)"^
  --eval "(ql:quickload '#:jsown)"^
+ --eval "(ql:quickload '#:shasht)"^
  --eval "(ql:quickload '#:yason)"^
  --load "%~dp0jzon-parsing.lisp"^
  --eval "%BUILD_EXP%"

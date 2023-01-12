@@ -10,6 +10,7 @@
   (:import-from #:jonathan)
   (:import-from #:json-streams)
   (:import-from #:jsown)
+  (:import-from #:shasht)
   (:import-from #:yason)
   (:export
    #:main))
@@ -23,6 +24,7 @@
     ("jonathan" (lambda (s) (jonathan:parse (read-stream-content-into-string s))))
     ("jsown" (lambda (s) (jsown:parse (read-stream-content-into-string s))))
     ("json-streams" #'json-streams:json-parse)
+    ("shasht" #'shasht:read-json)
     ("yason" #'yason:parse)))
 
 (defun main (&rest argv)
