@@ -554,15 +554,30 @@ see `json-atom'"
 
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
-  (let ((pool nil))
-    (declare (type list pool))
+  (let ((pool (make-hash-table :test 'equal)))
     (lambda (key)
       (declare (type simple-string key))
-      (or (find key pool :test (lambda (s1 s2)
-                                 (declare (type simple-string s1 s2))
-                                 (string= s1 s2)))
-          (progn (push key pool)
-                 key)))))
+      (etypecase pool
+        (list
+          (loop :for elt :of-type simple-string :in pool
+                :for i :from 0
+                :do
+                  (when (string= key elt)
+                    (return elt))
+                  (when (> i 64) ;; had to search too long
+                    (let ((old pool)
+                          (new (make-hash-table :size (* i 2) :test 'equal)))
+                     (dolist (key old)
+                       (setf (gethash key new) key))
+                     (setf pool new))
+                     
+                     (return (or (gethash key pool)
+                                 (setf (gethash key pool) key))))
+                :finally (push key pool)
+                         (return key)))
+        (hash-table
+          (or (gethash key pool)
+              (setf (gethash key pool) key)))))))
 
 (defun parse (in &key
                    (max-depth 128)
