@@ -352,15 +352,55 @@ see `json-atom'"
        :fail
          (return (values nil lc))))))
 
-(defun %read-json-element (step read-string key-fn max-depth allow-trailing-comma)
-  (prog ((stack nil)
-         (key nil)
-         (value nil)
+(defclass %jzon-sax-builder ()
+  ((%stack :initform nil :type list)
+   (%key :initform nil :type list)
+   %value))
+
+(defun %sax-finish-value (handler value)
+  (let ((stack (slot-value handler '%stack)))
+    (typecase stack
+      ((cons list)
+        (push value (car stack)))
+      ((cons hash-table)
+        (setf (gethash (pop (slot-value handler '%key)) (car stack)) value))
+      (t (setf (slot-value handler '%value) value)))))
+
+(defgeneric sax-atom (handler value)
+  (:method ((handler %jzon-sax-builder) value)
+    (%sax-finish-value handler value)))
+
+(defgeneric sax-begin-object (handler)
+  (:method ((handler %jzon-sax-builder))
+    (push (make-hash-table :test 'equal) (slot-value handler '%stack))))
+
+(defgeneric sax-key (handler key)
+  (:method ((handler %jzon-sax-builder) key)
+    (push key (slot-value handler '%key))))
+
+(defgeneric sax-end-object (handler)
+  (:method ((handler %jzon-sax-builder))
+    (%sax-finish-value handler (pop (slot-value handler '%stack)))))
+
+(defgeneric sax-begin-array (handler)
+  (:method ((handler %jzon-sax-builder))
+    (push (list) (slot-value handler '%stack))))
+
+(defgeneric sax-end-array (handler)
+  (:method ((handler %jzon-sax-builder))
+    (%sax-finish-value handler (coerce (nreverse (the list (pop (slot-value handler '%stack)))) 'simple-vector))))
+    
+(defgeneric sax-produce-value (handler)
+  (:method ((handler %jzon-sax-builder)) (slot-value handler '%value)))
+
+(defun %read-json-element (handler step read-string key-fn max-depth allow-trailing-comma)
+  (prog ((context (list))
          (depth 0)
          (c (%skip-whitespace step (%step step))))
-    (declare (type list stack key))
-    (declare (type (or null character) c))
+    (declare (type list context))
     (declare (type (integer 0) depth))
+    (declare (type (or null character) c))
+    (declare (dynamic-extent context depth))
 
    read-element
     (when (eql c #\[) (go begin-array))
@@ -380,30 +420,32 @@ see `json-atom'"
                                                                     :collect c
                                                                     :do (%step step))))))
                                             (%raise 'json-parse-error (format nil "Unexpected token '~A'" token))))))
-                    (setf value ,value)
+                    (sax-atom handler ,value)
                     (setf c (%skip-whitespace step (%step step))))))
       (case c
         ((nil) (%raise 'json-eof-error "End of input when reading JSON element."))
         (#.(char "\"" 0)
-          (setf value (funcall read-string))
+          (sax-atom handler (funcall read-string))
           (setf c (%skip-whitespace step (%step step))))
         (#\f (expect "false" nil))
         (#\t (expect "true" t))
         (#\n (expect "null" 'null))
         (t
-          (setf (values value c) (%read-json-number step c))
-          (unless value
-            (if c
-              (%raise 'json-parse-error "Unexpected character in JSON data '~C' (~A)." c (char-name c))
-              (%raise 'json-parse-error "End of input when reading number.")))
-          (setf c (%skip-whitespace step c)))))
+          (multiple-value-bind (number lc) (%read-json-number step c)
+            (unless number
+              (if lc
+                (%raise 'json-parse-error "Unexpected character in JSON data '~C' (~A)." c (char-name c))
+                (%raise 'json-parse-error "End of input when reading number.")))
+            (sax-atom handler number)
+            (setf c (%skip-whitespace step lc))))))
     (go finish-value)
 
    begin-array
     (incf depth)
     (when (and max-depth (> depth max-depth))
       (%raise 'json-parse-error "Maximum depth exceeded."))
-    (push (list) stack)
+    (push 'list context)
+    (sax-begin-array handler)
     (setf c (%skip-whitespace step (%step step)))
     (case c
       ((nil) (%raise 'json-parse-error "End of input when reading array, expecting element or array close."))
@@ -412,7 +454,8 @@ see `json-atom'"
 
    end-array
     (decf depth)
-    (setf value (coerce (nreverse (the list (pop stack))) 'simple-vector))
+    (pop context)
+    (sax-end-array handler)
     (setf c (%skip-whitespace step (%step step)))
     (go finish-value)
 
@@ -420,7 +463,8 @@ see `json-atom'"
     (incf depth)
     (when (and max-depth (> depth max-depth))
       (%raise 'json-parse-error "Maximum depth exceeded."))
-    (push (make-hash-table :test 'equal) stack)
+    (push 'hash-table context)
+    (sax-begin-object handler)
     (setf c (%skip-whitespace step (%step step)))
     (case c
       (#\}  (go end-object))
@@ -429,7 +473,7 @@ see `json-atom'"
    read-key
     (case c
       ((nil) (%raise 'json-parse-error "End of input when reading object, expecting key."))
-      (#.(char "\"" 0)  (push (funcall key-fn (funcall read-string)) key)
+      (#.(char "\"" 0)  (sax-key handler (funcall key-fn (funcall read-string)))
                         (setf c (%skip-whitespace step (%step step)))
                         (case c
                           ((nil) (%raise 'json-parse-error "End of input when reading object, expecting colon after object key."))
@@ -440,15 +484,15 @@ see `json-atom'"
     
    end-object
     (decf depth)
-    (setf value (pop stack))
+    (pop context)
+    (sax-end-object handler)
     (setf c (%skip-whitespace step (%step step)))
     (go finish-value)
 
     finish-value
-    (etypecase stack
-        (null               (return (values value c)))
-        ((cons list)        (push value (car stack))
-                            (case c
+    (ecase (car context)
+        ((nil)              (return c))
+        (list               (case c
                               ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting comma or array close."))
                               (#\,    (setf c (%skip-whitespace step (%step step)))
                                       (case c
@@ -462,8 +506,7 @@ see `json-atom'"
                                         (t     (go read-element))))
                               (#\]    (go end-array))
                               (t      (%raise 'json-parse-error "Unexpected character when reading array. Expecting comma or array close."))))
-        ((cons hash-table)  (setf (gethash (pop key) (car stack)) value)
-                            (case c
+        (hash-table         (case c
                               ((nil)  (%raise 'json-parse-error "End of input when reading object. Expecting comma or object close."))
                               (#\,    (setf c (%skip-whitespace step (%step step)))
                                       (case c
@@ -595,7 +638,8 @@ see `json-atom'"
                    (allow-comments nil)
                    (allow-trailing-comma nil)
                    (max-string-length (min #x100000 array-dimension-limit))
-                   key-fn)
+                   key-fn
+                   handler)
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:max-depth' controls the maximum depth of the object/array nesting
  `:allow-comments' controls whether or not single-line // comments are allowed.
@@ -622,15 +666,16 @@ see `json-atom'"
        (let ((*%allow-comments* (and allow-comments t))
              (*%max-string-length* max-string-length)
              (*%string-accum* (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0))
-             (*%pos-fn* pos))
+             (*%pos-fn* pos)
+             (handler (or handler (make-instance '%jzon-sax-builder))))
          (declare (dynamic-extent *%string-accum* *%pos-fn*))
-         (multiple-value-bind (value c) (%read-json-element step read-string
-                                                            (or (and key-fn (%ensure-function key-fn)) (%make-string-pool))
-                                                            max-depth
-                                                            (and allow-trailing-comma t))
+         (let ((c (%read-json-element handler step read-string
+                                              (or (and key-fn (%ensure-function key-fn)) (%make-string-pool))
+                                              max-depth
+                                              (and allow-trailing-comma t))))
            (unless (null (%skip-whitespace step c))
-             (%raise 'json-parse-error "Content after reading element"))
-           value))))))
+             (%raise 'json-parse-error "Content after reading element")))
+         (sax-produce-value handler))))))
 
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
