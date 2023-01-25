@@ -483,27 +483,37 @@ see `json-atom'"
                   (let* ((peek (lambda () (when (< i (length in)) (aref in i))))
                          (step (lambda () (when (< i (length in)) (prog1 (aref in i) (incf i)))))
                          (read-string (lambda ()
-                                        (let ((q-pos (position #.(char "\"" 0) in :start i)))
-                                          (unless q-pos (%raise 'json-eof-error "Unexpected end of input reading string"))
-                                          (cond
-                                            ((null (find #\\ in :start i :end q-pos))
-                                             ;; Fast path, just need to check for control chars
-                                             (let ((control-char (find-if #'%control-char-p in :start i :end q-pos)))
-                                               (when control-char
-                                                 (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" control-char (char-name control-char))))
-                                             (when (< *%max-string-length* (- q-pos i))
-                                               (setf i (+ i (1+ *%max-string-length*)))
-                                               (%raise 'json-parse-error "Maximum string length exceeded"))
-                                             ;; Create a base-string if possible, and copy characters over
-                                             (loop :with ret := (make-array (- q-pos i) :element-type (if (find-if (lambda (c) (not (typep c 'base-char))) in :start i :end q-pos) 'character 'base-char))
-                                                   :for j :from 0 :below (length ret)
-                                                   :do (setf (aref ret j) (aref in (+ i j)))
-                                                   :finally 
-                                                   (setf i (1+ q-pos))
-                                                   (return ret)))
-                                            (t
-                                             ;; Otherwise we need to worry about escape sequences, unicode, etc.
-                                             (%read-json-string step))))))
+                                        ;; Scan until we hit a closing "
+                                        ;; Error on EOF
+                                        ;; Error if we encounter a literal control char 
+                                        ;; Track suitable element-type
+                                        (loop
+                                          :with element-type := 'base-char
+                                          :for j :from i
+                                          :do
+                                            (when (<= (length in) j)
+                                              (%raise 'json-eof-error "Unexpected end of input when reading string."))
+                                            (let ((c (aref in j)))
+                                              (when (char= c #.(char "\"" 0))
+                                                (let ((len (- j i)))
+                                                  (when (< *%max-string-length* len)
+                                                    (setf i (+ i (1+ *%max-string-length*)))
+                                                    (%raise 'json-parse-error "Maximum string length exceeded"))
+                                                  (return
+                                                    (loop :with ret := (make-array len :element-type element-type)
+                                                          :for k :from 0 :below len
+                                                          :do (setf (aref ret k) (aref in (+ i k)))
+                                                          :finally 
+                                                          (setf i (1+ j))
+                                                          (return ret)))))
+                                              (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
+                                                (return (%read-json-string step)))
+
+                                              (when (<= #x00 (char-code c) #x1F)
+                                                (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" c (char-name c)))
+
+                                              (when (not (typep c 'base-char))
+                                                (setf element-type 'character))))))
                          (pos (lambda ()
                                 (loop :with line := 1
                                       :with col := 1
