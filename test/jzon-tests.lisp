@@ -278,8 +278,8 @@
       ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
 
 (test parse-returns-base-strings
-  (is (eq 'base-char (array-element-type (parse "\"COMMON-LISP\""))))
-  (is (eq 'base-char (array-element-type (parse "\"\\u0043\\u004F\\u004D\\u004D\\u004F\\u004E\\u002D\\u004C\\u0049\\u0053\\u0050\"")))))
+  (is (eq '#.(upgraded-array-element-type 'base-char) (array-element-type (parse "\"COMMON-LISP\""))))
+  (is (eq '#.(upgraded-array-element-type 'base-char) (array-element-type (parse "\"\\u0043\\u004F\\u004D\\u004D\\u004F\\u004E\\u002D\\u004C\\u0049\\u0053\\u0050\"")))))
 
 (test parse-accepts-octet-vector
   (is-every equalp
