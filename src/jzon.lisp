@@ -623,7 +623,7 @@ see `json-atom'"
              (*%max-string-length* max-string-length)
              (*%string-accum* (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0))
              (*%pos-fn* pos))
-         (declare (dynamic-extent *%pos-fn*))
+         (declare (dynamic-extent *%string-accum* *%pos-fn*))
          (multiple-value-bind (value c) (%read-json-element step read-string
                                                             (or (and key-fn (%ensure-function key-fn)) (%make-string-pool))
                                                             max-depth
