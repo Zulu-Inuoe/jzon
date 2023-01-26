@@ -558,22 +558,25 @@ see `json-atom'"
     :initform (min #x100000 array-dimension-limit)
     :type (integer 1 (#.array-dimension-limit)))
    (%state
-    :initform 'read-element
+    :initform nil
     :type symbol)
    (%lookahead
-      :initform nil
-      :type (or null character))
+    :initform nil
+    :type (or null character))
    (%context
-      :initform (list)
-      :type list)
+    :initform (list)
+    :type list)
+   (%encountered-top-value
+    :initform nil
+    :type boolean)
    (%depth
-      :initform 0
-      :type (integer 0))
+    :initform 0
+    :type (integer 0))
    (%string-accum
-      :initform (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)
-      :type (and string (not simple-string)))
+    :initform (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)
+    :type (and string (not simple-string)))
    (%close-action
-      :type (or null function)))
+    :type (or null function)))
   (:documentation "An incremental JSON parser.
 
 see `make-parser'
@@ -652,9 +655,7 @@ see `close-parser'"
 see `make-parser'
 see `close-parser'"
   (check-type parser parser)
-  (with-slots (%state %context %lookahead %step %read-string %key-fn %depth %max-depth %allow-trailing-comma) parser
-    (when (null %state)
-      (return-from parse-next nil))
+  (with-slots (%state %context %encountered-top-value %lookahead %step %read-string %key-fn %depth %max-depth %allow-trailing-comma) parser
     (flet ((read-element (lc)
             (macrolet ((expect (string value)
                          `(progn
@@ -711,8 +712,16 @@ see `close-parser'"
             lc)
         (declare (type (or null character) lc))
         (ecase %state
-          (read-element
-            (read-element (%skip-whitespace %step (%step %step))))
+          ((nil)
+            (let ((c (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)))))
+              (cond
+                ((and %encountered-top-value c)
+                  (%raise 'json-parse-error "Content after reading element"))
+                (%encountered-top-value
+                  (values nil))
+                (t
+                  (setf %encountered-top-value t)
+                  (read-element c)))))
           (read-array-element
             (case (setf lc (%skip-whitespace %step (%step %step)))
               ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting element or array close"))
