@@ -5,13 +5,6 @@
    #:hash-table-keys
    #:plist-hash-table)
   (:import-from
-   #:com.inuoe.jzon
-   #:coerced-fields
-   #:coerce-key
-   #:json-parse-error
-   #:parse
-   #:stringify)
-  (:import-from
    #:fiveam
    #:def-suite
    #:finishes
@@ -57,158 +50,158 @@
   (fs:string-to-octets string :external-format :utf-8))
 
 (test parses-atoms
-  (is (eq 'null (parse "null")))
-  (is (eq 't (parse "true")))
-  (is (eq 'nil (parse "false"))))
+  (is (eq 'null (jzon:parse "null")))
+  (is (eq 't (jzon:parse "true")))
+  (is (eq 'nil (jzon:parse "false"))))
 
 (test parses-integers
-  (is (integerp (parse "42")))
-  (is (= 42 (parse "42"))))
+  (is (integerp (jzon:parse "42")))
+  (is (= 42 (jzon:parse "42"))))
 
 (test parses-decimals
-  (is (typep (parse "42.0") 'double-float))
-  (is (= 42.0d0 (parse "42.0"))))
+  (is (typep (jzon:parse "42.0") 'double-float))
+  (is (= 42.0d0 (jzon:parse "42.0"))))
 
 (test parses-exponent
-  (is (typep (parse "42e1") 'double-float))
-  (is (= 420.0d0 (parse "42e1"))))
+  (is (typep (jzon:parse "42e1") 'double-float))
+  (is (= 420.0d0 (jzon:parse "42e1"))))
 
 (test parses-decimals-with-exponent
-  (is (= 42.0d0 (parse "0.42e2"))))
+  (is (= 42.0d0 (jzon:parse "0.42e2"))))
 
 (test parse-negative-decimal
-  (is (= -0.1d0 (parse "-0.1"))))
+  (is (= -0.1d0 (jzon:parse "-0.1"))))
 
 (test disallows-leading-zeros
-  (signals (com.inuoe.jzon:json-parse-error)
-    (parse "01"))
-  (signals (com.inuoe.jzon:json-parse-error)
-    (parse "01.0"))
-  (signals (com.inuoe.jzon:json-parse-error)
-    (parse "01e10")))
+  (signals (jzon:json-parse-error)
+    (jzon:parse "01"))
+  (signals (jzon:json-parse-error)
+    (jzon:parse "01.0"))
+  (signals (jzon:json-parse-error)
+    (jzon:parse "01e10")))
 
 (test disallows-trailing-decimal-point
-  (signals (com.inuoe.jzon:json-parse-error)
-    (parse "1."))
-  (signals (com.inuoe.jzon:json-parse-error)
-    (parse "1.e10")))
+  (signals (jzon:json-parse-error)
+    (jzon:parse "1."))
+  (signals (jzon:json-parse-error)
+    (jzon:parse "1.e10")))
 
 (test disallows-trailing-exponent-marker
-  (signals (com.inuoe.jzon:json-parse-error)
-    (parse "1e"))
-  (signals (com.inuoe.jzon:json-parse-error)
-    (parse "1.0e"))
-  (signals (com.inuoe.jzon:json-parse-error)
-    (parse "0e")))
+  (signals (jzon:json-parse-error)
+    (jzon:parse "1e"))
+  (signals (jzon:json-parse-error)
+    (jzon:parse "1.0e"))
+  (signals (jzon:json-parse-error)
+    (jzon:parse "0e")))
 
 (test parses-negative-zero.0
-  (is (= -0.0d0 (parse "-0.0"))))
+  (is (= -0.0d0 (jzon:parse "-0.0"))))
 
 (test parses-negative-zero
-  (is (= -0.0d0 (parse "-0"))))
+  (is (= -0.0d0 (jzon:parse "-0"))))
 
 (test parses-arrays
-  (is (equalp #() (parse "[]")))
-  (is (equalp #(1 2 3) (parse "[1, 2, 3]"))))
+  (is (equalp #() (jzon:parse "[]")))
+  (is (equalp #(1 2 3) (jzon:parse "[1, 2, 3]"))))
 
 (test parses-arrays-disallows-trailing-comma
   (signals (jzon:json-parse-error)
-    (parse "[1, 2, 3,]")))
+    (jzon:parse "[1, 2, 3,]")))
 
 (test parses-arrays-allows-trailing-comma-when-asked
-  (is (equalp #(1 2 3) (parse "[1, 2, 3,]" :allow-trailing-comma t))))
+  (is (equalp #(1 2 3) (jzon:parse "[1, 2, 3,]" :allow-trailing-comma t))))
 
 (test parses-arrays-disallows-several-trailing-commas
   (signals (jzon:json-parse-error)
-    (parse "[1, 2, 3,,]"))
+    (jzon:parse "[1, 2, 3,,]"))
   (signals (jzon:json-parse-error)
-    (parse "[1, 2, 3,,]" :allow-trailing-comma t)))
+    (jzon:parse "[1, 2, 3,,]" :allow-trailing-comma t)))
 
 (test parses-arrays-disallows-empty-with-comma
   (signals (jzon:json-parse-error)
-    (parse "[,]"))
+    (jzon:parse "[,]"))
   (signals (jzon:json-parse-error)
-    (parse "[,]" :allow-trailing-comma t)))
+    (jzon:parse "[,]" :allow-trailing-comma t)))
 
 (test parses-arrays-disallows-trailing-comma-with-eof
   (signals (jzon:json-parse-error)
-    (parse "[1, 2, 3,"))
+    (jzon:parse "[1, 2, 3,"))
   (signals (jzon:json-parse-error)
-    (parse "[1, 2, 3," :allow-trailing-comma t)))
+    (jzon:parse "[1, 2, 3," :allow-trailing-comma t)))
 
 (test parses-objects
-  (is (equalp (ph) (parse "{}")))
-  (is (equalp (ph "x" 1 "y" 2) (parse "{\"x\": 1, \"y\": 2}"))))
+  (is (equalp (ph) (jzon:parse "{}")))
+  (is (equalp (ph "x" 1 "y" 2) (jzon:parse "{\"x\": 1, \"y\": 2}"))))
 
 (test parses-objects-disallows-trailing-comma
   (signals (jzon:json-parse-error)
-    (parse "{\"x\": 1, \"y\": 2,}")))
+    (jzon:parse "{\"x\": 1, \"y\": 2,}")))
 
 (test parses-objects-allows-trailing-comma-when-asked
-  (is (equalp (ph "x" 1 "y" 2) (parse "{\"x\": 1, \"y\": 2,}" :allow-trailing-comma t))))
+  (is (equalp (ph "x" 1 "y" 2) (jzon:parse "{\"x\": 1, \"y\": 2,}" :allow-trailing-comma t))))
 
 (test parses-objects-disallows-several-trailing-commas
   (signals (jzon:json-parse-error)
-    (parse "{\"x\": 1, \"y\": 2,,}"))
+    (jzon:parse "{\"x\": 1, \"y\": 2,,}"))
   (signals (jzon:json-parse-error)
-    (parse "{\"x\": 1, \"y\": 2,,}" :allow-trailing-comma t)))
+    (jzon:parse "{\"x\": 1, \"y\": 2,,}" :allow-trailing-comma t)))
 
 (test parses-object-disallows-trailing-comma-with-eof
   (signals (jzon:json-parse-error)
-    (parse "{\"x\": 1, \"y\": 2,"))
+    (jzon:parse "{\"x\": 1, \"y\": 2,"))
   (signals (jzon:json-parse-error)
-    (parse "{\"x\": 1, \"y\": 2," :allow-trailing-comma t)))
+    (jzon:parse "{\"x\": 1, \"y\": 2," :allow-trailing-comma t)))
 
 (test parses-object-disallows-empty-with-comma
   (signals (jzon:json-parse-error)
-    (parse "{,}"))
+    (jzon:parse "{,}"))
   (signals (jzon:json-parse-error)
-    (parse "{,}" :allow-trailing-comma t)))
+    (jzon:parse "{,}" :allow-trailing-comma t)))
 
 (test parse-singular
   (is (equalp (ph "foo" "bar")
-              (parse "{\"foo\":\"bar\"}"))
+              (jzon:parse "{\"foo\":\"bar\"}"))
       "Matching of a single simple string")
   (is (equalp (ph "bar" 1000)
-              (parse "{\"bar\":1000}"))
+              (jzon:parse "{\"bar\":1000}"))
       "Matching of a single number")
   (is (equalp (ph "bar" 10.1d0)
-              (parse "{\"bar\":10.1}"))
+              (jzon:parse "{\"bar\":10.1}"))
       "Matching of a single decimal number")
   (is (equalp (ph "bar" #("foo" 10 101.1d0))
-              (parse "{\"bar\":[\"foo\",10,101.10]}"))
+              (jzon:parse "{\"bar\":[\"foo\",10,101.10]}"))
       "Matching of an array with various types of elements"))
 
 (test parse-multiple
   (is (equalp (ph "foo" "bar" "baz" "bang" "bing" 100 "bingo" 1.1d0 "bazo" #(1 2 "foo"))
-              (parse "{\"foo\":\"bar\",\"baz\":\"bang\",\"bing\":100,\"bingo\":1.1,\"bazo\":[1,2,\"foo\"]}"))
+              (jzon:parse "{\"foo\":\"bar\",\"baz\":\"bang\",\"bing\":100,\"bingo\":1.1,\"bazo\":[1,2,\"foo\"]}"))
       "Parsing of multiple items of all kinds"))
 
 (test parse-nested
   (is (equalp (ph "foo" (ph "bar" "baz"))
-              (parse "{\"foo\":{\"bar\":\"baz\"}}"))
+              (jzon:parse "{\"foo\":{\"bar\":\"baz\"}}"))
       "One object in one object")
   (is (equalp (ph "foo" "bar" "bie" (ph "bar" "baz" "bang" 1000) "bing" "bingo")
-              (parse "{\"foo\":\"bar\",\"bie\":{\"bar\":\"baz\",\"bang\":1000},\"bing\":\"bingo\"}")))
+              (jzon:parse "{\"foo\":\"bar\",\"bie\":{\"bar\":\"baz\",\"bang\":1000},\"bing\":\"bingo\"}")))
   (is (equalp (ph "foo" (vector (ph "foo" "bar" "baz" 1000)))
-              (parse "{\"foo\":[{\"foo\":\"bar\",\"baz\":1000}]}"))
+              (jzon:parse "{\"foo\":[{\"foo\":\"bar\",\"baz\":1000}]}"))
       "Object in an array")
   (is (equalp (ph  "foo" "bar" "baz" (ph "boo" 100.1d0))
-              (parse "{\"foo\":\"bar\",\"baz\":{\"boo\":100.10}}"))
+              (jzon:parse "{\"foo\":\"bar\",\"baz\":{\"boo\":100.10}}"))
       "Decimal number in inner object"))
 
 (test unicode-chars
   (is (equalp (ph "λlambda" "💩poop")
-              (parse "{\"\\u03BBlambda\":\"\\ud83d\\udca9poop\"}")))
+              (jzon:parse "{\"\\u03BBlambda\":\"\\ud83d\\udca9poop\"}")))
 
   (is (equalp (ph "lambdaλ" "poop💩")
-              (parse "{\"lambda\\u03BB\":\"poop\\ud83d\\udca9\"}")))
+              (jzon:parse "{\"lambda\\u03BB\":\"poop\\ud83d\\udca9\"}")))
 
   (is (equalp (ph "lambdaλlambda" "poop💩poop")
-              (parse "{\"lambda\\u03BBlambda\":\"poop\\ud83d\\udca9poop\"}"))))
+              (jzon:parse "{\"lambda\\u03BBlambda\":\"poop\\ud83d\\udca9poop\"}"))))
 
 (test parse-pools-keys
-  (let* ((objects (parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]"))
+  (let* ((objects (jzon:parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]"))
          (keys (map 'list #'hash-table-keys objects))
          (xs (mapcar #'first keys))
          (x1 (first xs))
@@ -219,120 +212,120 @@
 
 (test parse-uses-custom-key-fn
   (let ((keys ()))
-    (parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]" :key-fn (lambda (key) (push key keys) key))
+    (jzon:parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]" :key-fn (lambda (key) (push key keys) key))
     (is (equalp '("x" "x" "x") keys))))
 
 (test parse-ignores-pre-post-whitespace
   (is-every equalp
-    (nil               (parse "  false "))
-    (t                 (parse " true  "))
-    ('null             (parse "   null "))
-    (42                (parse "      42 "))
-    (42.0d0            (parse "  42e0  "))
-    ("Hello, world!"   (parse "   \"Hello, world!\"  "))
-    (#(1 2 3)          (parse " [1,2,3]  "))
-    ((ph "x" 10 "y" 0) (parse "   { \"x\": 10, \"y\": 0}   "))))
+    (nil               (jzon:parse "  false "))
+    (t                 (jzon:parse " true  "))
+    ('null             (jzon:parse "   null "))
+    (42                (jzon:parse "      42 "))
+    (42.0d0            (jzon:parse "  42e0  "))
+    ("Hello, world!"   (jzon:parse "   \"Hello, world!\"  "))
+    (#(1 2 3)          (jzon:parse " [1,2,3]  "))
+    ((ph "x" 10 "y" 0) (jzon:parse "   { \"x\": 10, \"y\": 0}   "))))
 
 (test parse-accepts-stream
-  (flet ((parse (str)
+  (flet ((jzon:parse (str)
            (with-input-from-string (in str)
-             (parse in))))
+             (jzon:parse in))))
     (is-every equalp
-      (nil               (parse "false"))
-      (t                 (parse "true"))
-      ('null             (parse "null"))
-      (42                (parse "42"))
-      (42.0d0            (parse "42e0"))
-      ("Hello, world!"   (parse "\"Hello, world!\""))
-      (#(1 2 3)          (parse "[1,2,3]"))
-      ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
+      (nil               (jzon:parse "false"))
+      (t                 (jzon:parse "true"))
+      ('null             (jzon:parse "null"))
+      (42                (jzon:parse "42"))
+      (42.0d0            (jzon:parse "42e0"))
+      ("Hello, world!"   (jzon:parse "\"Hello, world!\""))
+      (#(1 2 3)          (jzon:parse "[1,2,3]"))
+      ((ph "x" 10 "y" 0) (jzon:parse "{ \"x\": 10, \"y\": 0}")))))
 
 (test parse-accepts-pathname
-  (flet ((parse (str)
+  (flet ((jzon:parse (str)
            (uiop:with-temporary-file (:stream stream :pathname p :external-format :utf-8)
              (write-string str stream)
              (finish-output stream)
              (close stream)
-             (parse p))))
+             (jzon:parse p))))
     (is-every equalp
-      (nil               (parse "false"))
-      (t                 (parse "true"))
-      ('null             (parse "null"))
-      (42                (parse "42"))
-      (42.0d0            (parse "42e0"))
-      ("Hello, world!"   (parse "\"Hello, world!\""))
-      (#(1 2 3)          (parse "[1,2,3]"))
-      ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
+      (nil               (jzon:parse "false"))
+      (t                 (jzon:parse "true"))
+      ('null             (jzon:parse "null"))
+      (42                (jzon:parse "42"))
+      (42.0d0            (jzon:parse "42e0"))
+      ("Hello, world!"   (jzon:parse "\"Hello, world!\""))
+      (#(1 2 3)          (jzon:parse "[1,2,3]"))
+      ((ph "x" 10 "y" 0) (jzon:parse "{ \"x\": 10, \"y\": 0}")))))
 
 (test parse-accepts-non-simple-string
-  (flet ((parse (str)
-           (parse (make-array (length str) :element-type 'character :fill-pointer t :initial-contents str))))
+  (flet ((jzon:parse (str)
+           (jzon:parse (make-array (length str) :element-type 'character :fill-pointer t :initial-contents str))))
     (is-every equalp
-      (nil               (parse "false"))
-      (t                 (parse "true"))
-      ('null             (parse "null"))
-      (42                (parse "42"))
-      (42.0d0            (parse "42e0"))
-      ("Hello, world!"   (parse "\"Hello, world!\""))
-      (#(1 2 3)          (parse "[1,2,3]"))
-      ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
+      (nil               (jzon:parse "false"))
+      (t                 (jzon:parse "true"))
+      ('null             (jzon:parse "null"))
+      (42                (jzon:parse "42"))
+      (42.0d0            (jzon:parse "42e0"))
+      ("Hello, world!"   (jzon:parse "\"Hello, world!\""))
+      (#(1 2 3)          (jzon:parse "[1,2,3]"))
+      ((ph "x" 10 "y" 0) (jzon:parse "{ \"x\": 10, \"y\": 0}")))))
 
 (test parse-returns-base-strings
-  (is (eq '#.(upgraded-array-element-type 'base-char) (array-element-type (parse "\"COMMON-LISP\""))))
-  (is (eq '#.(upgraded-array-element-type 'base-char) (array-element-type (parse "\"\\u0043\\u004F\\u004D\\u004D\\u004F\\u004E\\u002D\\u004C\\u0049\\u0053\\u0050\"")))))
+  (is (eq '#.(upgraded-array-element-type 'base-char) (array-element-type (jzon:parse "\"COMMON-LISP\""))))
+  (is (eq '#.(upgraded-array-element-type 'base-char) (array-element-type (jzon:parse "\"\\u0043\\u004F\\u004D\\u004D\\u004F\\u004E\\u002D\\u004C\\u0049\\u0053\\u0050\"")))))
 
 (test parse-accepts-octet-vector
   (is-every equalp
-    (nil               (parse (utf-8 "false")))
-    (t                 (parse (utf-8 "true")))
-    ('null             (parse (utf-8 "null")))
-    (42                (parse (utf-8 "42")))
-    (42.0d0            (parse (utf-8 "42e0")))
-    ("Hello, world!"   (parse (utf-8 "\"Hello, world!\"")))
-    (#(1 2 3)          (parse (utf-8 "[1,2,3]")))
-    ((ph "x" 10 "y" 0) (parse (utf-8 "{ \"x\": 10, \"y\": 0}")))))
+    (nil               (jzon:parse (utf-8 "false")))
+    (t                 (jzon:parse (utf-8 "true")))
+    ('null             (jzon:parse (utf-8 "null")))
+    (42                (jzon:parse (utf-8 "42")))
+    (42.0d0            (jzon:parse (utf-8 "42e0")))
+    ("Hello, world!"   (jzon:parse (utf-8 "\"Hello, world!\"")))
+    (#(1 2 3)          (jzon:parse (utf-8 "[1,2,3]")))
+    ((ph "x" 10 "y" 0) (jzon:parse (utf-8 "{ \"x\": 10, \"y\": 0}")))))
 
 
 (test parse-accepts-binary-stream
-  (flet ((parse (str)
-           (parse (fs:make-in-memory-input-stream (fs:string-to-octets str)))))
+  (flet ((jzon:parse (str)
+           (jzon:parse (fs:make-in-memory-input-stream (fs:string-to-octets str)))))
     (is-every equalp
-      (nil               (parse "false"))
-      (t                 (parse "true"))
-      ('null             (parse "null"))
-      (42                (parse "42"))
-      (42.0d0            (parse "42e0"))
-      ("Hello, world!"   (parse "\"Hello, world!\""))
-      (#(1 2 3)          (parse "[1,2,3]"))
-      ((ph "x" 10 "y" 0) (parse "{ \"x\": 10, \"y\": 0}")))))
+      (nil               (jzon:parse "false"))
+      (t                 (jzon:parse "true"))
+      ('null             (jzon:parse "null"))
+      (42                (jzon:parse "42"))
+      (42.0d0            (jzon:parse "42e0"))
+      ("Hello, world!"   (jzon:parse "\"Hello, world!\""))
+      (#(1 2 3)          (jzon:parse "[1,2,3]"))
+      ((ph "x" 10 "y" 0) (jzon:parse "{ \"x\": 10, \"y\": 0}")))))
 
 (test parse-allows-strings-below-max-string-length
-  (finishes (parse "\"This is a string that is not long\"" :max-string-length 45)))
+  (finishes (jzon:parse "\"This is a string that is not long\"" :max-string-length 45)))
 
 (test parse-allows-strings-at-max-string-length
-  (finishes (parse "\"This is a string that is exactly not too long\"" :max-string-length 45)))
+  (finishes (jzon:parse "\"This is a string that is exactly not too long\"" :max-string-length 45)))
 
 (test parse-limits-max-string-length
   (signals (jzon:json-parse-error)
-    (parse "\"This is a string that is too long\"" :max-string-length 5)))
+    (jzon:parse "\"This is a string that is too long\"" :max-string-length 5)))
 
 (test parse-limits-max-string-length-with-escape-codes
   (signals (jzon:json-parse-error)
-    (parse "\"This is a string that is too long\bwith some special codes \\u00f8\"" :max-string-length 5)))
+    (jzon:parse "\"This is a string that is too long\bwith some special codes \\u00f8\"" :max-string-length 5)))
 
 (test parse-max-string-length-respects-escape-codes-1
-  (finishes (parse "\"\\u00f8\"" :max-string-length 1)))
+  (finishes (jzon:parse "\"\\u00f8\"" :max-string-length 1)))
 
 (test parse-max-string-length-respects-escape-codes-2
-  (finishes (parse "\"\\n\"" :max-string-length 1)))
+  (finishes (jzon:parse "\"\\n\"" :max-string-length 1)))
 
 (test parse-errors-on-too-large-string-length
   (signals (type-error)
-    (parse "\"Doesn't matter\"" :max-string-length (* array-dimension-limit 2))))
+    (jzon:parse "\"Doesn't matter\"" :max-string-length (* array-dimension-limit 2))))
 
 (test parse-disallows-comments
   (signals (jzon:json-parse-error)
-    (parse "//Line comment
+    (jzon:parse "//Line comment
     123")))
 
 (test parse-allows-comments-when-asked
@@ -353,20 +346,20 @@
 
 (test parse-disallows-block-comments
   (signals (jzon:json-parse-error)
-    (parse "/*Block comment*/ 123")))
+    (jzon:parse "/*Block comment*/ 123")))
 
 (test parse-allows-block-comments-when-asked
-  (is (= 123 (parse "/*Block comment*/ 123" :allow-comments t))))
+  (is (= 123 (jzon:parse "/*Block comment*/ 123" :allow-comments t))))
 
 (test parse-does-not-nest-block-comments
   (signals (jzon:json-parse-error)
-    (parse "/*Block comment /*Nested Block Comment */ */ 123" :allow-comments t)))
+    (jzon:parse "/*Block comment /*Nested Block Comment */ */ 123" :allow-comments t)))
 
 (test unterminated-block-comment-errors
   (signals (jzon:json-eof-error)
-    (parse "/* Some stuff" :allow-comments t))
+    (jzon:parse "/* Some stuff" :allow-comments t))
   (signals (jzon:json-eof-error)
-    (parse "/* Some stuff ** // " :allow-comments t)))
+    (jzon:parse "/* Some stuff ** // " :allow-comments t)))
 
 (test miscellaneous-block-comment-tests
   (is (= 123 (jzon:parse "123/*comment*/" :allow-comments t)))
@@ -483,19 +476,19 @@
 (in-suite stringify)
 
 (test stringify-to-nil-returns-string
-  (is (string= "42" (stringify 42))))
+  (is (string= "42" (jzon:stringify 42))))
 
 (test stringify-to-t-writes-to-stdout
   (is (string= "42" (with-output-to-string (*standard-output*)
-                      (stringify 42 :stream t)))))
+                      (jzon:stringify 42 :stream t)))))
 
 (test stringify-to-stream-writes-to-stream
   (is (string= "42" (with-output-to-string (stream)
-                      (stringify 42 :stream stream)))))
+                      (jzon:stringify 42 :stream stream)))))
 
 (test stringify-works-on-binary-streams
   (is (string= "42" (let ((stream (fs:make-in-memory-output-stream)))
-                      (stringify 42 :stream stream)
+                      (jzon:stringify 42 :stream stream)
                       (fs:octets-to-string (fs:get-output-stream-sequence stream))))))
 
 (test stringify-pretty-array-spaces-elements
@@ -503,18 +496,18 @@
   1,
   2,
   3
-]" (stringify #(1 2 3) :pretty t))))
+]" (jzon:stringify #(1 2 3) :pretty t))))
 
 (test stringify-pretty-object-spaces-kv
   (is (string= "{
   \"x\": 0
-}" (stringify (ph "x" 0) :pretty t))))
+}" (jzon:stringify (ph "x" 0) :pretty t))))
 
 (test stringify-pretty-object-newlines-multiple-kv
   (is (string= "{
   \"x\": 0,
   \"y\": 5
-}" (stringify (ph "x" 0 "y" 5) :pretty t))))
+}" (jzon:stringify (ph "x" 0 "y" 5) :pretty t))))
 
 (test stringify-pretty-object-newlines-if-nested-object
   (is (string= "{
@@ -522,7 +515,7 @@
     \"x\": 0,
     \"y\": 5
   }
-}" (stringify (ph "obj" (ph "x" 0 "y" 5)) :pretty t))))
+}" (jzon:stringify (ph "obj" (ph "x" 0 "y" 5)) :pretty t))))
 
 (test stringify-pretty-array-newlines-if-nested-object
   (is (string= "[
@@ -531,48 +524,48 @@
     \"x\": 0,
     \"y\": 5
   }
-]" (stringify (vector 1 (ph "x" 0 "y" 5)) :pretty t))))
+]" (jzon:stringify (vector 1 (ph "x" 0 "y" 5)) :pretty t))))
 
 (test string-expands-special-escapes
   (is-every string=
-    (#\Backspace (parse "\"\\b\""))
-    (#\Page  (parse "\"\\f\""))
-    (#\Linefeed  (parse "\"\\n\""))
-    (#\Return    (parse "\"\\r\""))
-    (#\Tab       (parse "\"\\t\""))))
+    (#\Backspace (jzon:parse "\"\\b\""))
+    (#\Page  (jzon:parse "\"\\f\""))
+    (#\Linefeed  (jzon:parse "\"\\n\""))
+    (#\Return    (jzon:parse "\"\\r\""))
+    (#\Tab       (jzon:parse "\"\\t\""))))
 
 (test stringify-atoms
   (is-every string=
-    ("true" (stringify t))
-    ("false" (stringify nil))
-    ("null" (stringify 'null))))
+    ("true" (jzon:stringify t))
+    ("false" (jzon:stringify nil))
+    ("null" (jzon:stringify 'null))))
 
 (test stringify-integers
-  (is (string= "5" (stringify 5)))
-  (is (string= "0" (stringify 0))))
+  (is (string= "5" (jzon:stringify 5)))
+  (is (string= "0" (jzon:stringify 0))))
 
 (test stringify-strings
-  (is (string= "\"hello, world!\"" (stringify "hello, world!")))
-  (is (string= "\"\"" (stringify ""))))
+  (is (string= "\"hello, world!\"" (jzon:stringify "hello, world!")))
+  (is (string= "\"\"" (jzon:stringify ""))))
 
 (test stringify-string-handles-special-escapes
   (is-every string=
-    ("\"\\b\"" (stringify (string #\Backspace)))
-    ("\"\\f\"" (stringify (string #\Page)))
-    ("\"\\n\"" (stringify (string #\Linefeed)))
-    ("\"\\r\"" (stringify (string #\Return)))
-    ("\"\\t\"" (stringify (string #\Tab)))))
+    ("\"\\b\"" (jzon:stringify (string #\Backspace)))
+    ("\"\\f\"" (jzon:stringify (string #\Page)))
+    ("\"\\n\"" (jzon:stringify (string #\Linefeed)))
+    ("\"\\r\"" (jzon:stringify (string #\Return)))
+    ("\"\\t\"" (jzon:stringify (string #\Tab)))))
 
 (test stringify-array
-  (is (string= "[]" (stringify #())))
-  (is (string= "[42,\"hello\",[]]" (stringify #(42 "hello" #())))))
+  (is (string= "[]" (jzon:stringify #())))
+  (is (string= "[42,\"hello\",[]]" (jzon:stringify #(42 "hello" #())))))
 
 (defun recode (value)
-  "Shorthand for (parse (stringify value))"
-  (parse (stringify value)))
+  "Shorthand for (jzon:parse (jzon:stringify value))"
+  (jzon:parse (jzon:stringify value)))
 
 (test stringify-object
-  (is (string= "{}" (stringify (ph))))
+  (is (string= "{}" (jzon:stringify (ph))))
   ;; Note - We can't reliably test object string output because hash tables ordering might differ
   ;; So instead, parse and verify structure matches
   (is (equalp (ph "x" 100 "y" 45 "name" "Rock") (recode (ph "x" 100 "y" 45 "name" "Rock")))))
@@ -629,81 +622,81 @@
   {
     \"x\": 0
   }
-]" (stringify (vector (ph "x" 0)) :pretty t))))
+]" (jzon:stringify (vector (ph "x" 0)) :pretty t))))
 
 (test stringify-no-slots-on-unknown-object ()
-  (is (string= "{}" (stringify (make-array '(2 2))))))
+  (is (string= "{}" (jzon:stringify (make-array '(2 2))))))
 
 (test stringify-pretty-prints-keys
-  (is (string= "{\"#(1 2)\":0}" (stringify (ph #(1 2) 0)))))
+  (is (string= "{\"#(1 2)\":0}" (jzon:stringify (ph #(1 2) 0)))))
 
 (test stringify-errors-on-circular-references
   (signals (jzon:json-recursive-write-error)
     (let ((ht (ph "x" 0)))
       (setf (gethash "self" ht) ht)
-      (stringify ht))))
+      (jzon:stringify ht))))
 
 (test stringify-errors-on-circular-reference-during-pretty-print
   (signals (jzon:json-recursive-write-error)
     (let ((ht (ph "x" 0)))
       (setf (gethash "self" ht) ht)
-      (stringify ht :pretty t))))
+      (jzon:stringify ht :pretty t))))
 
 (test stringify-errors-on-circular-reference-vector-during-pretty-print
   (signals (jzon:json-recursive-write-error)
     (let ((v (vector 0 1 2)))
       (setf (aref v 0) v)
-      (stringify v :pretty t))))
+      (jzon:stringify v :pretty t))))
 
 (test stringify-errors-on-non-symbol-coerce-key
-  (signals (type-error) (stringify 42 :coerce-key 0)))
+  (signals (type-error) (jzon:stringify 42 :coerce-key 0)))
 
 (test stringify-allows-symbols-on-coerce-key
-  (finishes (stringify 42 :coerce-key (constantly "42"))))
+  (finishes (jzon:stringify 42 :coerce-key (constantly "42"))))
 
 (test stringify-coerce-key-calls-fn
-  (is (string= "{\"something-else\":42}" (stringify (ph "something" 42) :coerce-key (constantly "something-else")))))
+  (is (string= "{\"something-else\":42}" (jzon:stringify (ph "something" 42) :coerce-key (constantly "something-else")))))
 
 (test stringify-detects-alist-when-characters
-  (is (string= "{\"a\":5,\"b\":42}" (stringify '((#\a . 5) (#\b . 42))))))
+  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '((#\a . 5) (#\b . 42))))))
 
 (test stringify-detects-alist-when-strings
-  (is (string= "{\"a\":5,\"b\":42}" (stringify '(("a" . 5) ("b" . 42))))))
+  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '(("a" . 5) ("b" . 42))))))
 
 (test stringify-detects-alist-when-symbols
-  (is (string= "{\"a\":5,\"b\":42}" (stringify '((#:a . 5) (#:b . 42))))))
+  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '((#:a . 5) (#:b . 42))))))
 
 (test stringify-no-alist-when-integers
-  (is (string= "[[1,5],[2,42]]" (stringify '((1 5) (2 42))))))
+  (is (string= "[[1,5],[2,42]]" (jzon:stringify '((1 5) (2 42))))))
 
 (test stringify-detects-plist-when-characters
-  (is (string= "{\"a\":5,\"b\":42}" (stringify '(#\a 5 #\b 42)))))
+  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '(#\a 5 #\b 42)))))
 
 (test stringify-detects-plist-when-strings
-  (is (string= "{\"a\":5,\"b\":42}" (stringify '("a" 5 "b" 42)))))
+  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '("a" 5 "b" 42)))))
 
 (test stringify-detects-plist-when-symbols
-  (is (string= "{\"a\":5,\"b\":42}" (stringify '(#:a 5 #:b 42)))))
+  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '(#:a 5 #:b 42)))))
 
 (test stringify-no-plist-when-integers
-  (is (string= "[1,5,2,42]" (stringify '(1 5 2 42)))))
+  (is (string= "[1,5,2,42]" (jzon:stringify '(1 5 2 42)))))
 
 (test stringify-coerces-pathname-to-namestring
-  (is (string= "\"hello.lisp\""(stringify #p"hello.lisp"))))
+  (is (string= "\"hello.lisp\""(jzon:stringify #p"hello.lisp"))))
 
 (test stringify-writes-cons-as-2-tuple
-  (is (string= "[1,2]" (stringify (cons 1 2)))))
+  (is (string= "[1,2]" (jzon:stringify (cons 1 2)))))
 
 (test stringify-replacer-keeps-keys-on-t
   (is (string= "{\"x\":0}"
-               (stringify (ph :x 0)
+               (jzon:stringify (ph :x 0)
                           :replacer (lambda (k v)
                                       (declare (ignore k v))
                                       t)))))
 
 (test stringify-replacer-filters-keys-on-nil
   (is (string= "{}"
-               (stringify (ph :x 0)
+               (jzon:stringify (ph :x 0)
                           :replacer (lambda (k v)
                                       (declare (ignore v))
                                       (case k
@@ -712,7 +705,7 @@
 
 (test stringify-replacer-filters-some-keys-on-nil
   (is (string= "{\"y\":0}"
-               (stringify (ph :x 0 :y 0)
+               (jzon:stringify (ph :x 0 :y 0)
                           :replacer (lambda (k v)
                                       (declare (ignore v))
                                       (case k
@@ -721,7 +714,7 @@
 
 (test stringify-replacer-replaces-values-using-multiple-values
   (is (string= "{\"x\":42}"
-               (stringify (ph :x 0)
+               (jzon:stringify (ph :x 0)
                           :replacer (lambda (k v)
                                       (declare (ignore v))
                                       (case k
@@ -730,7 +723,7 @@
 
 (test stringify-replacer-ignores-second-value-on-nil
   (is (string= "{}"
-               (stringify (ph :x 0)
+               (jzon:stringify (ph :x 0)
                           :replacer (lambda (k v)
                                       (declare (ignore v))
                                       (case k
@@ -739,7 +732,7 @@
 
 (test stringify-replacer-is-called-on-sub-objects
   (is (string= "{\"x\":{\"a\":42}}"
-               (stringify (ph :x (ph :a 0))
+               (jzon:stringify (ph :x (ph :a 0))
                           :replacer (lambda (k v)
                                       (declare (ignore v))
                                       (if (eq k :a)
@@ -748,7 +741,7 @@
 
 (test stringify-replacer-is-called-recursively
   (is (string= "{\"x\":{\"y\":{\"z\":0}}}"
-               (stringify (ph :x 0)
+               (jzon:stringify (ph :x 0)
                           :replacer (lambda (k v)
                                       (declare (ignore v))
                                       (case k
@@ -759,27 +752,27 @@
 (test stringify-replacer-is-called-on-toplevel-value-with-nil-key
   (5am:is-true
    (let ((key-is-nil nil))
-     (stringify 0 :replacer (lambda (k v)
+     (jzon:stringify 0 :replacer (lambda (k v)
                               (declare (ignore v))
                               (setf key-is-nil (null k))))
      key-is-nil))
   (5am:is-true
    (let ((value 0)
          (value-is-same nil))
-     (stringify value :replacer (lambda (k v)
+     (jzon:stringify value :replacer (lambda (k v)
                                   (declare (ignore k))
                                   (setf value-is-same (eq value v) )))
      value-is-same)))
 
 (test stringify-replacer-can-replace-toplevel-value
-  (is (string= "42" (stringify 0 :replacer (lambda (k v)
+  (is (string= "42" (jzon:stringify 0 :replacer (lambda (k v)
                                              (declare (ignore k v))
                                              (values t 42))))))
 
 (test stringify-replacer-is-called-on-array-elements-with-element-indexes
   (is (equalp #(0 1 2)
               (let ((keys (list)))
-                (stringify #(t t t) :replacer (lambda (k v)
+                (jzon:stringify #(t t t) :replacer (lambda (k v)
                                                 (declare (ignore v))
                                                 (when k
                                                   (push k keys))
@@ -789,7 +782,7 @@
 (test stringify-replacer-is-only-called-with-nil-on-toplevel-value
   (is (equalp '(#(1 2 3))
               (let ((called-on (list)))
-                (stringify #(1 2 3) :replacer (lambda (k v)
+                (jzon:stringify #(1 2 3) :replacer (lambda (k v)
                                                 (when (null k)
                                                   (push v called-on))
                                                 t))
@@ -798,7 +791,7 @@
 (test stringify-replacer-is-called-on-plists-as-objects
   (is (string= "{\"a\":\"b\",\"b\":\"a\"}"
                ;; As a p-list
-               (stringify '("a" 19 "b" "c")
+               (jzon:stringify '("a" 19 "b" "c")
                           :replacer (lambda (k v)
                                       (declare (ignore v))
                                       (cond
@@ -809,7 +802,7 @@
 (test stringify-replacer-is-called-on-alists-as-objects
   (is (string= "{\"a\":\"b\",\"b\":\"a\"}"
                ;; as an a-list
-               (stringify '(("a" . 19) ("b" . "c"))
+               (jzon:stringify '(("a" . 19) ("b" . "c"))
                           :replacer (lambda (k v)
                                       (declare (ignore v))
                                       (cond
@@ -823,105 +816,105 @@
 
 ;; fail1 in json-checker goes against RFC
 ;; (test fail1
-;;   (signals jzon:json-parse-error (parse "\"A JSON payload should be an object or array, not a string.\"")))
+;;   (signals jzon:json-parse-error (jzon:parse "\"A JSON payload should be an object or array, not a string.\"")))
 
 (test fail2
-  (signals jzon:json-parse-error (parse "[\"Unclosed array\"")))
+  (signals jzon:json-parse-error (jzon:parse "[\"Unclosed array\"")))
 
 (test fail3
-  (signals jzon:json-parse-error (parse "{unquoted_key: \"keys must be quoted\"}")))
+  (signals jzon:json-parse-error (jzon:parse "{unquoted_key: \"keys must be quoted\"}")))
 
 (test fail4
-  (signals jzon:json-parse-error (parse "[\"extra comma\",]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"extra comma\",]")))
 
 (test fail5
-  (signals jzon:json-parse-error (parse "[\"double extra comma\",,]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"double extra comma\",,]")))
 
 (test fail6
-  (signals jzon:json-parse-error (parse "[   , \"<-- missing value\"]")))
+  (signals jzon:json-parse-error (jzon:parse "[   , \"<-- missing value\"]")))
 
 (test fail7
-  (signals jzon:json-parse-error (parse "[\"Comma after the close\"],")))
+  (signals jzon:json-parse-error (jzon:parse "[\"Comma after the close\"],")))
 
 (test fail8
-  (signals jzon:json-parse-error (parse "[\"Extra close\"]]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"Extra close\"]]")))
 
 (test fail9
-  (signals jzon:json-parse-error (parse "{\"Extra comma\": true,}")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Extra comma\": true,}")))
 
 (test fail10
-  (signals jzon:json-parse-error (parse "{\"Extra value after close\": true} \"misplaced quoted value\"")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Extra value after close\": true} \"misplaced quoted value\"")))
 
 (test fail11
-  (signals jzon:json-parse-error (parse "{\"Illegal expression\": 1 + 2}")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Illegal expression\": 1 + 2}")))
 
 (test fail12
-  (signals jzon:json-parse-error (parse "{\"Illegal invocation\": alert()}")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Illegal invocation\": alert()}")))
 
 (test fail13
-  (signals jzon:json-parse-error (parse "{\"Numbers cannot have leading zeroes\": 013}")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Numbers cannot have leading zeroes\": 013}")))
 
 (test fail14
-  (signals jzon:json-parse-error (parse "{\"Numbers cannot be hex\": 0x14}")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Numbers cannot be hex\": 0x14}")))
 
 (test fail15
-  (signals jzon:json-parse-error (parse "[\"Illegal backslash escape: \\x15\"]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"Illegal backslash escape: \\x15\"]")))
 
 (test fail16
-  (signals jzon:json-parse-error (parse "[\\naked]")))
+  (signals jzon:json-parse-error (jzon:parse "[\\naked]")))
 
 (test fail17
-  (signals jzon:json-parse-error (parse "[\"Illegal backslash escape: \\017\"]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"Illegal backslash escape: \\017\"]")))
 
 (test fail18
-  (signals jzon:json-parse-error (parse "[[[[[[[[[[[[[[[[[[[[\"Too deep\"]]]]]]]]]]]]]]]]]]]]" :max-depth 19)))
+  (signals jzon:json-parse-error (jzon:parse "[[[[[[[[[[[[[[[[[[[[\"Too deep\"]]]]]]]]]]]]]]]]]]]]" :max-depth 19)))
 
 (test fail19
-  (signals jzon:json-parse-error (parse "{\"Missing colon\" null}")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Missing colon\" null}")))
 
 (test fail20
-  (signals jzon:json-parse-error (parse "{\"Double colon\":: null}")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Double colon\":: null}")))
 
 (test fail21
-  (signals jzon:json-parse-error (parse "{\"Comma instead of colon\", null}")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Comma instead of colon\", null}")))
 
 (test fail22
-  (signals jzon:json-parse-error (parse "[\"Colon instead of comma\": false]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"Colon instead of comma\": false]")))
 
 (test fail23
-  (signals jzon:json-parse-error (parse "[\"Bad value\", truth]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"Bad value\", truth]")))
 
 (test fail24
-  (signals jzon:json-parse-error (parse "['single quote']")))
+  (signals jzon:json-parse-error (jzon:parse "['single quote']")))
 
 (test fail25
-  (signals jzon:json-parse-error (parse "[\"	tab	character	in	string	\"]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"	tab	character	in	string	\"]")))
 
 (test fail26
-  (signals jzon:json-parse-error (parse "[\"tab\\   character\\   in\\  string\\  \"]")))
+  (signals jzon:json-parse-error (jzon:parse "[\"tab\\   character\\   in\\  string\\  \"]")))
 
 (test fail27
-  (signals jzon:json-parse-error (parse "[\"line
+  (signals jzon:json-parse-error (jzon:parse "[\"line
 break\"]")))
 
 (test fail28
-  (signals jzon:json-parse-error (parse "[\"line\\
+  (signals jzon:json-parse-error (jzon:parse "[\"line\\
 break\"]")))
 
 (test fail29
-  (signals jzon:json-parse-error (parse "[0e]")))
+  (signals jzon:json-parse-error (jzon:parse "[0e]")))
 
 (test fail30
-  (signals jzon:json-parse-error (parse "[0e+]")))
+  (signals jzon:json-parse-error (jzon:parse "[0e+]")))
 
 (test fail31
-  (signals jzon:json-parse-error (parse "[0e+-1]")))
+  (signals jzon:json-parse-error (jzon:parse "[0e+-1]")))
 
 (test fail32
-  (signals jzon:json-parse-error (parse "{\"Comma instead if closing brace\": true,")))
+  (signals jzon:json-parse-error (jzon:parse "{\"Comma instead if closing brace\": true,")))
 
 (test fail33
-  (signals jzon:json-parse-error (parse "[\"mismatch\"}")))
+  (signals jzon:json-parse-error (jzon:parse "[\"mismatch\"}")))
 
 (test pass1
   (is (equalp
@@ -968,7 +961,7 @@ break\"]")))
                    "/\\\"쫾몾ꮘﳞ볚
 	`1~!@#$%^&*()_+-=[]{}|;:',./<>?" "A key can be any string")
          0.5d0 98.6d0 99.44d0 1066 10.0d0 1.0d0 0.1d0 1.0d0 2.0d0 2.0d0 "rosebud")
-       (parse "[
+       (jzon:parse "[
     \"JSON Test Pattern pass1\",
     {\"object with 1 member\":[\"array with 1 element\"]},
     {},
@@ -1029,13 +1022,13 @@ break\"]")))
 
 (test pass2
   (is (equalp #(#(#(#(#(#(#(#(#(#(#(#(#(#(#(#(#(#(#("Not too deep")))))))))))))))))))
-              (parse "[[[[[[[[[[[[[[[[[[[\"Not too deep\"]]]]]]]]]]]]]]]]]]]"))))
+              (jzon:parse "[[[[[[[[[[[[[[[[[[[\"Not too deep\"]]]]]]]]]]]]]]]]]]]"))))
 
 (test pass3
   (is (equalp (ph "JSON Test Pattern pass3"
                   (ph "The outermost value" "must be an object or array."
                       "In this test" "It is an object.")) 
-              (parse "{
+              (jzon:parse "{
     \"JSON Test Pattern pass3\": {
         \"The outermost value\": \"must be an object or array.\",
         \"In this test\": \"It is an object.\"
