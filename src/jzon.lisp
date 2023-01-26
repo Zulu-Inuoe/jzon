@@ -551,7 +551,7 @@ see `close-parser'"
 
 (defmacro with-parser ((name &rest args) &body body)
   `(let ((,name (make-parser ,@args)))
-    (unwind-protect (progn ,@body)
+    (unwind-protect (locally ,@body)
       (close-parser ,name))))
 
 (defun parse-next (parser)
