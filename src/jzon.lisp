@@ -372,6 +372,18 @@ see `json-atom'"
   (:method ((handler %jzon-sax-builder) value)
     (%sax-finish-value handler value)))
 
+(defgeneric sax-begin-array (handler)
+  (:method ((handler function))
+    (funcall handler :begin-array))
+  (:method ((handler %jzon-sax-builder))
+    (push (list) (slot-value handler '%stack))))
+
+(defgeneric sax-end-array (handler)
+  (:method ((handler function))
+    (funcall handler :end-array))
+  (:method ((handler %jzon-sax-builder))
+    (%sax-finish-value handler (coerce (nreverse (the list (pop (slot-value handler '%stack)))) 'simple-vector))))
+
 (defgeneric sax-begin-object (handler)
   (:method ((handler function))
     (funcall handler :begin-object))
@@ -389,18 +401,6 @@ see `json-atom'"
     (funcall handler :end-object))
   (:method ((handler %jzon-sax-builder))
     (%sax-finish-value handler (pop (slot-value handler '%stack)))))
-
-(defgeneric sax-begin-array (handler)
-  (:method ((handler function))
-    (funcall handler :begin-array))
-  (:method ((handler %jzon-sax-builder))
-    (push (list) (slot-value handler '%stack))))
-
-(defgeneric sax-end-array (handler)
-  (:method ((handler function))
-    (funcall handler :end-array))
-  (:method ((handler %jzon-sax-builder))
-    (%sax-finish-value handler (coerce (nreverse (the list (pop (slot-value handler '%stack)))) 'simple-vector))))
 
 (defgeneric sax-produce-value (handler)
   (:method ((handler function))
