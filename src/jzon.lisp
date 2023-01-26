@@ -611,12 +611,13 @@ see `close-parser'"
                               (close bstream)))))
         (t (values in nil)))
     (let ((parser (make-instance 'parser)))
-      (with-slots (%step %read-string %pos %max-depth %allow-comments %allow-trailing-comma %max-string-length %key-fn) parser
+      (with-slots (%step %read-string %pos %max-depth %allow-comments %allow-trailing-comma %max-string-length %key-fn %close-action) parser
+        (setf %close-action close-action)
         (setf (values %step %read-string %pos)
-              (etypecase in
-                (simple-string (%make-fns-simple-string in))
-                (string (%make-fns-string in))
-                (stream (%make-fns-stream in))))
+              (etypecase input
+                (simple-string (%make-fns-simple-string input))
+                (string (%make-fns-string input))
+                (stream (%make-fns-stream input))))
 
         (setf %max-depth max-depth)
         (setf %allow-comments (and allow-comments t))
