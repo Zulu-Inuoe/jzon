@@ -341,7 +341,7 @@
   
 (test parse-line-comments-do-not-end-on-cr-only-lf
   (is (= 123 (jzon:parse (format nil "//Comment~C123~C 123" #\Return #\Linefeed) :allow-comments t)))
-  (signals (jzon:json-parse-error)
+  (signals (jzon:json-eof-error)
     (jzon:parse (format nil "//Comment~C123 123" #\Return) :allow-comments t)))
   
 (test parse-comments-delimit-atoms
