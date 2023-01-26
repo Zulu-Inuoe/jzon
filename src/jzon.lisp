@@ -536,7 +536,7 @@ see `json-atom'"
                               (#\}    (go end-object))
                               (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting comma or object close." c (char-name c))))))))
 
-(defclass %reader ()
+(defclass parser ()
   ((%step
     :type function)
    (%read-string
@@ -573,19 +573,27 @@ see `json-atom'"
       :initform (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)
       :type (and string (not simple-string)))
    (%close-action
-      :type (or null function))))
+      :type (or null function)))
+  (:documentation "An incremental JSON parser.
 
-(defun make-reader (in &key
+see `make-parser'
+see `next'
+see `close-parser'"))
+
+(defun make-parser (in &key
                       (max-depth 128)
                       (allow-comments nil)
                       (allow-trailing-comma nil)
                       (max-string-length (min #x100000 array-dimension-limit))
                       key-fn)
-  "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
+  "Construct a `parser' Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:max-depth' controls the maximum depth of the object/array nesting
  `:allow-comments' controls whether or not single-line // comments are allowed.
  `:allow-trailing-comma' controls whether or not a single comma `,' is allowed after all elements of an array or object.
- `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool"
+ `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool
+
+see `next'
+see `close-parser'"
   (check-type max-depth (or (integer 1) null))
   (check-type max-string-length (integer 1 (#.array-dimension-limit)))
   (check-type key-fn (or null symbol function))
@@ -602,8 +610,8 @@ see `json-atom'"
                               (close fstream)
                               (close bstream)))))
         (t (values in nil)))
-    (let ((reader (make-instance '%reader)))
-      (with-slots (%step %read-string %pos %max-depth %allow-comments %allow-trailing-comma %max-string-length %key-fn) reader
+    (let ((parser (make-instance 'parser)))
+      (with-slots (%step %read-string %pos %max-depth %allow-comments %allow-trailing-comma %max-string-length %key-fn) parser
         (setf (values %step %read-string %pos)
               (etypecase in
                 (simple-string (%make-fns-simple-string in))
@@ -615,22 +623,37 @@ see `json-atom'"
         (setf %allow-trailing-comma (and allow-trailing-comma t))
         (setf %max-string-length max-string-length)
         (setf %key-fn (or key-fn (%make-string-pool))))
-      reader)))
+      parser)))
 
-(defun close-reader (reader)
-  (let ((action (shiftf (slot-value reader '%close-action) nil)))
-    (when action (funcall action)))
-  reader)
+(defun close-parser (parser)
+  "Close the `parser'"
+  (check-type parser parser)
+  (let ((action (shiftf (slot-value parser '%close-action) nil)))
+    (when action
+      (funcall action)
+      (slot-makunbound parser '%step)
+      (slot-makunbound parser '%read-string)
+      (slot-makunbound parser '%pos)
+      (slot-makunbound parser '%key-fn)
+      (slot-makunbound parser '%string-accum)))
+  parser)
 
-(defun %read-json-element2 (reader
-                              &aux
-                                (*%allow-comments* (slot-value reader '%allow-comments))
-                                (*%max-string-length* (slot-value reader '%max-string-length))
-                                (*%string-accum* (slot-value reader '%string-accum))
-                                (*%pos-fn* (slot-value reader '%pos))
-                                lc)
-  (declare (type (or null character) lc))
-  (with-slots (%state %context %lookahead %step %read-string %key-fn %depth %max-depth %allow-trailing-comma) reader
+(defun parse-next (parser)
+  "Read the next token from `parser'. Depending on the token, returns 1 or 2 values:
+
+  :value, <value>     ; A `json-atom' <value>
+  :begin-array        ; Array open [
+  :end-array          ; Array close ]
+  :begin-object       ; Object open {
+  :object-key, <key>  ; Object key
+  :end-object         ; Object finished }
+
+see `make-parser'
+see `close-parser'"
+  (check-type parser parser)
+  (with-slots (%state %context %lookahead %step %read-string %key-fn %depth %max-depth %allow-trailing-comma) parser
+    (when (null %state)
+      (return-from parse-next nil))
     (flet ((read-element (lc)
             (macrolet ((expect (string value)
                          `(progn
@@ -680,70 +703,76 @@ see `json-atom'"
               (pop %context)
               (setf %state (car %context))))
       (declare (dynamic-extent #'read-element #'pop-state))
-      (ecase %state
-        ((nil)  nil)
-        (read-element
-          (read-element (%skip-whitespace %step (%step %step))))
-        (read-array-element
-          (case (setf lc (%skip-whitespace %step (%step %step)))
-            ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting element or array close"))
-            (#\]    (pop-state)
-                    (values :end-array))
-            (t      (read-element lc))))
-        (after-read-array-element
-          (case (setf lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step))))
-            ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting comma or array close"))
-            (#\,    (case (setf lc (%skip-whitespace %step (%step %step)))
-                      ((nil)  (if %allow-trailing-comma
-                                (%raise 'json-parse-error "End of input when reading array, expecting element or array close")
-                                (%raise 'json-parse-error "End of input when reading array, expecting element")))
-                        (#\]  (unless %allow-trailing-comma
-                                (%raise 'json-parse-error "Trailing comma when reading array"))
-                              (pop-state)
-                              (values :end-array))
-                        (t    (read-element lc))))
-            (#\]    (pop-state)
-                    (values :end-array))
-            (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading array, expecting comma or array close" lc (char-name lc)))))
-        (read-key
-          (case (setf lc (%skip-whitespace %step (%step %step)))
-            ((nil) (%raise 'json-parse-error "End of input when reading object, expecting key"))
-            (#.(char "\"" 0)
-              (setf %state 'after-read-key)
-              (values :object-key (funcall %key-fn (funcall %read-string))))
-            (t    (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc)))))
-        (after-read-key
-          (case (setf lc (%skip-whitespace %step (%step %step)))
-            ((nil) (%raise 'json-parse-error "End of input when reading object, expecting colon after object key"))
-            (#\:)
-            (t     (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting colon after object key" lc (char-name lc))))
+      (let ((*%allow-comments* (slot-value parser '%allow-comments))
+            (*%max-string-length* (slot-value parser '%max-string-length))
+            (*%string-accum* (slot-value parser '%string-accum))
+            (*%pos-fn* (slot-value parser '%pos))
+            lc)
+        (declare (type (or null character) lc))
+        (ecase %state
+          (read-element
+            (read-element (%skip-whitespace %step (%step %step))))
+          (read-array-element
+            (case (setf lc (%skip-whitespace %step (%step %step)))
+              ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting element or array close"))
+              (#\]    (pop-state)
+                      (values :end-array))
+              (t      (read-element lc))))
+          (after-read-array-element
+            (case (setf lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step))))
+              ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting comma or array close"))
+              (#\,    (case (setf lc (%skip-whitespace %step (%step %step)))
+                        ((nil)  (if %allow-trailing-comma
+                                  (%raise 'json-parse-error "End of input when reading array, expecting element or array close")
+                                  (%raise 'json-parse-error "End of input when reading array, expecting element")))
+                          (#\]  (unless %allow-trailing-comma
+                                  (%raise 'json-parse-error "Trailing comma when reading array"))
+                                (pop-state)
+                                (values :end-array))
+                          (t    (read-element lc))))
+              (#\]    (pop-state)
+                      (values :end-array))
+              (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading array, expecting comma or array close" lc (char-name lc)))))
+          (read-key
+            (case (setf lc (%skip-whitespace %step (%step %step)))
+              ((nil)            (%raise 'json-parse-error "End of input when reading object, expecting key or object close"))
+              (#\}              (pop-state)
+                                (values :end-object))
+              (#.(char "\"" 0)  (setf %state 'after-read-key)
+                                (values :object-key (funcall %key-fn (funcall %read-string))))
+              (t                (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc)))))
+          (after-read-key
+            (case (setf lc (%skip-whitespace %step (%step %step)))
+              ((nil) (%raise 'json-parse-error "End of input when reading object, expecting colon after object key"))
+              (#\:)
+              (t     (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting colon after object key" lc (char-name lc))))
 
-          (case (setf lc (%skip-whitespace %step (%step %step)))
-            ((nil)  (%raise 'json-parse-error "End of input when reading object, expecting value after colon"))
-            (t      (read-element lc))))
-        (after-read-property
-          (case (setf lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step))))
-            ((nil)  (%raise 'json-parse-error "End of input when reading object. Expecting comma or object close"))
-            (#\,    (case (setf lc (%skip-whitespace %step (%step %step)))
-                      ((nil)
-                        (if %allow-trailing-comma
-                          (%raise 'json-parse-error "End of input when reading object. expected key or object close after comma")
-                          (%raise 'json-parse-error "End of input when reading object, expected key after comma")))
-                      (#\}
-                        (unless %allow-trailing-comma
-                          (%raise 'json-parse-error "Trailing comma when reading object"))
-                        (pop-state)
-                        (values :end-object))
-                      (t
-                        (case lc
-                          ((nil) (%raise 'json-parse-error "End of input when reading object, expecting key"))
-                          (#.(char "\"" 0)
-                            (setf %state 'after-read-key)
-                            (values :object-key (funcall %key-fn (funcall %read-string))))
-                          (t    (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc)))))))
-            (#\}    (pop-state)
-                    (values :end-object))
-            (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting comma or object close" lc (char-name lc)))))))))
+            (case (setf lc (%skip-whitespace %step (%step %step)))
+              ((nil)  (%raise 'json-parse-error "End of input when reading object, expecting value after colon"))
+              (t      (read-element lc))))
+          (after-read-property
+            (case (setf lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step))))
+              ((nil)  (%raise 'json-parse-error "End of input when reading object. Expecting comma or object close"))
+              (#\,    (case (setf lc (%skip-whitespace %step (%step %step)))
+                        ((nil)
+                          (if %allow-trailing-comma
+                            (%raise 'json-parse-error "End of input when reading object. expected key or object close after comma")
+                            (%raise 'json-parse-error "End of input when reading object, expected key after comma")))
+                        (#\}
+                          (unless %allow-trailing-comma
+                            (%raise 'json-parse-error "Trailing comma when reading object"))
+                          (pop-state)
+                          (values :end-object))
+                        (t
+                          (case lc
+                            ((nil) (%raise 'json-parse-error "End of input when reading object, expecting key"))
+                            (#.(char "\"" 0)
+                              (setf %state 'after-read-key)
+                              (values :object-key (funcall %key-fn (funcall %read-string))))
+                            (t    (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc)))))))
+              (#\}    (pop-state)
+                      (values :end-object))
+              (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting comma or object close" lc (char-name lc))))))))))
 
 
 (macrolet ((def-make-string-fns (name type)
