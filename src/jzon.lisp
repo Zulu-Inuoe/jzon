@@ -3,6 +3,12 @@
   (:export
    ;;; Read
    #:parse
+   ;;;; Incremental reader
+   #:make-parser
+   #:parse-next
+   #:close-parser
+   #:with-parser
+
    ;;; Write
    #:stringify
 
@@ -352,189 +358,90 @@ see `json-atom'"
        :fail
          (return (values nil lc))))))
 
-(defclass %jzon-sax-builder ()
-  ((%stack :initform nil :type list)
-   (%key :initform nil :type list)
-   %value))
+(macrolet ((def-make-string-fns (name type)
+             `(defun ,name (in)
+                "Create step, and read-string functions for the string `in'."
+                (declare (type ,type in))
+                (let ((i 0))
+                  (declare (type (integer 0 #.array-dimension-limit) i))
+                  (let* ((step (lambda () (when (< i (length in)) (prog1 (aref in i) (incf i)))))
+                         (read-string (lambda ()
+                                        ;; Scan until we hit a closing "
+                                        ;; Error on EOF
+                                        ;; Error if we encounter a literal control char
+                                        ;; Track suitable element-type
+                                        (loop
+                                          :with element-type := 'base-char
+                                          :for j :from i
+                                          :do
+                                            (when (<= (length in) j)
+                                              (%raise 'json-eof-error "Unexpected end of input when reading string."))
+                                            (let ((c (aref in j)))
+                                              (when (char= c #.(char "\"" 0))
+                                                (let ((len (- j i)))
+                                                  (when (< *%max-string-length* len)
+                                                    (setf i (+ i (1+ *%max-string-length*)))
+                                                    (%raise 'json-parse-error "Maximum string length exceeded"))
+                                                  (return
+                                                    (loop :with ret := (make-array len :element-type element-type)
+                                                          :for k :from 0 :below len
+                                                          :do (setf (aref ret k) (aref in (+ i k)))
+                                                          :finally
+                                                          (setf i (1+ j))
+                                                          (return ret)))))
+                                              (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
+                                                (return (%read-json-string step)))
 
-(defun %sax-finish-value (handler value)
-  (let ((stack (slot-value handler '%stack)))
-    (typecase stack
-      ((cons list)
-        (push value (car stack)))
-      ((cons hash-table)
-        (setf (gethash (pop (slot-value handler '%key)) (car stack)) value))
-      (t (setf (slot-value handler '%value) value)))))
+                                              (when (<= #x00 (char-code c) #x1F)
+                                                (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" c (char-name c)))
 
-(defgeneric sax-value (handler value)
-  (:method ((handler function) value)
-    (funcall handler :value value))
-  (:method ((handler %jzon-sax-builder) value)
-    (%sax-finish-value handler value)))
+                                              (when (not (typep c 'base-char))
+                                                (setf element-type 'character))))))
+                         (pos (lambda ()
+                                (loop :with line := 1
+                                      :with col := 1
+                                      :with cr := nil
+                                      :for p :from 0 :below (1- i)
+                                      :for c := (aref in p)
+                                      :do (case c
+                                            (#\Linefeed (incf line) (setf col 1))
+                                            (t (incf col)))
+                                      :finally
+                                         (return (values line col))))))
+                    (values step
+                            read-string
+                            pos))))))
+  (def-make-string-fns %make-fns-simple-string simple-string)
+  (def-make-string-fns %make-fns-string (and string (not simple-string))))
 
-(defgeneric sax-begin-array (handler)
-  (:method ((handler function))
-    (funcall handler :begin-array))
-  (:method ((handler %jzon-sax-builder))
-    (push (list) (slot-value handler '%stack))))
+(defun %make-fns-stream (in)
+  "Create step, and read-string functions for the stream `in'."
+  (declare (type stream in))
+  (unless (subtypep (stream-element-type in) 'character)
+    (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8))))
+  (let* ((step (lambda () (read-char in nil)))
+         (read-string (lambda () (%read-json-string step)))
+         (pos (lambda ()
+                (block nil
+                  (let ((pos (ignore-errors (file-position in))))
+                    (unless (and pos (ignore-errors (file-position in 0)))
+                      (return (values nil nil)))
 
-(defgeneric sax-end-array (handler)
-  (:method ((handler function))
-    (funcall handler :end-array))
-  (:method ((handler %jzon-sax-builder))
-    (%sax-finish-value handler (coerce (nreverse (the list (pop (slot-value handler '%stack)))) 'simple-vector))))
+                    (loop :with line := 1
+                          :with col := 1
+                          :with cr := nil
+                          :for p :from 0 :below (1- pos)
+                          :for c := (read-char in)
+                          :do (case c
+                                (#\Linefeed (incf line) (setf col 1))
+                                (t (incf col)))
+                          :finally
+                             (file-position in pos)
+                             (return (values line col))))))))
+    (values step
+            read-string
+            pos)))
 
-(defgeneric sax-begin-object (handler)
-  (:method ((handler function))
-    (funcall handler :begin-object))
-  (:method ((handler %jzon-sax-builder))
-    (push (make-hash-table :test 'equal) (slot-value handler '%stack))))
-
-(defgeneric sax-object-key (handler key)
-  (:method ((handler function) key)
-    (funcall handler :object-key key))
-  (:method ((handler %jzon-sax-builder) key)
-    (push key (slot-value handler '%key))))
-
-(defgeneric sax-end-object (handler)
-  (:method ((handler function))
-    (funcall handler :end-object))
-  (:method ((handler %jzon-sax-builder))
-    (%sax-finish-value handler (pop (slot-value handler '%stack)))))
-
-(defgeneric sax-produce-value (handler)
-  (:method ((handler function))
-    (funcall handler :produce-value))
-  (:method ((handler %jzon-sax-builder)) (slot-value handler '%value)))
-
-(defun %read-json-element (handler step read-string key-fn max-depth allow-trailing-comma)
-  (prog ((context (list))
-         (depth 0)
-         (c (%skip-whitespace step (%step step))))
-    (declare (type list context))
-    (declare (type (integer 0) depth))
-    (declare (type (or null character) c))
-    (declare (dynamic-extent context depth))
-
-   read-element
-    (when (eql c #\[) (go begin-array))
-    (when (eql c #\{) (go begin-object))
-    (macrolet ((expect (string value)
-                 `(progn
-                    ,@(loop :for i :from 1 :below (length string)
-                            :for expect-c := (char string i)
-                            :collect `(let ((c (or (%step step)
-                                                   (%raise 'json-eof-error (format nil "End of input when reading token '~A'. Expected '~A'" ,string ,expect-c)))))
-                                        (unless (char= c ,expect-c)
-                                          (let ((token (concatenate 'string
-                                                       ,(subseq string 0 i)
-                                                       (cons  c
-                                                              (loop :for c := (%step step)
-                                                                    :until (or (null c) (%whitespace-p c) (find c "{}[],-/"))
-                                                                    :collect c
-                                                                    :do (%step step))))))
-                                            (%raise 'json-parse-error (format nil "Unexpected token '~A'" token))))))
-                    (sax-value handler ,value)
-                    (setf c (%skip-whitespace step (%step step))))))
-      (case c
-        ((nil) (%raise 'json-eof-error "End of input when reading JSON element."))
-        (#.(char "\"" 0)
-          (sax-value handler (funcall read-string))
-          (setf c (%skip-whitespace step (%step step))))
-        (#\f (expect "false" nil))
-        (#\t (expect "true" t))
-        (#\n (expect "null" 'null))
-        (t
-          (multiple-value-bind (number lc) (%read-json-number step c)
-            (unless number
-              (if lc
-                (%raise 'json-parse-error "Unexpected character in JSON data '~C' (~A)." c (char-name c))
-                (%raise 'json-parse-error "End of input when reading number.")))
-            (sax-value handler number)
-            (setf c (%skip-whitespace step lc))))))
-    (go finish-value)
-
-   begin-array
-    (incf depth)
-    (when (and max-depth (> depth max-depth))
-      (%raise 'json-parse-error "Maximum depth exceeded."))
-    (push 'list context)
-    (sax-begin-array handler)
-    (setf c (%skip-whitespace step (%step step)))
-    (case c
-      ((nil) (%raise 'json-parse-error "End of input when reading array, expecting element or array close."))
-      (#\]   (go end-array))
-      (t     (go read-element)))
-
-   end-array
-    (decf depth)
-    (pop context)
-    (sax-end-array handler)
-    (setf c (%skip-whitespace step (%step step)))
-    (go finish-value)
-
-   begin-object
-    (incf depth)
-    (when (and max-depth (> depth max-depth))
-      (%raise 'json-parse-error "Maximum depth exceeded."))
-    (push 'hash-table context)
-    (sax-begin-object handler)
-    (setf c (%skip-whitespace step (%step step)))
-    (case c
-      (#\}  (go end-object))
-      (t    (go read-key)))
-
-   read-key
-    (case c
-      ((nil) (%raise 'json-parse-error "End of input when reading object, expecting key."))
-      (#.(char "\"" 0)  (sax-object-key handler (funcall key-fn (funcall read-string)))
-                        (setf c (%skip-whitespace step (%step step)))
-                        (case c
-                          ((nil) (%raise 'json-parse-error "End of input when reading object, expecting colon after object key."))
-                          (#\:   (setf c (%skip-whitespace step (%step step)))
-                                 (go read-element))
-                          (t     (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting colon after object key" c (char-name c)))))
-      (t    (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key." c (char-name c))))
-
-   end-object
-    (decf depth)
-    (pop context)
-    (sax-end-object handler)
-    (setf c (%skip-whitespace step (%step step)))
-    (go finish-value)
-
-    finish-value
-    (ecase (car context)
-        ((nil)              (return c))
-        (list               (case c
-                              ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting comma or array close."))
-                              (#\,    (setf c (%skip-whitespace step (%step step)))
-                                      (case c
-                                        ((nil) (if allow-trailing-comma
-                                                 (%raise 'json-parse-error "End of input when reading array, expected element or array close after comma.")
-                                                 (%raise 'json-parse-error "End of input when reading array, expected element after comma.")))
-                                        (#\]
-                                          (unless allow-trailing-comma
-                                            (%raise 'json-parse-error "Trailing comma when reading array."))
-                                          (go end-array))
-                                        (t     (go read-element))))
-                              (#\]    (go end-array))
-                              (t      (%raise 'json-parse-error "Unexpected character when reading array. Expecting comma or array close."))))
-        (hash-table         (case c
-                              ((nil)  (%raise 'json-parse-error "End of input when reading object. Expecting comma or object close."))
-                              (#\,    (setf c (%skip-whitespace step (%step step)))
-                                      (case c
-                                        ((nil)
-                                          (if allow-trailing-comma
-                                            (%raise 'json-parse-error "End of input when reading object. expected key or object close after comma.")
-                                            (%raise 'json-parse-error "End of input when reading object, expected key after comma.")))
-                                        (#\}
-                                          (if allow-trailing-comma
-                                            (go end-object)
-                                            (%raise 'json-parse-error "Trailing comma when reading object.")))
-                                        (t (go read-key))))
-                              (#\}    (go end-object))
-                              (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting comma or object close." c (char-name c))))))))
 
 (defclass parser ()
   ((%step
@@ -641,6 +548,11 @@ see `close-parser'"
       (slot-makunbound parser '%key-fn)
       (slot-makunbound parser '%string-accum)))
   parser)
+
+(defmacro with-parser ((name &rest args) &body body)
+  `(let ((,name (make-parser ,@args)))
+    (unwind-protect (progn ,@body)
+      (close-parser ,name))))
 
 (defun parse-next (parser)
   "Read the next token from `parser'. Depending on the token, returns 1 or 2 values:
@@ -784,91 +696,6 @@ see `close-parser'"
                       (values :end-object))
               (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting comma or object close" lc (char-name lc))))))))))
 
-
-(macrolet ((def-make-string-fns (name type)
-             `(defun ,name (in)
-                "Create step, and read-string functions for the string `in'."
-                (declare (type ,type in))
-                (let ((i 0))
-                  (declare (type (integer 0 #.array-dimension-limit) i))
-                  (let* ((step (lambda () (when (< i (length in)) (prog1 (aref in i) (incf i)))))
-                         (read-string (lambda ()
-                                        ;; Scan until we hit a closing "
-                                        ;; Error on EOF
-                                        ;; Error if we encounter a literal control char
-                                        ;; Track suitable element-type
-                                        (loop
-                                          :with element-type := 'base-char
-                                          :for j :from i
-                                          :do
-                                            (when (<= (length in) j)
-                                              (%raise 'json-eof-error "Unexpected end of input when reading string."))
-                                            (let ((c (aref in j)))
-                                              (when (char= c #.(char "\"" 0))
-                                                (let ((len (- j i)))
-                                                  (when (< *%max-string-length* len)
-                                                    (setf i (+ i (1+ *%max-string-length*)))
-                                                    (%raise 'json-parse-error "Maximum string length exceeded"))
-                                                  (return
-                                                    (loop :with ret := (make-array len :element-type element-type)
-                                                          :for k :from 0 :below len
-                                                          :do (setf (aref ret k) (aref in (+ i k)))
-                                                          :finally
-                                                          (setf i (1+ j))
-                                                          (return ret)))))
-                                              (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
-                                                (return (%read-json-string step)))
-
-                                              (when (<= #x00 (char-code c) #x1F)
-                                                (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" c (char-name c)))
-
-                                              (when (not (typep c 'base-char))
-                                                (setf element-type 'character))))))
-                         (pos (lambda ()
-                                (loop :with line := 1
-                                      :with col := 1
-                                      :with cr := nil
-                                      :for p :from 0 :below (1- i)
-                                      :for c := (aref in p)
-                                      :do (case c
-                                            (#\Linefeed (incf line) (setf col 1))
-                                            (t (incf col)))
-                                      :finally
-                                         (return (values line col))))))
-                    (values step
-                            read-string
-                            pos))))))
-  (def-make-string-fns %make-fns-simple-string simple-string)
-  (def-make-string-fns %make-fns-string (and string (not simple-string))))
-
-(defun %make-fns-stream (in)
-  "Create step, and read-string functions for the stream `in'."
-  (declare (type stream in))
-  (unless (subtypep (stream-element-type in) 'character)
-    (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8))))
-  (let* ((step (lambda () (read-char in nil)))
-         (read-string (lambda () (%read-json-string step)))
-         (pos (lambda ()
-                (block nil
-                  (let ((pos (ignore-errors (file-position in))))
-                    (unless (and pos (ignore-errors (file-position in 0)))
-                      (return (values nil nil)))
-
-                    (loop :with line := 1
-                          :with col := 1
-                          :with cr := nil
-                          :for p :from 0 :below (1- pos)
-                          :for c := (read-char in)
-                          :do (case c
-                                (#\Linefeed (incf line) (setf col 1))
-                                (t (incf col)))
-                          :finally
-                             (file-position in pos)
-                             (return (values line col))))))))
-    (values step
-            read-string
-            pos)))
-
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
   (let ((pool (make-hash-table :test 'equal)))
@@ -896,6 +723,62 @@ see `close-parser'"
           (or (gethash key pool)
               (setf (gethash key pool) key)))))))
 
+(defclass %jzon-sax-builder ()
+  ((%stack :initform nil :type list)
+   (%key :initform nil :type list)
+   %value))
+
+(defun %sax-finish-value (handler value)
+  (let ((stack (slot-value handler '%stack)))
+    (typecase stack
+      ((cons list)
+        (push value (car stack)))
+      ((cons hash-table)
+        (setf (gethash (pop (slot-value handler '%key)) (car stack)) value))
+      (t (setf (slot-value handler '%value) value)))))
+
+(defgeneric sax-value (handler value)
+  (:method ((handler function) value)
+    (funcall handler :value value))
+  (:method ((handler %jzon-sax-builder) value)
+    (%sax-finish-value handler value)))
+
+(defgeneric sax-begin-array (handler)
+  (:method ((handler function))
+    (funcall handler :begin-array))
+  (:method ((handler %jzon-sax-builder))
+    (push (list) (slot-value handler '%stack))))
+
+(defgeneric sax-end-array (handler)
+  (:method ((handler function))
+    (funcall handler :end-array))
+  (:method ((handler %jzon-sax-builder))
+    (%sax-finish-value handler (coerce (nreverse (the list (pop (slot-value handler '%stack)))) 'simple-vector))))
+
+(defgeneric sax-begin-object (handler)
+  (:method ((handler function))
+    (funcall handler :begin-object))
+  (:method ((handler %jzon-sax-builder))
+    (push (make-hash-table :test 'equal) (slot-value handler '%stack))))
+
+(defgeneric sax-object-key (handler key)
+  (:method ((handler function) key)
+    (funcall handler :object-key key))
+  (:method ((handler %jzon-sax-builder) key)
+    (push key (slot-value handler '%key))))
+
+(defgeneric sax-end-object (handler)
+  (:method ((handler function))
+    (funcall handler :end-object))
+  (:method ((handler %jzon-sax-builder))
+    (%sax-finish-value handler (pop (slot-value handler '%stack)))))
+
+(defgeneric sax-complete (handler)
+  (:method ((handler function))
+    (funcall handler nil))
+  (:method ((handler %jzon-sax-builder))
+    (slot-value handler '%value)))
+
 (defun parse (in &key
                    (max-depth 128)
                    (allow-comments nil)
@@ -920,25 +803,23 @@ see `close-parser'"
        (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
          (parse stream :max-depth max-depth :allow-comments allow-comments :key-fn key-fn))))
     (t
-     (multiple-value-bind (step read-string pos)
-         (etypecase in
-           (simple-string (%make-fns-simple-string in))
-           (string (%make-fns-string in))
-           (stream (%make-fns-stream in)))
-       (declare (dynamic-extent step read-string pos))
-       (let ((*%allow-comments* (and allow-comments t))
-             (*%max-string-length* max-string-length)
-             (*%string-accum* (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0))
-             (*%pos-fn* pos)
-             (handler (or handler (make-instance '%jzon-sax-builder))))
-         (declare (dynamic-extent *%string-accum* *%pos-fn*))
-         (let ((c (%read-json-element handler step read-string
-                                              (or (and key-fn (%ensure-function key-fn)) (%make-string-pool))
-                                              max-depth
-                                              (and allow-trailing-comma t))))
-           (unless (null (%skip-whitespace step c))
-             (%raise 'json-parse-error "Content after reading element")))
-         (sax-produce-value handler))))))
+      (with-parser (parser in
+                          :max-depth max-depth :allow-comments allow-comments
+                          :allow-trailing-comma allow-trailing-comma
+                          :max-string-length max-string-length
+                          :key-fn key-fn)
+        (loop
+          :with handler := (or handler (make-instance '%jzon-sax-builder))
+          :do
+            (multiple-value-bind (evt value) (parse-next parser)
+              (ecase evt
+                ((nil)          (return (sax-complete handler)))
+                (:value         (sax-value handler value))
+                (:begin-array   (sax-begin-array handler))
+                (:end-array     (sax-end-array handler))
+                (:begin-object  (sax-begin-object handler))
+                (:object-key    (sax-object-key handler value))
+                (:end-object    (sax-end-object handler)))))))))
 
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
