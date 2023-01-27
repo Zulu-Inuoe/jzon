@@ -251,9 +251,10 @@ see `json-atom'"
           :do
              (when (= (fill-pointer string-accum) max-string-length)
                (%raise 'json-parse-error "Maximum string length exceeded"))
-             (vector-push-extend (interpret next) string-accum)
-             (unless (typep next 'base-char)
-               (setf element-type 'character))
+             (let ((interpreted (interpret next)))
+               (vector-push-extend interpreted string-accum)
+               (unless (typep interpreted 'base-char)
+                 (setf element-type 'character)))
           :finally (return (make-array (fill-pointer string-accum) :element-type element-type :initial-contents string-accum)))))
 
 (defun %read-json-number (step c)
