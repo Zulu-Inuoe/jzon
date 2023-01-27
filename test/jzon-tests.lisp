@@ -331,12 +331,12 @@
 (test parse-allows-comments-when-asked
   (is (= 123 (jzon:parse "//Line comment
   123" :allow-comments t))))
-  
+
 (test parse-line-comments-do-not-end-on-cr-only-lf
   (is (= 123 (jzon:parse (format nil "//Comment~C123~C 123" #\Return #\Linefeed) :allow-comments t)))
   (signals (jzon:json-eof-error)
     (jzon:parse (format nil "//Comment~C123 123" #\Return) :allow-comments t)))
-  
+
 (test parse-comments-delimit-atoms
   (is (= 123 (jzon:parse "123//Line comment" :allow-comments t)))
   (is (eq t (jzon:parse "true//Line comment" :allow-comments t)))
@@ -395,6 +395,12 @@
     (is (eq :value (jzon:parse-next parser)))
     (is (eq :end-array (jzon:parse-next parser)))
     (is (eq :end-object (jzon:parse-next parser)))))
+
+(test parse-next-errors-after-toplevel
+  (jzon:with-parser (parser "42 24")
+    (is (eq :value (jzon:parse-next parser)))
+    (signals (jzon:json-parse-error)
+      (jzon:parse-next parser))))
 
 (test parse-next-after-toplevel-continues-failing
   (jzon:with-parser (parser "{} {")
@@ -1079,7 +1085,7 @@ break\"]")))
 (test pass3
   (is (equalp (ph "JSON Test Pattern pass3"
                   (ph "The outermost value" "must be an object or array."
-                      "In this test" "It is an object.")) 
+                      "In this test" "It is an object."))
               (jzon:parse "{
     \"JSON Test Pattern pass3\": {
         \"The outermost value\": \"must be an object or array.\",
