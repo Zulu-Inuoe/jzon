@@ -369,7 +369,7 @@ see `json-atom'"
                 (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
                 (let ((i 0))
                   (declare (type (integer 0 #.array-dimension-limit) i))
-                  (let* ((step (lambda () (when (< i (length in)) (prog1 (aref in i) (incf i)))))
+                  (let* ((step (lambda () (when (< i (length in)) (prog1 (char in i) (incf i)))))
                          (read-string (let ((string-accum (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
                                         (lambda ()
                                           ;; Scan until we hit a closing "
@@ -382,7 +382,7 @@ see `json-atom'"
                                             :do
                                               (when (<= (length in) j)
                                                 (%raise 'json-eof-error "Unexpected end of input when reading string."))
-                                              (let ((c (aref in j)))
+                                              (let ((c (char in j)))
                                                 (when (char= c #.(char "\"" 0))
                                                   (let ((len (- j i)))
                                                     (when (< max-string-length len)
@@ -391,7 +391,7 @@ see `json-atom'"
                                                     (return
                                                       (loop :with ret := (make-array len :element-type element-type)
                                                             :for k :from 0 :below len
-                                                            :do (setf (aref ret k) (aref in (+ i k)))
+                                                            :do (setf (char ret k) (char in (+ i k)))
                                                             :finally
                                                             (setf i (1+ j))
                                                             (return ret)))))
