@@ -733,7 +733,7 @@ see `close-parser'"
 
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
-  (let ((pool (make-hash-table :test 'equal)))
+  (let ((pool (list "")))
     (lambda (key)
       (declare (type simple-string key))
       (etypecase pool
