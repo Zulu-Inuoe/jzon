@@ -245,13 +245,16 @@ see `json-atom'"
                              (- utf-16-low-surrogate-pair #xDC00))))
                       code-point))))))
     (setf (fill-pointer string-accum) 0)
-    (loop :for next :of-type character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
+    (loop :with element-type := 'base-char
+          :for next :of-type character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
           :until (char= #.(char "\"" 0) next)
           :do
              (when (= (fill-pointer string-accum) max-string-length)
                (%raise 'json-parse-error "Maximum string length exceeded"))
-             (vector-push-extend (interpret next) string-accum))
-    (make-array (fill-pointer string-accum) :element-type (if (every (lambda (c) (typep c 'base-char)) (the (and string (not simple-string)) string-accum)) 'base-char 'character) :initial-contents string-accum)))
+             (vector-push-extend (interpret next) string-accum)
+             (when (not (typep next 'base-char))
+               (setf element-type 'character))
+          :finally (return (make-array (fill-pointer string-accum) :element-type element-type :initial-contents string-accum)))))
 
 (defun %read-json-number (step c)
   "Reads an RFC 8259 number, starting with `c'."
