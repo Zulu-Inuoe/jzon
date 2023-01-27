@@ -539,6 +539,10 @@ In this example, the string `x` is shared (eq) between all 3 objects.
 
 This optimizes for the common case of reading a JSON payload containing many duplicate keys.
 
+## `base-string` coercion
+
+When possible, strings will be coerced to `cl:base-string`. This can lead to upwards of 1/4 memory usage per string on implementations like SBCL, which store `string`s internally as UTF32, while `base-string` can be represented in 8 bits per char.
+
 # Dependencies
 
 * [closer-mop](https://github.com/pcostanza/closer-mop)
