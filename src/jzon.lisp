@@ -252,7 +252,7 @@ see `json-atom'"
              (when (= (fill-pointer string-accum) max-string-length)
                (%raise 'json-parse-error "Maximum string length exceeded"))
              (vector-push-extend (interpret next) string-accum)
-             (when (not (typep next 'base-char))
+             (unless (typep next 'base-char)
                (setf element-type 'character))
           :finally (return (make-array (fill-pointer string-accum) :element-type element-type :initial-contents string-accum)))))
 
@@ -401,7 +401,7 @@ see `json-atom'"
                                                 (when (<= #x00 (char-code c) #x1F)
                                                   (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" c (char-name c)))
 
-                                                (when (not (typep c 'base-char))
+                                                (unless (typep c 'base-char)
                                                   (setf element-type 'character)))))))
                          (pos (lambda ()
                                 (loop :with line := 1
