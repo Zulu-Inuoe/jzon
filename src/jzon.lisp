@@ -442,7 +442,6 @@ see `json-atom'"
             read-string
             pos)))
 
-
 (defclass parser ()
   ((%step
     :type function)
@@ -723,69 +722,12 @@ see `close-parser'"
           (or (gethash key pool)
               (setf (gethash key pool) key)))))))
 
-(defclass %jzon-sax-builder ()
-  ((%stack :initform nil :type list)
-   (%key :initform nil :type list)
-   %value))
-
-(defun %sax-finish-value (handler value)
-  (let ((stack (slot-value handler '%stack)))
-    (typecase stack
-      ((cons list)
-        (push value (car stack)))
-      ((cons hash-table)
-        (setf (gethash (pop (slot-value handler '%key)) (car stack)) value))
-      (t (setf (slot-value handler '%value) value)))))
-
-(defgeneric sax-value (handler value)
-  (:method ((handler function) value)
-    (funcall handler :value value))
-  (:method ((handler %jzon-sax-builder) value)
-    (%sax-finish-value handler value)))
-
-(defgeneric sax-begin-array (handler)
-  (:method ((handler function))
-    (funcall handler :begin-array))
-  (:method ((handler %jzon-sax-builder))
-    (push (list) (slot-value handler '%stack))))
-
-(defgeneric sax-end-array (handler)
-  (:method ((handler function))
-    (funcall handler :end-array))
-  (:method ((handler %jzon-sax-builder))
-    (%sax-finish-value handler (coerce (nreverse (the list (pop (slot-value handler '%stack)))) 'simple-vector))))
-
-(defgeneric sax-begin-object (handler)
-  (:method ((handler function))
-    (funcall handler :begin-object))
-  (:method ((handler %jzon-sax-builder))
-    (push (make-hash-table :test 'equal) (slot-value handler '%stack))))
-
-(defgeneric sax-object-key (handler key)
-  (:method ((handler function) key)
-    (funcall handler :object-key key))
-  (:method ((handler %jzon-sax-builder) key)
-    (push key (slot-value handler '%key))))
-
-(defgeneric sax-end-object (handler)
-  (:method ((handler function))
-    (funcall handler :end-object))
-  (:method ((handler %jzon-sax-builder))
-    (%sax-finish-value handler (pop (slot-value handler '%stack)))))
-
-(defgeneric sax-complete (handler)
-  (:method ((handler function))
-    (funcall handler nil))
-  (:method ((handler %jzon-sax-builder))
-    (slot-value handler '%value)))
-
 (defun parse (in &key
                    (max-depth 128)
                    (allow-comments nil)
                    (allow-trailing-comma nil)
                    (max-string-length (min #x100000 array-dimension-limit))
-                   key-fn
-                   handler)
+                   key-fn)
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:max-depth' controls the maximum depth of the object/array nesting
  `:allow-comments' controls whether or not single-line // comments are allowed.
@@ -808,18 +750,26 @@ see `close-parser'"
                           :allow-trailing-comma allow-trailing-comma
                           :max-string-length max-string-length
                           :key-fn key-fn)
-        (loop
-          :with handler := (or handler (make-instance '%jzon-sax-builder))
-          :do
-            (multiple-value-bind (evt value) (parse-next parser)
-              (ecase evt
-                ((nil)          (return (sax-complete handler)))
-                (:value         (sax-value handler value))
-                (:begin-array   (sax-begin-array handler))
-                (:end-array     (sax-end-array handler))
-                (:begin-object  (sax-begin-object handler))
-                (:object-key    (sax-object-key handler value))
-                (:end-object    (sax-end-object handler)))))))))
+        (let (top stack key)
+          (declare (dynamic-extent stack key))
+          (flet ((finish-value (value)
+                    (typecase stack
+                      ((cons list)
+                        (push value (car stack)))
+                      ((cons hash-table)
+                        (setf (gethash (pop key) (car stack)) value))
+                      (t (setf top value)))))
+              (declare (dynamic-extent #'finish-value))
+              (loop
+                (multiple-value-bind (evt value) (parse-next parser)
+                  (ecase evt
+                    ((nil)          (return top))
+                    (:value         (finish-value value))
+                    (:begin-array   (push (list) stack))
+                    (:end-array     (finish-value (coerce (the list (nreverse (pop stack))) 'simple-vector)))
+                    (:begin-object  (push (make-hash-table :test 'equal) stack))
+                    (:object-key    (push value key))
+                    (:end-object    (finish-value (pop stack))))))))))))
 
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
