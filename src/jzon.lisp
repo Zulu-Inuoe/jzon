@@ -577,13 +577,13 @@ see `close-parser'"
                               ,@(loop :for i :from 1 :below (length string)
                                       :for expect-c := (char string i)
                                       :collect `(let ((c (or (%step %step)
-                                                             (%raise 'json-eof-error (format nil "End of input when reading token '~A' - expected '~A'" ,string ,expect-c)))))
+                                                             (%raise 'json-eof-error "End of input when reading token '~A' - expected '~A'" ,string ,expect-c))))
                                                   (unless (char= c ,expect-c)
-                                                    (%raise 'json-parse-error (format nil "Unexpected token '~A'" (concatenate 'string
+                                                    (%raise 'json-parse-error "Unexpected token '~A'" (concatenate 'string
                                                                                                                    ,(subseq string 0 i)
                                                                                                                    (loop :for c := c :then (%step %step)
                                                                                                                          :until (or (null c) (%whitespace-p c) (find c "{}[],-/"))
-                                                                                                                         :collect c)))))))
+                                                                                                                         :collect c))))))
                               (setf %state (car %context))
                               (values :value ,value))))
                 (case lc
