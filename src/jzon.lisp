@@ -549,7 +549,7 @@ see `close-parser'"
   (check-type parser parser)
   (let ((action (shiftf (slot-value parser '%close-action) nil)))
     (when action
-      (funcall action)
+      (funcall (the function action))
       (slot-makunbound parser '%step)
       (slot-makunbound parser '%read-string)
       (slot-makunbound parser '%pos)
