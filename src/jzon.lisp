@@ -490,7 +490,7 @@ see `json-atom'"
     :initform 0
     :type (integer 0))
    (%close-action
-    :type function))
+    :type (or null function)))
   (:documentation "An incremental JSON parser.
 
 see `make-parser'
