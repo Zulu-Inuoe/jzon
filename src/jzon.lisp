@@ -629,7 +629,7 @@ see `close-parser'"
                 (setf %lookahead lc)
                 (%raise 'json-parse-error "Content after reading element"))
               (%encountered-top-value
-                (values nil nil nil))
+                (values nil nil))
               ((null lc)
                 (%raise 'json-eof-error "End of input when reading JSON element"))
               (t
@@ -667,9 +667,8 @@ see `close-parser'"
                                 (setf %state (car %context))
                                 (values :end-object nil))
               (#.(char "\"" 0)  (setf %state 'after-read-key)
-                                (let ((key (%key-fn %key-fn (%read-string %read-string))))
-                                  (push 'after-read-property %context)
-                                  (values :object-key key nil)))
+                                (push 'after-read-property %context)
+                                (values :object-key (%key-fn %key-fn (%read-string %read-string)) nil))
               (t                (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc))))))
         (after-read-key
           (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
@@ -698,8 +697,7 @@ see `close-parser'"
                             (pop-state :end-object))
                           (#.(char "\"" 0)
                             (setf %state 'after-read-key)
-                            (let ((key (%key-fn %key-fn (%read-string %read-string))))
-                              (values :object-key key nil)))
+                            (values :object-key (%key-fn %key-fn (%read-string %read-string))))
                           (t
                             (if %allow-trailing-comma
                               (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key or object close after comma" lc (char-name lc))
@@ -708,15 +706,17 @@ see `close-parser'"
               (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting comma or object close" lc (char-name lc))))))))))
 
 (defun parse-next (parser)
-  "Read the next token from `parser'. Depending on the token, returns 1 or 2 values:
+  "Read the next token from `parser'.
 
-  :value, value       ; A `json-atom' <value>
-  :begin-array, nil   ; Array open [
-  :end-array, nil     ; Array close ]
-  :begin-object, nil  ; Object open {
-  :object-key, key    ; Object key
-  :end-object, nil    ; Object finished }
+  Returns 2 values:
+    :value, value       ; A `json-atom' <value>
+    :begin-array, nil   ; Array open [
+    :end-array, nil     ; Array close ]
+    :begin-object, nil  ; Object open {
+    :object-key, key    ; Object key
+    :end-object, nil    ; Object finished }
 
+see `with-parser'
 see `make-parser'
 see `close-parser'"
   (check-type parser parser)
