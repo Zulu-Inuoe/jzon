@@ -750,8 +750,8 @@ see `close-parser'"
                           :max-depth max-depth :allow-comments allow-comments
                           :allow-trailing-comma allow-trailing-comma
                           :max-string-length max-string-length
-                          :key-fn key-fn)
-        (let (top stack key)
+                          :key-fn (or (and key-fn (%ensure-function key-fn))
+                                      (%make-string-pool)))
           (declare (dynamic-extent stack key))
           (flet ((finish-value (value)
                     (typecase stack
