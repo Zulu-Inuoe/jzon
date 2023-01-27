@@ -3,6 +3,13 @@
   (:export
    ;;; Read
    #:parse
+
+   ;;;; Streaming reader
+   #:make-parser
+   #:parse-next
+   #:close-parser
+   #:with-parser
+
    ;;; Write
    #:stringify
 
@@ -22,8 +29,8 @@
    #:coerce-key
 
    ;;; Streaming Writer
-   #:json-writer
-   #:make-json-writer
+   #:writer
+   #:make-writer
 
    ;; Extensible serialization
    #:write-value
@@ -122,20 +129,28 @@ see `json-atom'"
         (error type :format-control format :format-arguments args :line line :column column))
       (error type :format-control format :format-arguments args)))
 
-(declaim (type boolean *%allow-comments*))
-(defvar *%allow-comments*)
-
 (declaim (inline %step))
 (defun %step (step)
   (declare (function step))
   (values (the (or null character) (funcall step))))
+
+(declaim (inline %read-string))
+(defun %read-string (read-string)
+  (declare (function read-string))
+  (values (the simple-string (funcall read-string))))
+
+(declaim (inline %key-fn))
+(defun %key-fn (key-fn str)
+  (declare (function key-fn))
+  (declare (simple-string str))
+  (values (the t (funcall key-fn str))))
 
 (declaim (inline %whitespace-p))
 (defun %whitespace-p (char)
   (and (member char '(#\Space #\Linefeed #\Return #\Tab))
        t))
 
-(defun %skip-whitespace (step c)
+(defun %skip-whitespace (step c allow-comments)
   "Skip whitespace, and optionally comments, depending on `%*allow-comments*'
  Returns the next character."
   (flet ((skip-cpp-comment ()
@@ -168,7 +183,7 @@ see `json-atom'"
           :do (cond
                 ((null char)
                  (return nil))
-                ((and (char= #\/ char) *%allow-comments*)
+                ((and (char= #\/ char) allow-comments)
                  (skip-cpp-comment))
                 ((not (%whitespace-p char))
                  (return char))))))
@@ -178,15 +193,11 @@ see `json-atom'"
   (declare (type character c))
   (<= #x00 (char-code c) #x1F))
 
-(declaim (type (and string (not simple-string)) *%string-accum*))
-(defvar *%string-accum*)
-
-(declaim (type (integer 1 (#.array-dimension-limit)) *%max-string-length*))
-(defvar *%max-string-length*)
-
-(defun %read-json-string (step)
+(defun %read-json-string (step string-accum max-string-length)
   "Reads a JSON string step-wise using `step' until an unescaped double-quote.
  Returns a `simple-string' representing the string."
+  (declare (type (and string (not simple-string)) string-accum))
+  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
   (labels ((interpret (char)
              (cond
                ((char= #\\ char)
@@ -234,17 +245,18 @@ see `json-atom'"
                              (ash (- utf-16-high-surrogate-pair #xD800) 10)
                              (- utf-16-low-surrogate-pair #xDC00))))
                       code-point))))))
-    (let ((accum *%string-accum*)
-          (max-string-length *%max-string-length*))
-      (setf (fill-pointer accum) 0)
-      (loop :for next :of-type character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
-            :for i :from 0
-            :until (char= #.(char "\"" 0) next)
-            :do
-               (when (= i max-string-length)
-                 (%raise 'json-parse-error "Maximum string length exceeded"))
-               (vector-push-extend (interpret next) accum))
-      (make-array (fill-pointer accum) :element-type (if (every (lambda (c) (typep c 'base-char)) accum) 'base-char 'character) :initial-contents accum))))
+    (setf (fill-pointer string-accum) 0)
+    (loop :with element-type := 'base-char
+          :for next :of-type character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
+          :until (char= #.(char "\"" 0) next)
+          :do
+             (when (= (fill-pointer string-accum) max-string-length)
+               (%raise 'json-parse-error "Maximum string length exceeded"))
+             (let ((interpreted (interpret next)))
+               (vector-push-extend interpreted string-accum)
+               (unless (typep interpreted 'base-char)
+                 (setf element-type 'character)))
+          :finally (return (make-array (fill-pointer string-accum) :element-type element-type :initial-contents string-accum)))))
 
 (defun %read-json-number (step c)
   "Reads an RFC 8259 number, starting with `c'."
@@ -352,178 +364,53 @@ see `json-atom'"
        :fail
          (return (values nil lc))))))
 
-(defun %read-json-element (step read-string key-fn max-depth allow-trailing-comma)
-  (prog ((stack nil)
-         (key nil)
-         (value nil)
-         (depth 0)
-         (c (%skip-whitespace step (%step step))))
-    (declare (type list stack key))
-    (declare (type (or null character) c))
-    (declare (type (integer 0) depth))
-
-   read-element
-    (when (eql c #\[) (go begin-array))
-    (when (eql c #\{) (go begin-object))
-    (macrolet ((expect (string value)
-                 `(progn
-                    ,@(loop :for i :from 1 :below (length string)
-                            :for expect-c := (char string i)
-                            :collect `(let ((c (or (%step step)
-                                                   (%raise 'json-eof-error (format nil "End of input when reading token '~A'. Expected '~A'" ,string ,expect-c)))))
-                                        (unless (char= c ,expect-c)
-                                          (let ((token (concatenate 'string
-                                                       ,(subseq string 0 i)
-                                                       (cons  c
-                                                              (loop :for c := (%step step)
-                                                                    :until (or (null c) (%whitespace-p c) (find c "{}[],-/"))
-                                                                    :collect c
-                                                                    :do (%step step))))))
-                                            (%raise 'json-parse-error (format nil "Unexpected token '~A'" token))))))
-                    (setf value ,value)
-                    (setf c (%skip-whitespace step (%step step))))))
-      (case c
-        ((nil) (%raise 'json-eof-error "End of input when reading JSON element."))
-        (#.(char "\"" 0)
-          (setf value (funcall read-string))
-          (setf c (%skip-whitespace step (%step step))))
-        (#\f (expect "false" nil))
-        (#\t (expect "true" t))
-        (#\n (expect "null" 'null))
-        (t
-          (setf (values value c) (%read-json-number step c))
-          (unless value
-            (if c
-              (%raise 'json-parse-error "Unexpected character in JSON data '~C' (~A)." c (char-name c))
-              (%raise 'json-parse-error "End of input when reading number.")))
-          (setf c (%skip-whitespace step c)))))
-    (go finish-value)
-
-   begin-array
-    (incf depth)
-    (when (and max-depth (> depth max-depth))
-      (%raise 'json-parse-error "Maximum depth exceeded."))
-    (push (list) stack)
-    (setf c (%skip-whitespace step (%step step)))
-    (case c
-      ((nil) (%raise 'json-parse-error "End of input when reading array, expecting element or array close."))
-      (#\]   (go end-array))
-      (t     (go read-element)))
-
-   end-array
-    (decf depth)
-    (setf value (coerce (nreverse (the list (pop stack))) 'simple-vector))
-    (setf c (%skip-whitespace step (%step step)))
-    (go finish-value)
-
-   begin-object
-    (incf depth)
-    (when (and max-depth (> depth max-depth))
-      (%raise 'json-parse-error "Maximum depth exceeded."))
-    (push (make-hash-table :test 'equal) stack)
-    (setf c (%skip-whitespace step (%step step)))
-    (case c
-      (#\}  (go end-object))
-      (t    (go read-key)))
-
-   read-key
-    (case c
-      ((nil) (%raise 'json-parse-error "End of input when reading object, expecting key."))
-      (#.(char "\"" 0)  (push (funcall key-fn (funcall read-string)) key)
-                        (setf c (%skip-whitespace step (%step step)))
-                        (case c
-                          ((nil) (%raise 'json-parse-error "End of input when reading object, expecting colon after object key."))
-                          (#\:   (setf c (%skip-whitespace step (%step step)))
-                                 (go read-element))
-                          (t     (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting colon after object key" c (char-name c)))))
-      (t    (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key." c (char-name c))))
-    
-   end-object
-    (decf depth)
-    (setf value (pop stack))
-    (setf c (%skip-whitespace step (%step step)))
-    (go finish-value)
-
-    finish-value
-    (etypecase stack
-        (null               (return (values value c)))
-        ((cons list)        (push value (car stack))
-                            (case c
-                              ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting comma or array close."))
-                              (#\,    (setf c (%skip-whitespace step (%step step)))
-                                      (case c
-                                        ((nil) (if allow-trailing-comma
-                                                 (%raise 'json-parse-error "End of input when reading array, expected element or array close after comma.")
-                                                 (%raise 'json-parse-error "End of input when reading array, expected element after comma.")))
-                                        (#\]
-                                          (unless allow-trailing-comma
-                                            (%raise 'json-parse-error "Trailing comma when reading array."))
-                                          (go end-array))
-                                        (t     (go read-element))))
-                              (#\]    (go end-array))
-                              (t      (%raise 'json-parse-error "Unexpected character when reading array. Expecting comma or array close."))))
-        ((cons hash-table)  (setf (gethash (pop key) (car stack)) value)
-                            (case c
-                              ((nil)  (%raise 'json-parse-error "End of input when reading object. Expecting comma or object close."))
-                              (#\,    (setf c (%skip-whitespace step (%step step)))
-                                      (case c
-                                        ((nil)
-                                          (if allow-trailing-comma
-                                            (%raise 'json-parse-error "End of input when reading object. expected key or object close after comma.")
-                                            (%raise 'json-parse-error "End of input when reading object, expected key after comma.")))
-                                        (#\}
-                                          (if allow-trailing-comma
-                                            (go end-object)
-                                            (%raise 'json-parse-error "Trailing comma when reading object.")))
-                                        (t (go read-key))))
-                              (#\}    (go end-object))
-                              (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting comma or object close." c (char-name c))))))))
-
 (macrolet ((def-make-string-fns (name type)
-             `(defun ,name (in)
+             `(defun ,name (in max-string-length)
                 "Create step, and read-string functions for the string `in'."
                 (declare (type ,type in))
+                (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
                 (let ((i 0))
                   (declare (type (integer 0 #.array-dimension-limit) i))
-                  (let* ((step (lambda () (when (< i (length in)) (prog1 (aref in i) (incf i)))))
-                         (read-string (lambda ()
-                                        ;; Scan until we hit a closing "
-                                        ;; Error on EOF
-                                        ;; Error if we encounter a literal control char 
-                                        ;; Track suitable element-type
-                                        (loop
-                                          :with element-type := 'base-char
-                                          :for j :from i
-                                          :do
-                                            (when (<= (length in) j)
-                                              (%raise 'json-eof-error "Unexpected end of input when reading string."))
-                                            (let ((c (aref in j)))
-                                              (when (char= c #.(char "\"" 0))
-                                                (let ((len (- j i)))
-                                                  (when (< *%max-string-length* len)
-                                                    (setf i (+ i (1+ *%max-string-length*)))
-                                                    (%raise 'json-parse-error "Maximum string length exceeded"))
-                                                  (return
-                                                    (loop :with ret := (make-array len :element-type element-type)
-                                                          :for k :from 0 :below len
-                                                          :do (setf (aref ret k) (aref in (+ i k)))
-                                                          :finally 
-                                                          (setf i (1+ j))
-                                                          (return ret)))))
-                                              (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
-                                                (return (%read-json-string step)))
+                  (let* ((step (lambda () (when (< i (length in)) (prog1 (char in i) (incf i)))))
+                         (read-string (let ((string-accum (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
+                                        (lambda ()
+                                          ;; Scan until we hit a closing "
+                                          ;; Error on EOF
+                                          ;; Error if we encounter a literal control char
+                                          ;; Track suitable element-type
+                                          (loop
+                                            :with element-type := 'base-char
+                                            :for j :from i
+                                            :do
+                                              (when (<= (length in) j)
+                                                (%raise 'json-eof-error "Unexpected end of input when reading string."))
+                                              (let ((c (char in j)))
+                                                (when (char= c #.(char "\"" 0))
+                                                  (let ((len (- j i)))
+                                                    (when (< max-string-length len)
+                                                      (setf i (+ i (1+ max-string-length)))
+                                                      (%raise 'json-parse-error "Maximum string length exceeded"))
+                                                    (return
+                                                      (loop :with ret := (make-array len :element-type element-type)
+                                                            :for k :from 0 :below len
+                                                            :do (setf (char ret k) (char in (+ i k)))
+                                                            :finally
+                                                            (setf i (1+ j))
+                                                            (return ret)))))
+                                                (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
+                                                  (return (%read-json-string step string-accum max-string-length)))
 
-                                              (when (<= #x00 (char-code c) #x1F)
-                                                (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" c (char-name c)))
+                                                (when (<= #x00 (char-code c) #x1F)
+                                                  (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" c (char-name c)))
 
-                                              (when (not (typep c 'base-char))
-                                                (setf element-type 'character))))))
+                                                (unless (typep c 'base-char)
+                                                  (setf element-type 'character)))))))
                          (pos (lambda ()
-                                (loop :with line := 1
-                                      :with col := 1
+                                (loop :with line :of-type (integer 1)  := 1
+                                      :with col :of-type (integer 1) := 1
                                       :with cr := nil
                                       :for p :from 0 :below (1- i)
-                                      :for c := (aref in p)
+                                      :for c := (char in p)
                                       :do (case c
                                             (#\Linefeed (incf line) (setf col 1))
                                             (t (incf col)))
@@ -535,21 +422,24 @@ see `json-atom'"
   (def-make-string-fns %make-fns-simple-string simple-string)
   (def-make-string-fns %make-fns-string (and string (not simple-string))))
 
-(defun %make-fns-stream (in)
+(defun %make-fns-stream (in max-string-length)
   "Create step, and read-string functions for the stream `in'."
   (declare (type stream in))
+  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
   (unless (subtypep (stream-element-type in) 'character)
-    (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8))))
+    (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8) max-string-length)))
   (let* ((step (lambda () (read-char in nil)))
-         (read-string (lambda () (%read-json-string step)))
+         (read-string (let ((string-accum (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
+                        (lambda () (%read-json-string step string-accum max-string-length))))
          (pos (lambda ()
                 (block nil
                   (let ((pos (ignore-errors (file-position in))))
                     (unless (and pos (ignore-errors (file-position in 0)))
                       (return (values nil nil)))
 
-                    (loop :with line := 1
-                          :with col := 1
+                    (loop :with pos :of-type integer := pos
+                          :with line :of-type (integer 1) := 1
+                          :with col :of-type (integer 1) := 1
                           :with cr := nil
                           :for p :from 0 :below (1- pos)
                           :for c := (read-char in)
@@ -562,6 +452,279 @@ see `json-atom'"
     (values step
             read-string
             pos)))
+
+(defclass parser ()
+  ((%step
+    :type function)
+   (%read-string
+    :type function)
+   (%pos
+    :type function)
+   (%max-depth
+    :initform nil
+    :type (or null (integer 1)))
+   (%allow-comments
+    :initform nil
+    :type boolean)
+   (%allow-trailing-comma
+    :initform nil
+    :type boolean)
+   (%key-fn
+    :type function)
+   (%max-string-length
+    :initform (min #x100000 array-dimension-limit)
+    :type (integer 1 (#.array-dimension-limit)))
+   (%state
+    :initform nil
+    :type symbol)
+   (%lookahead
+    :initform nil
+    :type (or null character))
+   (%context
+    :initform (list)
+    :type list)
+   (%encountered-top-value
+    :initform nil
+    :type boolean)
+   (%depth
+    :initform 0
+    :type (integer 0))
+   (%close-action
+    :type function))
+  (:documentation "An incremental JSON parser.
+
+see `make-parser'
+see `next'
+see `close-parser'"))
+
+(defun make-parser (in &key
+                      (max-depth 128)
+                      (allow-comments nil)
+                      (allow-trailing-comma nil)
+                      (max-string-length (min #x100000 array-dimension-limit))
+                      key-fn)
+  "Construct a `parser' Read a JSON value from `in', which may be a vector, a stream, or a pathname.
+ `:max-depth' controls the maximum depth of the object/array nesting
+ `:allow-comments' controls whether or not single-line // comments are allowed.
+ `:allow-trailing-comma' controls whether or not a single comma `,' is allowed after all elements of an array or object.
+ `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool
+
+see `next'
+see `close-parser'"
+  (check-type max-depth (or (integer 1) null))
+  (check-type max-string-length (integer 1 (#.array-dimension-limit)))
+  (check-type key-fn (or null symbol function))
+
+  (multiple-value-bind (input close-action)
+      (typecase in
+        (pathname
+          (let ((f (open in :direction :input :external-format :utf-8)))
+            (values f (lambda () (close f)))))
+        ((vector (unsigned-byte 8))
+          (let* ((bstream (flexi-streams:make-in-memory-input-stream in))
+                 (fstream (flexi-streams:make-flexi-stream bstream :external-format :utf-8)))
+            (values fstream (lambda ()
+                              (close fstream)
+                              (close bstream)))))
+        (t (values in (lambda ()))))
+    (let ((parser (make-instance 'parser)))
+      (with-slots (%step %read-string %pos %max-depth %allow-comments %allow-trailing-comma %max-string-length %key-fn %close-action) parser
+        (setf %close-action close-action)
+        (setf (values %step %read-string %pos)
+              (etypecase input
+                (simple-string (%make-fns-simple-string input max-string-length))
+                (string (%make-fns-string input max-string-length))
+                (stream (%make-fns-stream input max-string-length))))
+
+        (setf %max-depth max-depth)
+        (setf %allow-comments (and allow-comments t))
+        (setf %allow-trailing-comma (and allow-trailing-comma t))
+        (setf %key-fn (etypecase key-fn
+                        (null (%make-string-pool))
+                        (function key-fn)
+                        (symbol (let ((sym key-fn))
+                                  (lambda (str)
+                                    (funcall (symbol-function sym) str)))))))
+      parser)))
+
+(defun close-parser (parser)
+  "Close the `parser'"
+  (check-type parser parser)
+  (let ((action (shiftf (slot-value parser '%close-action) nil)))
+    (when action
+      (funcall (the function action))
+      (slot-makunbound parser '%step)
+      (slot-makunbound parser '%read-string)
+      (slot-makunbound parser '%pos)
+      (slot-makunbound parser '%key-fn)))
+  parser)
+
+(defmacro with-parser ((name &rest args) &body body)
+  "Create a `parser', ensuring `close-parser' is called on it on exit.
+
+see `make-parser'
+see `close-parser'"
+  `(let ((,name (make-parser ,@args)))
+    (unwind-protect (locally ,@body)
+      (close-parser ,name))))
+
+(defun %parse-next (parser %step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments)
+  (declare (type parser parser)
+           (type function %step %read-string %key-fn)
+           (type (or null (integer 1)) %max-depth)
+           (type boolean %allow-trailing-comma)
+           (type boolean %allow-comments))
+  (with-slots (%state %context %lookahead %depth %encountered-top-value) parser
+    (labels ((read-element (lc)
+              (declare (type character lc))
+              (macrolet ((expect (string value)
+                           `(progn
+                              ,@(loop :for i :from 1 :below (length string)
+                                      :for expect-c := (char string i)
+                                      :collect `(let ((c (or (%step %step)
+                                                             (%raise 'json-parse-error ,(concatenate 'string "Unexpected token '" (subseq string 0 i) "'")))))
+                                                  (unless (char= c ,expect-c)
+                                                    (%raise 'json-parse-error "Unexpected token '~A'" (concatenate 'string
+                                                                                                                   ,(subseq string 0 i)
+                                                                                                                   (loop :for c := c :then (%step %step)
+                                                                                                                         :until (or (null c) (%whitespace-p c) (find c "{}[],-/"))
+                                                                                                                         :collect c))))))
+                              (setf %state (car %context))
+                              (values :value ,value))))
+                (case lc
+                  (#\[              (push-state :begin-array))
+                  (#\{              (push-state :begin-object))
+                  (#.(char "\"" 0)  (setf %state (car %context))
+                                    (values :value (%read-string %read-string)))
+                  (#\f              (expect "false" nil))
+                  (#\t              (expect "true" t))
+                  (#\n              (expect "null" 'null))
+                  (t                (multiple-value-bind (number lookahead)
+                                        (%read-json-number %step lc)
+                                      (unless number
+                                        (if lookahead
+                                          (%raise 'json-parse-error "Unexpected character in JSON data '~C' (~A)" lookahead (char-name lookahead))
+                                          (%raise 'json-eof-error "End of input when reading number")))
+  
+                                      (setf %lookahead lookahead)
+                                      (setf %state (car %context))
+                                      (values :value number))))))
+              (push-state (kind)
+                (incf (the fixnum %depth))
+                (when (and %max-depth (> (the fixnum %depth) (the fixnum %max-depth)))
+                  (%raise 'json-parse-error "Maximum depth exceeded"))
+                (setf %state kind)
+                (values kind nil))
+              (pop-state (kind)
+                (decf (the fixnum %depth))
+                (pop %context)
+                (setf %state (car %context))
+                (values kind nil)))
+      (declare (dynamic-extent #'read-element #'push-state #'pop-state))
+      (ecase %state
+        ((nil)
+          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)) %allow-comments)))
+            (cond
+              ((and %encountered-top-value lc)
+                (setf %lookahead lc)
+                (%raise 'json-parse-error "Content after reading element"))
+              (%encountered-top-value
+                (values nil nil nil))
+              ((null lc)
+                (%raise 'json-eof-error "End of input when reading JSON element"))
+              (t
+                (setf %encountered-top-value t)
+                (read-element lc)))))
+        (:begin-array
+          (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
+            (case lc
+              ((nil)  (%raise 'json-eof-error "End of input when reading array, expecting element or array close"))
+              (#\]    (decf (the fixnum %depth))
+                      (setf %state (car %context))
+                      (values :end-array nil))
+              (t      (push 'after-read-array-element %context)
+                      (read-element lc)))))
+        (after-read-array-element
+          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)) %allow-comments)))
+            (case lc
+              ((nil)  (%raise 'json-eof-error "End of input when reading array, expecting comma or array close"))
+              (#\,    (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
+                        (case lc
+                          ((nil)  (if %allow-trailing-comma
+                                    (%raise 'json-eof-error "End of input when reading array, expecting element or array close")
+                                    (%raise 'json-eof-error "End of input when reading array, expecting element")))
+                            (#\]  (unless %allow-trailing-comma
+                                    (%raise 'json-parse-error "Trailing comma when reading array"))
+                                  (pop-state :end-array))
+                            (t    (read-element lc)))))
+              (#\]    (pop-state :end-array))
+              (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading array, expecting comma or array close" lc (char-name lc))))))
+        (:begin-object
+          (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
+            (case lc
+              ((nil)            (%raise 'json-eof-error "End of input when reading object, expecting key or object close"))
+              (#\}              (decf (the fixnum %depth))
+                                (setf %state (car %context))
+                                (values :end-object nil))
+              (#.(char "\"" 0)  (setf %state 'after-read-key)
+                                (let ((key (%key-fn %key-fn (%read-string %read-string))))
+                                  (push 'after-read-property %context)
+                                  (values :object-key key nil)))
+              (t                (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc))))))
+        (after-read-key
+          (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
+            (case lc
+              ((nil) (%raise 'json-eof-error "End of input when reading object, expecting colon after object key"))
+              (#\:)
+              (t     (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting colon after object key" lc (char-name lc)))))
+
+          (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
+            (case lc
+              ((nil)  (%raise 'json-eof-error "End of input when reading object, expecting value after colon"))
+              (t      (read-element lc)))))
+        (after-read-property
+          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)) %allow-comments)))
+            (case lc
+              ((nil)  (%raise 'json-eof-error "End of input when reading object. Expecting comma or object close"))
+              (#\,    (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
+                        (case lc
+                          ((nil)
+                            (if %allow-trailing-comma
+                              (%raise 'json-eof-error "End of input when reading object. expected key or object close after comma")
+                              (%raise 'json-eof-error "End of input when reading object, expected key after comma")))
+                          (#\}
+                            (unless %allow-trailing-comma
+                              (%raise 'json-parse-error "Trailing comma when reading object"))
+                            (pop-state :end-object))
+                          (#.(char "\"" 0)
+                            (setf %state 'after-read-key)
+                            (let ((key (%key-fn %key-fn (%read-string %read-string))))
+                              (values :object-key key nil)))
+                          (t
+                            (if %allow-trailing-comma
+                              (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key or object close after comma" lc (char-name lc))
+                              (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key after comma" lc (char-name lc)))))))
+              (#\}    (pop-state :end-object))
+              (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting comma or object close" lc (char-name lc))))))))))
+
+(defun parse-next (parser)
+  "Read the next token from `parser'. Depending on the token, returns 1 or 2 values:
+
+  :value, value       ; A `json-atom' <value>
+  :begin-array, nil   ; Array open [
+  :end-array, nil     ; Array close ]
+  :begin-object, nil  ; Object open {
+  :object-key, key    ; Object key
+  :end-object, nil    ; Object finished }
+
+see `make-parser'
+see `close-parser'"
+  (check-type parser parser)
+  (when (null (slot-value parser '%close-action))
+    (%raise 'json-error "The parser has been closed."))
+  (let ((*%pos-fn* (slot-value parser '%pos)))
+    (with-slots (%step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments) parser
+      (%parse-next parser %step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments))))
 
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
@@ -581,7 +744,7 @@ see `json-atom'"
                      (dolist (key old)
                        (setf (gethash key new) key))
                      (setf pool new))
-                     
+
                      (return (or (gethash key pool)
                                  (setf (gethash key pool) key))))
                 :finally (push key pool)
@@ -613,24 +776,41 @@ see `json-atom'"
        (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
          (parse stream :max-depth max-depth :allow-comments allow-comments :key-fn key-fn))))
     (t
-     (multiple-value-bind (step read-string pos)
-         (etypecase in
-           (simple-string (%make-fns-simple-string in))
-           (string (%make-fns-string in))
-           (stream (%make-fns-stream in)))
-       (declare (dynamic-extent step read-string pos))
-       (let ((*%allow-comments* (and allow-comments t))
-             (*%max-string-length* max-string-length)
-             (*%string-accum* (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0))
-             (*%pos-fn* pos))
-         (declare (dynamic-extent *%string-accum* *%pos-fn*))
-         (multiple-value-bind (value c) (%read-json-element step read-string
-                                                            (or (and key-fn (%ensure-function key-fn)) (%make-string-pool))
-                                                            max-depth
-                                                            (and allow-trailing-comma t))
-           (unless (null (%skip-whitespace step c))
-             (%raise 'json-parse-error "Content after reading element"))
-           value))))))
+      (with-parser (parser in
+                          :max-depth max-depth :allow-comments allow-comments
+                          :allow-trailing-comma allow-trailing-comma
+                          :max-string-length max-string-length
+                          :key-fn (or (and key-fn (%ensure-function key-fn))
+                                      (%make-string-pool)))
+
+        (let (top stack key)
+          (declare (dynamic-extent stack key))
+          (flet ((finish-value (value)
+                    (typecase stack
+                      (null
+                        (setf top value))
+                      ((cons list)
+                        (push value (the list (car stack))))
+                      ((cons hash-table)
+                        (setf (gethash (pop key) (the hash-table (car stack))) value)))))
+              (declare (dynamic-extent #'finish-value))
+              (let ((*%pos-fn* (slot-value parser '%pos))
+                    (%step (slot-value parser '%step))
+                    (%read-string (slot-value parser '%read-string))
+                    (%key-fn (slot-value parser '%key-fn))
+                    (%max-depth (slot-value parser '%max-depth))
+                    (%allow-trailing-comma (slot-value parser '%allow-trailing-comma))
+                    (%allow-comments (slot-value parser '%allow-comments)))
+                (loop
+                  (multiple-value-bind (evt value) (%parse-next parser %step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments)
+                    (ecase evt
+                      ((nil)          (return top))
+                      (:value         (finish-value value))
+                      (:begin-array   (push (list) stack))
+                      (:end-array     (finish-value (coerce (the list (nreverse (pop stack))) 'simple-vector)))
+                      (:begin-object  (push (make-hash-table :test 'equal) stack))
+                      (:object-key    (push value key))
+                      (:end-object    (finish-value (pop stack)))))))))))))
 
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
@@ -712,7 +892,7 @@ Example return value:
 ;;;   a VALUE OR array close
 ;;; :complete signals we have finished writing a toplevel value
 
-(defclass json-writer ()
+(defclass writer ()
   ((%stream :initarg :stream)
    (%coerce-key :initarg :coerce-key)
    (%pretty :initarg :pretty)
@@ -729,12 +909,12 @@ Example return value:
    :replacer nil
    :max-depth 128))
 
-(defun make-json-writer (&key
-                           (stream (make-broadcast-stream))
-                           (coerce-key #'coerce-key)
-                           (pretty nil)
-                           (replacer nil)
-                           (max-depth 128))
+(defun make-writer (&key
+                      (stream (make-broadcast-stream))
+                      (coerce-key #'coerce-key)
+                      (pretty nil)
+                      (replacer nil)
+                      (max-depth 128))
   "Create a writer for subsequent `write-value', `begin-object', et al calls.
   `:stream' must be a character or binary `stream'
   `:replacer' a function of two arguments, the key and the value of a KV pair.
@@ -746,11 +926,11 @@ Example return value:
   (let ((stream (cond
                   ((subtypep (stream-element-type stream) 'character) stream)
                   (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
-    (make-instance 'json-writer :stream stream
-                                :coerce-key (%ensure-function coerce-key)
-                                :pretty (and pretty t)
-                                :replacer replacer
-                                :max-depth max-depth)))
+    (make-instance 'writer :stream stream
+                           :coerce-key (%ensure-function coerce-key)
+                           :pretty (and pretty t)
+                           :replacer replacer
+                           :max-depth max-depth)))
 
 (defun %write-indentation (writer)
   "Indent `writer' depending on its depth, if it is set to pretty print."
@@ -820,7 +1000,7 @@ see `write-key'
 see `write-property'
 see `write-properties'
 see `end-object'"
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array)                     (progn (%write-indentation writer)
@@ -829,7 +1009,7 @@ see `end-object'"
                                            (%write-indentation writer)))
       ((:object-key)                (setf (car %stack) :object-value))
       ((:object :object-value)      (error "Expecting object key"))
-      ((:complete)                  (error "Attempting to write object when value already written to json-writer")))
+      ((:complete)                  (error "Attempting to write object when value already written to writer")))
     (when (and %max-depth (> (incf %depth) %max-depth))
       (error "Exceeded maximum depth in writing object."))
     (push :object %stack)
@@ -841,7 +1021,7 @@ see `end-object'"
 
 see `begin-object'
 see `with-object'"
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %coerce-key %stack %pretty) writer
     (let ((context (car %stack)))
       (case context
@@ -862,7 +1042,7 @@ see `with-object'"
 
 (defun end-object (writer)
   "Finish writing an object to `writer'. Must match an opening `begin-object'."
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %stack %pretty %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
@@ -897,7 +1077,7 @@ see `write-properties'"
 
 see `write-values'
 see `end-array'"
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array-value)          (progn
@@ -905,7 +1085,7 @@ see `end-array'"
                                  (%write-indentation writer)))
       ((:object-key)           (setf (car %stack) :object-value))
       ((:object :object-value) (error "Expecting object key"))
-      ((:complete)             (error "Attempting to write array when value already written to json-writer")))
+      ((:complete)             (error "Attempting to write array when value already written to writer")))
     (push :array %stack)
     (when (and %max-depth (> (incf %depth) %max-depth))
       (error "Exceeded maximum depth in writing array."))
@@ -914,7 +1094,7 @@ see `end-array'"
 
 (defun end-array (writer)
   "Finish writing an array to `writer'. Must match an opening `begin-array'."
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %stack %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
@@ -944,12 +1124,12 @@ see `write-values'"
 
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
-  (:method :around ((writer json-writer) value)
+  (:method :around ((writer writer) value)
     (with-slots (%stack %ref-stack %pretty %replacer) writer
       (let ((context (car %stack)))
         (case context
           ((:object :object-value) (error "Expecting object key"))
-          ((:complete)             (error "Attempting to write value when value already written to json-writer")))
+          ((:complete)             (error "Attempting to write value when value already written to writer")))
 
         (let ((prev-stack %ref-stack))
           (let ((path (member value prev-stack :test #'eq)))
@@ -976,7 +1156,7 @@ see `write-values'"
                               ((nil)       (push :complete %stack))))
             (setf %ref-stack prev-stack)))))
     writer)
-  (:method ((writer json-writer) value)
+  (:method ((writer writer) value)
     (let ((coerce-key (slot-value writer '%coerce-key))
           (fields (coerced-fields value)))
       (with-object writer
@@ -993,24 +1173,24 @@ see `write-values'"
                                                     (t 'null)))))
                      (write-key writer key)
                      (write-value writer coerced-value))))))
-  (:method ((writer json-writer) (value (eql 't)))
+  (:method ((writer writer) (value (eql 't)))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value (eql 'nil)))
+  (:method ((writer writer) (value (eql 'nil)))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value (eql 'null)))
+  (:method ((writer writer) (value (eql 'null)))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value number))
+  (:method ((writer writer) (value number))
     (%write-atom-value writer value))
   ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
-  (:method ((writer json-writer) (value real))
+  (:method ((writer writer) (value real))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value string))
+  (:method ((writer writer) (value string))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value symbol))
+  (:method ((writer writer) (value symbol))
     (%write-atom-value writer (string value)))
-  (:method  ((writer json-writer) (value pathname))
+  (:method  ((writer writer) (value pathname))
     (%write-atom-value writer (uiop:native-namestring value)))
-  (:method ((writer json-writer) (value cons))
+  (:method ((writer writer) (value cons))
     ;; Try and guess alist/plist
     ;; TODO - this might be too hacky/brittle to have on by default
     (let* ((coerce-key (slot-value writer '%coerce-key))
@@ -1075,7 +1255,7 @@ see `write-values'"
          (with-array writer
            (write-value writer (car value))
            (write-value writer (cdr value)))))))
-  (:method ((writer json-writer) (value sequence))
+  (:method ((writer writer) (value sequence))
     (with-array writer
       (let ((replacer (slot-value writer '%replacer)))
         (if replacer
@@ -1095,7 +1275,7 @@ see `write-values'"
                  (lambda (x)
                    (write-value writer x))
                  value)))))
-  (:method ((writer json-writer) (value hash-table))
+  (:method ((writer writer) (value hash-table))
     (with-object writer
       (maphash (lambda (key value)
                  (let ((replacer (slot-value writer '%replacer)))
@@ -1117,7 +1297,7 @@ see `write-values'"
 (defun write-values (writer &rest values)
   "Convenience function to write multiple `values' to `writer'. Must be writing an array."
   (declare (dynamic-extent values))
-  (check-type writer json-writer)
+  (check-type writer writer)
   (unless (or values (member (slot-value writer '%stack) '(:array :array-value)))
     (error "Attempting to write multiple values outside of an array."))
   (map nil (lambda (x) (write-value writer x)) values)
@@ -1130,7 +1310,7 @@ see `write-values'"
 
 (defun write-property (writer key value)
   "Write an object property/key value pair."
-  (check-type writer json-writer)
+  (check-type writer writer)
   (write-key writer key)
   (write-value writer value))
 
@@ -1150,7 +1330,7 @@ see `write-values'"
 see `write-property'
 see `write-object'"
   (declare (dynamic-extent kvp))
-  (check-type writer json-writer)
+  (check-type writer writer)
   (loop
     :for cell :on kvp :by #'cddr
     :for (k . rest) := cell
@@ -1167,21 +1347,21 @@ see `write-object'"
                  :colour :red)
 "
   (declare (dynamic-extent kvp))
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-object writer
     (apply #'write-properties writer kvp)))
 
 ;; dynavar-based write functions
 (defvar *writer*)
 (eval-when (:load-toplevel :compile-toplevel :execute)
-  (setf (documentation '*writer* 'variable) "The active `json-writer' for the various `write-*' functions."))
+  (setf (documentation '*writer* 'variable) "The active `writer' for the various `write-*' functions."))
 
 (defmacro with-writer* ((&rest args &key &allow-other-keys) &body body)
-  "Create a new `json-writer' using `args' and bind it to `*writer*'
+  "Create a new `writer' using `args' and bind it to `*writer*'
 
-  `args' are a the same as `make-json-writer'"
+  `args' are a the same as `make-writer'"
   (let ((writer-sym (gensym "WRITER")))
-    `(let* ((,writer-sym (make-json-writer ,@args))
+    `(let* ((,writer-sym (make-writer ,@args))
             (*writer* ,writer-sym))
        ,@body
        ,writer-sym)))
@@ -1255,10 +1435,10 @@ see `write-object'"
   (check-type coerce-key (or symbol function))
   (let ((coerce-key (%ensure-function coerce-key)))
     (flet ((stringify-to (stream)
-             (let ((writer (make-json-writer :stream stream
-                                             :coerce-key coerce-key
-                                             :pretty (and pretty t)
-                                             :replacer replacer)))
+             (let ((writer (make-writer :stream stream
+                                        :coerce-key coerce-key
+                                        :pretty (and pretty t)
+                                        :replacer replacer)))
                (write-value writer element))))
       (cond
         ((null stream)

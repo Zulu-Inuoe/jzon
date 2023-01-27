@@ -42,7 +42,7 @@ jzon maps types per the following chart:
 
 ## Reading
 
-There's a single entry point: `parse`:
+`jzon:parse` will parse JSON and produce a CL value:
 
 ``` common-lisp
 (jzon:parse "
@@ -60,7 +60,7 @@ There's a single entry point: `parse`:
 }")
 ```
 
-`parse` reads input from its single argument and returns a parsed value per [Type Mappings](#type-mappings).
+`jzon:parse` reads input from its single argument and returns a parsed value per [Type Mappings](#type-mappings).
 
 `in` can be any of the following:
 * string
@@ -68,7 +68,7 @@ There's a single entry point: `parse`:
 * stream - character or binary in utf-8
 * pathname - `parse` will open the file for reading
 
-`parse` also accepts the follwing keyword arguments:
+`jzon:parse` also accepts the follwing keyword arguments:
 * `:allow-comments` This allows the given JSON to contain cpp-style `// line comments` and `/* block comments */`.
 * `:allow-trailing-comma` This allows for a single trailing comma after the final element in a JSON array or object.
 * `:max-depth` This controls the maximum depth to allow arrays/objects to nest. Can be a positive integer, or `nil` to disable depth tests.
@@ -87,6 +87,66 @@ There's a single entry point: `parse`:
 (jzon:parse "[ { \"x\": 1, \"y\": 1 }, { \"x\": 1, \"y\": 1 } ]" :key-fn #'alexandria:make-keyword)
 ```
 
+### Incremental/Streaming Reader
+
+In addition to `jzon:parse`, `jzon` exposes an incremental parser for reading JSON in parts:
+
+```lisp
+(jzon:with-parser (parser "{\"x\": 1, \"y\": [2, 3], \"live\": false}")
+  (jzon:parse-next parser)  ; => :begin-object
+  (jzon:parse-next parser)  ; => :object-key, "x"
+  (jzon:parse-next parser)  ; => :value, 1
+  (jzon:parse-next parser)  ; => :object-key, "y"
+  (jzon:parse-next parser)  ; => :begin-array
+  (jzon:parse-next parser)  ; => :value, 2
+  (jzon:parse-next parser)  ; => :value, 3
+  (jzon:parse-next parser)  ; => :end-array
+  (jzon:parse-next parser)  ; => :object-key, "live"
+  (jzon:parse-next parser)  ; => :value, nil
+  (jzon:parse-next parser) ; => :end-object
+  (jzon:parse-next parser)) ; => nil
+```
+
+both `jzon:with-parser` and `jzon:make-parser` receive the same arguments as `jzon:parse`.
+
+**Note**: `jzon:make-parser` is akin to `cl:open` and `jzon:close-parser` is akin to `cl:close`. Prefer `jzon:with-parser` when you do not need indefinite extent for the parser.
+
+The relevant functions for the incremental parser are:
+
+`jzon:make-parser in` - Construct a parser from `in`, which may be any of the inputs applicable to `jzon:parse`
+`jzon:parse-next parser` - Parse the next token from `parser`. Returns two values, depending on the token:
+  * `:value`, `<value>` - The parser encountered a `json-atom`, `<value>` is the value of the atom
+  * `:begin-object`, `nil` - The parser encountered an object opening
+  * `:object-key`, `<key>` - The parser encountered an object key, `<key>` is that key
+  * `:close-object`, `nil` - The parser encountered an object closing
+  * `:begin-array`, `nil` - The parser encountered an array opening
+  * `:close-array`, `nil` - The parser encountered an array closing
+  * nil - The parser is complete
+`jzon:close-parser parser` - Close a parser, closing any opened streams and allocated objects
+
+As an example, `jzon:parse` could be approximately defined as follows using this API:
+
+```lisp
+(defun my/jzon-parse (in)
+  (jzon:with-parser (parser in)
+    (let (top stack key)
+      (flet ((finish-value (value)
+                (typecase stack
+                  (null                 (setf top value))
+                  ((cons list)          (push value (car stack)))
+                  ((cons hash-table)    (setf (gethash (pop key) (car stack)) value)))))
+        (loop
+          (multiple-value-bind (evt value) (jzon:parse-next parser)
+            (ecase evt
+              ((nil)          (return top))
+              (:value         (finish-value value))
+              (:begin-array   (push (list) stack))
+              (:end-array     (finish-value (coerce (the list (nreverse (pop stack))) 'simple-vector)))
+              (:begin-object  (push (make-hash-table :test 'equal) stack))
+              (:object-key    (push value key))
+              (:end-object    (finish-value (pop stack))))))))))
+```
+
 ## Writing
 
 `stringify` will serialize an object to JSON:
@@ -96,7 +156,7 @@ There's a single entry point: `parse`:
 ; => "[\"Hello, world!\",5,2.2,[null]]"
 ```
 
-`stringify` accepts the following keyword arguments:
+`jzon:stringify` accepts the following keyword arguments:
 * `:stream` A destination like in `format`, or a `pathname`. Like `format`, returns a string if `nil`.
 * `:pretty` If true, output pretty-formatted JSON
 * `:coerce-element` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
@@ -302,7 +362,7 @@ For more fine-grained control, you can specialize a method on `jzon:write-value`
 
 `jzon:write-value writer value`
 
-`writer` is a [json-writer](#json-writer) on which any of the writer functions may be called to serialize your object in any desired way.
+`writer` is a [writer](#writer) on which any of the writer functions may be called to serialize your object in any desired way.
 
 
 ``` common-lisp
@@ -312,11 +372,11 @@ For more fine-grained control, you can specialize a method on `jzon:write-value`
   (jzon:write-array writer 1 2))
 ```
 
-See [json-writer](#json-writer) for the available functions.
+See [writer](#writer) for the available functions.
 
-### json-writer
+### writer
 
-In addition to `stringify`, jzon also provides an imperative, streaming writer for writing JSON.
+In addition to `jzon:stringify`, jzon also provides an imperative, streaming writer for writing JSON.
 
 The following are the available functions for writing:
 
@@ -346,7 +406,7 @@ The following are the available functions for writing:
 Using the plain variants:
 
 ``` common-lisp
-(let ((writer (jzon:make-json-writer :stream *standard-output* :pretty t)))
+(let ((writer (jzon:make-writer :stream *standard-output* :pretty t)))
   (jzon:with-object writer
     (jzon:write-properties writer :age 24 "colour" "blue")
     (jzon:write-key writer 42)
@@ -406,7 +466,7 @@ result:
 It's worth noting that every function returns the `writer` itself for usage with arrow macros:
 
 ``` common-lisp
-(let ((writer (jzon:make-json-writer :stream *standard-output*)))
+(let ((writer (jzon:make-writer :stream *standard-output*)))
   (jzon:with-object writer
     (-> writer
         (jzon:write-key "key")
