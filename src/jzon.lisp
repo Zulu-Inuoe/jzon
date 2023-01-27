@@ -404,11 +404,11 @@ see `json-atom'"
                                                 (unless (typep c 'base-char)
                                                   (setf element-type 'character)))))))
                          (pos (lambda ()
-                                (loop :with line := 1
-                                      :with col := 1
+                                (loop :with line :of-type (integer 1)  := 1
+                                      :with col :of-type (integer 1) := 1
                                       :with cr := nil
                                       :for p :from 0 :below (1- i)
-                                      :for c := (aref in p)
+                                      :for c := (char in p)
                                       :do (case c
                                             (#\Linefeed (incf line) (setf col 1))
                                             (t (incf col)))
@@ -435,8 +435,9 @@ see `json-atom'"
                     (unless (and pos (ignore-errors (file-position in 0)))
                       (return (values nil nil)))
 
-                    (loop :with line := 1
-                          :with col := 1
+                    (loop :with pos :of-type integer := pos
+                          :with line :of-type (integer 1) := 1
+                          :with col :of-type (integer 1) := 1
                           :with cr := nil
                           :for p :from 0 :below (1- pos)
                           :for c := (read-char in)
@@ -541,7 +542,7 @@ see `close-parser'"
                         (function key-fn)
                         (symbol (let ((sym key-fn))
                                   (lambda (str)
-                                    (funcall sym str)))))))
+                                    (funcall (symbol-function sym) str)))))))
       parser)))
 
 (defun close-parser (parser)
