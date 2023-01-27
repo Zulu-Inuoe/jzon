@@ -559,6 +559,10 @@ see `close-parser'"
   parser)
 
 (defmacro with-parser ((name &rest args) &body body)
+  "Create a `parser', ensuring `close-parser' is called on it on exit.
+
+see `make-parser'
+see `close-parser'"
   `(let ((,name (make-parser ,@args)))
     (unwind-protect (locally ,@body)
       (close-parser ,name))))
