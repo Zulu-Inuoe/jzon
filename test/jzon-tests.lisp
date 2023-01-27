@@ -377,6 +377,25 @@
 (def-suite incremental :in parsing)
 (in-suite incremental)
 
+(test parse-next-basics
+  (jzon:with-parser (parser "{\"x\": 42, \"y\": [1, 2, 3], \"z\": [true, false, null]}")
+    (is (eq :begin-object (jzon:parse-next parser)))
+    (is (eq :object-key (jzon:parse-next parser)))
+    (is (eq :value (jzon:parse-next parser)))
+    (is (eq :object-key (jzon:parse-next parser)))
+    (is (eq :begin-array (jzon:parse-next parser)))
+    (is (eq :value (jzon:parse-next parser)))
+    (is (eq :value (jzon:parse-next parser)))
+    (is (eq :value (jzon:parse-next parser)))
+    (is (eq :end-array (jzon:parse-next parser)))
+    (is (eq :object-key (jzon:parse-next parser)))
+    (is (eq :begin-array (jzon:parse-next parser)))
+    (is (eq :value (jzon:parse-next parser)))
+    (is (eq :value (jzon:parse-next parser)))
+    (is (eq :value (jzon:parse-next parser)))
+    (is (eq :end-array (jzon:parse-next parser)))
+    (is (eq :end-object (jzon:parse-next parser)))))
+
 (test parse-next-after-toplevel-continues-failing
   (jzon:with-parser (parser "{} {")
     (is (eq :begin-object (jzon:parse-next parser)))
@@ -390,6 +409,16 @@
   (jzon:with-parser (parser "{}")
     (jzon:close-parser parser)
     (jzon:close-parser parser)))
+
+(test parse-next-after-complete-returns-nil
+  (jzon:with-parser (parser "42")
+    (is (eq :value (jzon:parse-next parser)))
+    (is (eq nil (jzon:parse-next parser)))
+    (is (eq nil (jzon:parse-next parser)))
+    (is (eq nil (jzon:parse-next parser)))
+    (is (eq nil (jzon:parse-next parser)))
+    (is (eq nil (jzon:parse-next parser)))
+    (is (eq nil (jzon:parse-next parser)))))
 
 (test parse-next-after-close-errors
   (signals (jzon:json-error)
