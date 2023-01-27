@@ -599,7 +599,7 @@ see `close-parser'"
                                       (unless number
                                         (if lookahead
                                           (%raise 'json-parse-error "Unexpected character in JSON data '~C' (~A)" lookahead (char-name lookahead))
-                                          (%raise 'json-parse-error "End of input when reading number")))
+                                          (%raise 'json-eof-error "End of input when reading number")))
   
                                       (setf %lookahead lookahead)
                                       (setf %state (car %context))
@@ -633,7 +633,7 @@ see `close-parser'"
         (:begin-array
           (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
             (case lc
-              ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting element or array close"))
+              ((nil)  (%raise 'json-eof-error "End of input when reading array, expecting element or array close"))
               (#\]    (decf (the fixnum %depth))
                       (setf %state (car %context))
                       (values :end-array nil))
@@ -642,12 +642,12 @@ see `close-parser'"
         (after-read-array-element
           (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)) %allow-comments)))
             (case lc
-              ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting comma or array close"))
+              ((nil)  (%raise 'json-eof-error "End of input when reading array, expecting comma or array close"))
               (#\,    (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
                         (case lc
                           ((nil)  (if %allow-trailing-comma
-                                    (%raise 'json-parse-error "End of input when reading array, expecting element or array close")
-                                    (%raise 'json-parse-error "End of input when reading array, expecting element")))
+                                    (%raise 'json-eof-error "End of input when reading array, expecting element or array close")
+                                    (%raise 'json-eof-error "End of input when reading array, expecting element")))
                             (#\]  (unless %allow-trailing-comma
                                     (%raise 'json-parse-error "Trailing comma when reading array"))
                                   (pop-state :end-array))
@@ -657,7 +657,7 @@ see `close-parser'"
         (:begin-object
           (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
             (case lc
-              ((nil)            (%raise 'json-parse-error "End of input when reading object, expecting key or object close"))
+              ((nil)            (%raise 'json-eof-error "End of input when reading object, expecting key or object close"))
               (#\}              (decf (the fixnum %depth))
                                 (setf %state (car %context))
                                 (values :end-object nil))
@@ -669,24 +669,24 @@ see `close-parser'"
         (after-read-key
           (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
             (case lc
-              ((nil) (%raise 'json-parse-error "End of input when reading object, expecting colon after object key"))
+              ((nil) (%raise 'json-eof-error "End of input when reading object, expecting colon after object key"))
               (#\:)
               (t     (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting colon after object key" lc (char-name lc)))))
 
           (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
             (case lc
-              ((nil)  (%raise 'json-parse-error "End of input when reading object, expecting value after colon"))
+              ((nil)  (%raise 'json-eof-error "End of input when reading object, expecting value after colon"))
               (t      (read-element lc)))))
         (after-read-property
           (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)) %allow-comments)))
             (case lc
-              ((nil)  (%raise 'json-parse-error "End of input when reading object. Expecting comma or object close"))
+              ((nil)  (%raise 'json-eof-error "End of input when reading object. Expecting comma or object close"))
               (#\,    (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
                         (case lc
                           ((nil)
                             (if %allow-trailing-comma
-                              (%raise 'json-parse-error "End of input when reading object. expected key or object close after comma")
-                              (%raise 'json-parse-error "End of input when reading object, expected key after comma")))
+                              (%raise 'json-eof-error "End of input when reading object. expected key or object close after comma")
+                              (%raise 'json-eof-error "End of input when reading object, expected key after comma")))
                           (#\}
                             (unless %allow-trailing-comma
                               (%raise 'json-parse-error "Trailing comma when reading object"))

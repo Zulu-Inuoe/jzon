@@ -104,6 +104,10 @@
   (is (equalp #() (jzon:parse "[]")))
   (is (equalp #(1 2 3) (jzon:parse "[1, 2, 3]"))))
 
+(test parses-arrays-signals-eof
+  (signals (jzon:json-eof-error)
+    (jzon:parse "[1, 2, 3")))
+
 (test parses-arrays-disallows-trailing-comma
   (signals (jzon:json-parse-error)
     (jzon:parse "[1, 2, 3,]")))
@@ -124,14 +128,20 @@
     (jzon:parse "[,]" :allow-trailing-comma t)))
 
 (test parses-arrays-disallows-trailing-comma-with-eof
-  (signals (jzon:json-parse-error)
+  (signals (jzon:json-eof-error)
     (jzon:parse "[1, 2, 3,"))
-  (signals (jzon:json-parse-error)
+  (signals (jzon:json-eof-error)
     (jzon:parse "[1, 2, 3," :allow-trailing-comma t)))
 
 (test parses-objects
   (is (equalp (ph) (jzon:parse "{}")))
   (is (equalp (ph "x" 1 "y" 2) (jzon:parse "{\"x\": 1, \"y\": 2}"))))
+
+(test parses-objects-eof
+  (signals (jzon:json-eof-error)
+    (jzon:parse "{"))
+  (signals (jzon:json-eof-error)
+    (jzon:parse "{\"x\": 1, \"y\": 2")))
 
 (test parses-objects-disallows-trailing-comma
   (signals (jzon:json-parse-error)
@@ -147,9 +157,9 @@
     (jzon:parse "{\"x\": 1, \"y\": 2,,}" :allow-trailing-comma t)))
 
 (test parses-object-disallows-trailing-comma-with-eof
-  (signals (jzon:json-parse-error)
+  (signals (jzon:json-eof-error)
     (jzon:parse "{\"x\": 1, \"y\": 2,"))
-  (signals (jzon:json-parse-error)
+  (signals (jzon:json-eof-error)
     (jzon:parse "{\"x\": 1, \"y\": 2," :allow-trailing-comma t)))
 
 (test parses-object-disallows-empty-with-comma
