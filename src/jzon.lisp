@@ -374,7 +374,7 @@ see `json-atom'"
                 (let ((i 0))
                   (declare (type (integer 0 #.array-dimension-limit) i))
                   (let* ((step (lambda () (when (< i (length in)) (prog1 (char in i) (incf i)))))
-                         (read-string (let ((string-accum (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
+                         (read-string (let ((string-accum (make-array (min 256 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
                                         (lambda ()
                                           ;; Scan until we hit a closing "
                                           ;; Error on EOF
@@ -434,7 +434,7 @@ see `json-atom'"
   (unless (subtypep (stream-element-type in) 'character)
     (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8) max-string-length)))
   (let* ((step (lambda () (read-char in nil)))
-         (read-string (let ((string-accum (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
+         (read-string (let ((string-accum (make-array (min 256 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
                         (lambda () (%read-json-string step string-accum max-string-length))))
          (pos (lambda ()
                 (block nil
