@@ -374,6 +374,18 @@
   (is (string= "123" (jzon:parse "/*comment before */\"123\"/*comment*/" :allow-comments t)))
   (is (= 123 (jzon:parse "/*comment before //line comment ignored inside block */123/*comment*/" :allow-comments t))))
 
+(def-suite incremental :in parsing)
+(in-suite incremental)
+
+(test parse-next-after-toplevel-continues-failing
+  (jzon:with-parser (parser "{} {")
+    (is (eq :begin-object (jzon:parse-next parser)))
+    (is (eq :end-object (jzon:parse-next parser)))
+    (signals (jzon:json-parse-error)
+      (jzon:parse-next parser))
+    (signals (jzon:json-parse-error)
+      (jzon:parse-next parser))))
+
 (def-suite writer :in jzon)
 (in-suite writer)
 

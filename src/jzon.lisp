@@ -627,6 +627,7 @@ see `close-parser'"
             (let ((c (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)))))
               (cond
                 ((and %encountered-top-value c)
+                  (setf %lookahead c)
                   (%raise 'json-parse-error "Content after reading element"))
                 (%encountered-top-value
                   (values nil))
