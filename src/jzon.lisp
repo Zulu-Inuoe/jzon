@@ -577,7 +577,7 @@ see `close-parser'"
                               ,@(loop :for i :from 1 :below (length string)
                                       :for expect-c := (char string i)
                                       :collect `(let ((c (or (%step %step)
-                                                             (%raise 'json-eof-error "End of input when reading token '~A' - expected '~A'" ,string ,expect-c))))
+                                                             (%raise 'json-parse-error ,(concatenate 'string "Unexpected token '" (subseq string 0 i) "'")))))
                                                   (unless (char= c ,expect-c)
                                                     (%raise 'json-parse-error "Unexpected token '~A'" (concatenate 'string
                                                                                                                    ,(subseq string 0 i)
