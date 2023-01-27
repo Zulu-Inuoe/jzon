@@ -128,9 +128,6 @@ see `json-atom'"
         (error type :format-control format :format-arguments args :line line :column column))
       (error type :format-control format :format-arguments args)))
 
-(declaim (type boolean *%allow-comments*))
-(defvar *%allow-comments*)
-
 (declaim (inline %step))
 (defun %step (step)
   (declare (function step))
@@ -152,7 +149,7 @@ see `json-atom'"
   (and (member char '(#\Space #\Linefeed #\Return #\Tab))
        t))
 
-(defun %skip-whitespace (step c)
+(defun %skip-whitespace (step c allow-comments)
   "Skip whitespace, and optionally comments, depending on `%*allow-comments*'
  Returns the next character."
   (flet ((skip-cpp-comment ()
@@ -185,7 +182,7 @@ see `json-atom'"
           :do (cond
                 ((null char)
                  (return nil))
-                ((and (char= #\/ char) *%allow-comments*)
+                ((and (char= #\/ char) allow-comments)
                  (skip-cpp-comment))
                 ((not (%whitespace-p char))
                  (return char))))))
@@ -569,11 +566,12 @@ see `close-parser'"
     (unwind-protect (locally ,@body)
       (close-parser ,name))))
 
-(defun %parse-next (parser %step %read-string %key-fn %max-depth %allow-trailing-comma)
+(defun %parse-next (parser %step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments)
   (declare (type parser parser)
            (type function %step %read-string %key-fn)
            (type (or null (integer 1)) %max-depth)
-           (type boolean %allow-trailing-comma))
+           (type boolean %allow-trailing-comma)
+           (type boolean %allow-comments))
   (with-slots (%state %context %lookahead %depth %encountered-top-value) parser
     (labels ((read-element (lc)
               (declare (type character lc))
@@ -623,7 +621,7 @@ see `close-parser'"
       (declare (dynamic-extent #'read-element #'push-state #'pop-state))
       (ecase %state
         ((nil)
-          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)))))
+          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)) %allow-comments)))
             (cond
               ((and %encountered-top-value lc)
                 (setf %lookahead lc)
@@ -636,7 +634,7 @@ see `close-parser'"
                 (setf %encountered-top-value t)
                 (read-element lc)))))
         (:begin-array
-          (let ((lc (%skip-whitespace %step (%step %step))))
+          (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
             (case lc
               ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting element or array close"))
               (#\]    (decf (the fixnum %depth))
@@ -645,10 +643,10 @@ see `close-parser'"
               (t      (push 'after-read-array-element %context)
                       (read-element lc)))))
         (after-read-array-element
-          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)))))
+          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)) %allow-comments)))
             (case lc
               ((nil)  (%raise 'json-parse-error "End of input when reading array, expecting comma or array close"))
-              (#\,    (let ((lc (%skip-whitespace %step (%step %step))))
+              (#\,    (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
                         (case lc
                           ((nil)  (if %allow-trailing-comma
                                     (%raise 'json-parse-error "End of input when reading array, expecting element or array close")
@@ -660,7 +658,7 @@ see `close-parser'"
               (#\]    (pop-state :end-array))
               (t      (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading array, expecting comma or array close" lc (char-name lc))))))
         (:begin-object
-          (let ((lc (%skip-whitespace %step (%step %step))))
+          (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
             (case lc
               ((nil)            (%raise 'json-parse-error "End of input when reading object, expecting key or object close"))
               (#\}              (decf (the fixnum %depth))
@@ -672,21 +670,21 @@ see `close-parser'"
                                   (values :object-key key nil)))
               (t                (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc))))))
         (after-read-key
-          (let ((lc (%skip-whitespace %step (%step %step))))
+          (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
             (case lc
               ((nil) (%raise 'json-parse-error "End of input when reading object, expecting colon after object key"))
               (#\:)
               (t     (%raise 'json-parse-error "Unexpected character '~A' (~A) when reading object, expecting colon after object key" lc (char-name lc)))))
 
-          (let ((lc (%skip-whitespace %step (%step %step))))
+          (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
             (case lc
               ((nil)  (%raise 'json-parse-error "End of input when reading object, expecting value after colon"))
               (t      (read-element lc)))))
         (after-read-property
-          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)))))
+          (let ((lc (%skip-whitespace %step (or (shiftf %lookahead nil) (%step %step)) %allow-comments)))
             (case lc
               ((nil)  (%raise 'json-parse-error "End of input when reading object. Expecting comma or object close"))
-              (#\,    (let ((lc (%skip-whitespace %step (%step %step))))
+              (#\,    (let ((lc (%skip-whitespace %step (%step %step) %allow-comments)))
                         (case lc
                           ((nil)
                             (if %allow-trailing-comma
@@ -720,12 +718,11 @@ see `close-parser'"
 see `make-parser'
 see `close-parser'"
   (check-type parser parser)
-  (let ((*%allow-comments* (slot-value parser '%allow-comments))
-        (*%max-string-length* (slot-value parser '%max-string-length))
+  (let ((*%max-string-length* (slot-value parser '%max-string-length))
         (*%string-accum* (slot-value parser '%string-accum))
         (*%pos-fn* (slot-value parser '%pos)))
-    (with-slots (%step %read-string %key-fn %max-depth %allow-trailing-comma) parser
-      (%parse-next parser %step %read-string %key-fn %max-depth %allow-trailing-comma))))
+    (with-slots (%step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments) parser
+      (%parse-next parser %step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments))))
 
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
@@ -795,17 +792,17 @@ see `close-parser'"
                       ((cons hash-table)
                         (setf (gethash (pop key) (the hash-table (car stack))) value)))))
               (declare (dynamic-extent #'finish-value))
-              (let ((*%allow-comments* (slot-value parser '%allow-comments))
-                    (*%max-string-length* (slot-value parser '%max-string-length))
+              (let ((*%max-string-length* (slot-value parser '%max-string-length))
                     (*%string-accum* (slot-value parser '%string-accum))
                     (*%pos-fn* (slot-value parser '%pos))
                     (%step (slot-value parser '%step))
                     (%read-string (slot-value parser '%read-string))
                     (%key-fn (slot-value parser '%key-fn))
                     (%max-depth (slot-value parser '%max-depth))
-                    (%allow-trailing-comma (slot-value parser '%allow-trailing-comma)))
+                    (%allow-trailing-comma (slot-value parser '%allow-trailing-comma))
+                    (%allow-comments (slot-value parser '%allow-comments)))
                 (loop
-                  (multiple-value-bind (evt value) (%parse-next parser %step %read-string %key-fn %max-depth %allow-trailing-comma)
+                  (multiple-value-bind (evt value) (%parse-next parser %step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments)
                     (ecase evt
                       ((nil)          (return top))
                       (:value         (finish-value value))
