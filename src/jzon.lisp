@@ -772,6 +772,9 @@ see `close-parser'"
   (check-type max-depth (or (integer 1) null))
   (check-type key-fn (or null symbol function))
   (check-type max-string-length (integer 1 (#.array-dimension-limit)))
+  ;; Make sure it's a bound function
+  (when (and key-fn (symbolp key-fn)) (fdefinition key-fn))
+
   (typecase in
     (pathname
      (with-open-file (in in :direction :input :external-format :utf-8)
