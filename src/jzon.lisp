@@ -192,15 +192,11 @@ see `json-atom'"
   (declare (type character c))
   (<= #x00 (char-code c) #x1F))
 
-(declaim (type (and string (not simple-string)) *%string-accum*))
-(defvar *%string-accum*)
-
-(declaim (type (integer 1 (#.array-dimension-limit)) *%max-string-length*))
-(defvar *%max-string-length*)
-
-(defun %read-json-string (step)
+(defun %read-json-string (step string-accum max-string-length)
   "Reads a JSON string step-wise using `step' until an unescaped double-quote.
  Returns a `simple-string' representing the string."
+  (declare (type (and string (not simple-string)) string-accum))
+  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
   (labels ((interpret (char)
              (cond
                ((char= #\\ char)
@@ -248,17 +244,14 @@ see `json-atom'"
                              (ash (- utf-16-high-surrogate-pair #xD800) 10)
                              (- utf-16-low-surrogate-pair #xDC00))))
                       code-point))))))
-    (let ((accum *%string-accum*)
-          (max-string-length *%max-string-length*))
-      (setf (fill-pointer accum) 0)
-      (loop :for next :of-type character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
-            :for i :from 0
-            :until (char= #.(char "\"" 0) next)
-            :do
-               (when (= i max-string-length)
-                 (%raise 'json-parse-error "Maximum string length exceeded"))
-               (vector-push-extend (interpret next) accum))
-      (make-array (fill-pointer accum) :element-type (if (every (lambda (c) (typep c 'base-char)) accum) 'base-char 'character) :initial-contents accum))))
+    (setf (fill-pointer string-accum) 0)
+    (loop :for next :of-type character := (or (%step step) (%raise 'json-eof-error "Encountered end of input inside string constant"))
+          :until (char= #.(char "\"" 0) next)
+          :do
+             (when (= (fill-pointer string-accum) max-string-length)
+               (%raise 'json-parse-error "Maximum string length exceeded"))
+             (vector-push-extend (interpret next) string-accum))
+    (make-array (fill-pointer string-accum) :element-type (if (every (lambda (c) (typep c 'base-char)) (the (and string (not simple-string)) string-accum)) 'base-char 'character) :initial-contents string-accum)))
 
 (defun %read-json-number (step c)
   "Reads an RFC 8259 number, starting with `c'."
@@ -367,44 +360,46 @@ see `json-atom'"
          (return (values nil lc))))))
 
 (macrolet ((def-make-string-fns (name type)
-             `(defun ,name (in)
+             `(defun ,name (in max-string-length)
                 "Create step, and read-string functions for the string `in'."
                 (declare (type ,type in))
+                (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
                 (let ((i 0))
                   (declare (type (integer 0 #.array-dimension-limit) i))
                   (let* ((step (lambda () (when (< i (length in)) (prog1 (aref in i) (incf i)))))
-                         (read-string (lambda ()
-                                        ;; Scan until we hit a closing "
-                                        ;; Error on EOF
-                                        ;; Error if we encounter a literal control char
-                                        ;; Track suitable element-type
-                                        (loop
-                                          :with element-type := 'base-char
-                                          :for j :from i
-                                          :do
-                                            (when (<= (length in) j)
-                                              (%raise 'json-eof-error "Unexpected end of input when reading string."))
-                                            (let ((c (aref in j)))
-                                              (when (char= c #.(char "\"" 0))
-                                                (let ((len (- j i)))
-                                                  (when (< *%max-string-length* len)
-                                                    (setf i (+ i (1+ *%max-string-length*)))
-                                                    (%raise 'json-parse-error "Maximum string length exceeded"))
-                                                  (return
-                                                    (loop :with ret := (make-array len :element-type element-type)
-                                                          :for k :from 0 :below len
-                                                          :do (setf (aref ret k) (aref in (+ i k)))
-                                                          :finally
-                                                          (setf i (1+ j))
-                                                          (return ret)))))
-                                              (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
-                                                (return (%read-json-string step)))
+                         (read-string (let ((string-accum (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
+                                        (lambda ()
+                                          ;; Scan until we hit a closing "
+                                          ;; Error on EOF
+                                          ;; Error if we encounter a literal control char
+                                          ;; Track suitable element-type
+                                          (loop
+                                            :with element-type := 'base-char
+                                            :for j :from i
+                                            :do
+                                              (when (<= (length in) j)
+                                                (%raise 'json-eof-error "Unexpected end of input when reading string."))
+                                              (let ((c (aref in j)))
+                                                (when (char= c #.(char "\"" 0))
+                                                  (let ((len (- j i)))
+                                                    (when (< max-string-length len)
+                                                      (setf i (+ i (1+ max-string-length)))
+                                                      (%raise 'json-parse-error "Maximum string length exceeded"))
+                                                    (return
+                                                      (loop :with ret := (make-array len :element-type element-type)
+                                                            :for k :from 0 :below len
+                                                            :do (setf (aref ret k) (aref in (+ i k)))
+                                                            :finally
+                                                            (setf i (1+ j))
+                                                            (return ret)))))
+                                                (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
+                                                  (return (%read-json-string step string-accum max-string-length)))
 
-                                              (when (<= #x00 (char-code c) #x1F)
-                                                (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" c (char-name c)))
+                                                (when (<= #x00 (char-code c) #x1F)
+                                                  (%raise 'json-parse-error "Unexpected control character in string '~A' (~A)" c (char-name c)))
 
-                                              (when (not (typep c 'base-char))
-                                                (setf element-type 'character))))))
+                                                (when (not (typep c 'base-char))
+                                                  (setf element-type 'character)))))))
                          (pos (lambda ()
                                 (loop :with line := 1
                                       :with col := 1
@@ -422,13 +417,15 @@ see `json-atom'"
   (def-make-string-fns %make-fns-simple-string simple-string)
   (def-make-string-fns %make-fns-string (and string (not simple-string))))
 
-(defun %make-fns-stream (in)
+(defun %make-fns-stream (in max-string-length)
   "Create step, and read-string functions for the stream `in'."
   (declare (type stream in))
+  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
   (unless (subtypep (stream-element-type in) 'character)
-    (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8))))
+    (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8) max-string-length)))
   (let* ((step (lambda () (read-char in nil)))
-         (read-string (lambda () (%read-json-string step)))
+         (read-string (let ((string-accum (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
+                        (lambda () (%read-json-string step string-accum max-string-length))))
          (pos (lambda ()
                 (block nil
                   (let ((pos (ignore-errors (file-position in))))
@@ -486,9 +483,6 @@ see `json-atom'"
    (%depth
     :initform 0
     :type (integer 0))
-   (%string-accum
-    :initform (make-array (min 1024 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)
-    :type (and string (not simple-string)))
    (%close-action
     :type (or null function)))
   (:documentation "An incremental JSON parser.
@@ -532,14 +526,13 @@ see `close-parser'"
         (setf %close-action close-action)
         (setf (values %step %read-string %pos)
               (etypecase input
-                (simple-string (%make-fns-simple-string input))
-                (string (%make-fns-string input))
-                (stream (%make-fns-stream input))))
+                (simple-string (%make-fns-simple-string input max-string-length))
+                (string (%make-fns-string input max-string-length))
+                (stream (%make-fns-stream input max-string-length))))
 
         (setf %max-depth max-depth)
         (setf %allow-comments (and allow-comments t))
         (setf %allow-trailing-comma (and allow-trailing-comma t))
-        (setf %max-string-length max-string-length)
         (setf %key-fn (etypecase key-fn
                         (null (%make-string-pool))
                         (function key-fn)
@@ -557,8 +550,7 @@ see `close-parser'"
       (slot-makunbound parser '%step)
       (slot-makunbound parser '%read-string)
       (slot-makunbound parser '%pos)
-      (slot-makunbound parser '%key-fn)
-      (slot-makunbound parser '%string-accum)))
+      (slot-makunbound parser '%key-fn)))
   parser)
 
 (defmacro with-parser ((name &rest args) &body body)
@@ -718,9 +710,7 @@ see `close-parser'"
 see `make-parser'
 see `close-parser'"
   (check-type parser parser)
-  (let ((*%max-string-length* (slot-value parser '%max-string-length))
-        (*%string-accum* (slot-value parser '%string-accum))
-        (*%pos-fn* (slot-value parser '%pos)))
+  (let ((*%pos-fn* (slot-value parser '%pos)))
     (with-slots (%step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments) parser
       (%parse-next parser %step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments))))
 
@@ -792,9 +782,7 @@ see `close-parser'"
                       ((cons hash-table)
                         (setf (gethash (pop key) (the hash-table (car stack))) value)))))
               (declare (dynamic-extent #'finish-value))
-              (let ((*%max-string-length* (slot-value parser '%max-string-length))
-                    (*%string-accum* (slot-value parser '%string-accum))
-                    (*%pos-fn* (slot-value parser '%pos))
+              (let ((*%pos-fn* (slot-value parser '%pos))
                     (%step (slot-value parser '%step))
                     (%read-string (slot-value parser '%read-string))
                     (%key-fn (slot-value parser '%key-fn))
