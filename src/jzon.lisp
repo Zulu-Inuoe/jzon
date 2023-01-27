@@ -1141,15 +1141,15 @@ see `write-values'"
           ;; Call the replacer on the top-level object first, if applicable
 
           (unwind-protect (progn
-                            (call-next-method writer (if (and (null context) %replacer)
-                                                       (multiple-value-call
-                                                           (lambda (write-p &optional (new-value nil value-changed-p))
-                                                             (when write-p
-                                                               (if value-changed-p
-                                                                   new-value
-                                                                   value)))
-                                                         (funcall %replacer nil value))
-                                                       value))
+                            (if (and (null context) %replacer)
+                              (multiple-value-call
+                                  (lambda (write-p &optional (new-value value))
+                                    (when write-p
+                                      (if (eql value new-value)
+                                        (call-next-method writer value)
+                                        (call-next-method writer new-value))))
+                                (funcall %replacer nil value))
+                              (call-next-method writer value))
                             (case context
                               (:array      (setf (car %stack) :array-value))
                               (:object-key (setf (car %stack) :object-value))

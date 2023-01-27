@@ -862,6 +862,10 @@
                                         (:y (values t(ph :z 0)))
                                         (t t)))))))
 
+(test stringify-replacer-can-ommit-toplevel
+  (is (string= "" (jzon:stringify (ph :x 0) :replacer (constantly nil))))
+  (is (string= "" (jzon:stringify 42 :replacer (constantly nil)))))
+
 (test stringify-replacer-is-called-on-toplevel-value-with-nil-key
   (5am:is-true
    (let ((key-is-nil nil))
