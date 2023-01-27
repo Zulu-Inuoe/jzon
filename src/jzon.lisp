@@ -256,7 +256,9 @@ see `json-atom'"
                (vector-push-extend interpreted string-accum)
                (unless (typep interpreted 'base-char)
                  (setf element-type 'character)))
-          :finally (return (make-array (fill-pointer string-accum) :element-type element-type :initial-contents string-accum)))))
+          :finally (return (if (zerop (fill-pointer string-accum))
+                             ""
+                             (make-array (fill-pointer string-accum) :element-type element-type :initial-contents string-accum))))))
 
 (defun %read-json-number (step c)
   "Reads an RFC 8259 number, starting with `c'."
@@ -390,6 +392,9 @@ see `json-atom'"
                                                     (when (< max-string-length len)
                                                       (setf i (+ i (1+ max-string-length)))
                                                       (%raise 'json-parse-error "Maximum string length exceeded"))
+                                                    (when (zerop len)
+                                                      (setf i (1+ j))
+                                                      (return ""))
                                                     (return
                                                       (loop :with ret := (make-array len :element-type element-type)
                                                             :for k :from 0 :below len
