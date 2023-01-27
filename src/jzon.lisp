@@ -489,7 +489,7 @@ see `json-atom'"
     :initform 0
     :type (integer 0))
    (%close-action
-    :type (or null function)))
+    :type function))
   (:documentation "An incremental JSON parser.
 
 see `make-parser'
@@ -525,7 +525,7 @@ see `close-parser'"
             (values fstream (lambda ()
                               (close fstream)
                               (close bstream)))))
-        (t (values in nil)))
+        (t (values in (lambda ()))))
     (let ((parser (make-instance 'parser)))
       (with-slots (%step %read-string %pos %max-depth %allow-comments %allow-trailing-comma %max-string-length %key-fn %close-action) parser
         (setf %close-action close-action)
@@ -715,6 +715,8 @@ see `close-parser'"
 see `make-parser'
 see `close-parser'"
   (check-type parser parser)
+  (when (null (slot-value parser '%close-action))
+    (%raise 'json-error "The parser has been closed."))
   (let ((*%pos-fn* (slot-value parser '%pos)))
     (with-slots (%step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments) parser
       (%parse-next parser %step %read-string %key-fn %max-depth %allow-trailing-comma %allow-comments))))

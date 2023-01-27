@@ -386,6 +386,17 @@
     (signals (jzon:json-parse-error)
       (jzon:parse-next parser))))
 
+(test multi-close-ok
+  (jzon:with-parser (parser "{}")
+    (jzon:close-parser parser)
+    (jzon:close-parser parser)))
+
+(test parse-next-after-close-errors
+  (signals (jzon:json-error)
+    (jzon:with-parser (parser "{}")
+      (jzon:close-parser parser)
+      (jzon:parse-next parser))))
+
 (def-suite writer :in jzon)
 (in-suite writer)
 
