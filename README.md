@@ -362,7 +362,7 @@ For more fine-grained control, you can specialize a method on `jzon:write-value`
 
 `jzon:write-value writer value`
 
-`writer` is a [json-writer](#json-writer) on which any of the writer functions may be called to serialize your object in any desired way.
+`writer` is a [writer](#writer) on which any of the writer functions may be called to serialize your object in any desired way.
 
 
 ``` common-lisp
@@ -372,11 +372,11 @@ For more fine-grained control, you can specialize a method on `jzon:write-value`
   (jzon:write-array writer 1 2))
 ```
 
-See [json-writer](#json-writer) for the available functions.
+See [writer](#writer) for the available functions.
 
-### json-writer
+### writer
 
-In addition to `stringify`, jzon also provides an imperative, streaming writer for writing JSON.
+In addition to `jzon:stringify`, jzon also provides an imperative, streaming writer for writing JSON.
 
 The following are the available functions for writing:
 
@@ -406,7 +406,7 @@ The following are the available functions for writing:
 Using the plain variants:
 
 ``` common-lisp
-(let ((writer (jzon:make-json-writer :stream *standard-output* :pretty t)))
+(let ((writer (jzon:make-writer :stream *standard-output* :pretty t)))
   (jzon:with-object writer
     (jzon:write-properties writer :age 24 "colour" "blue")
     (jzon:write-key writer 42)
@@ -466,7 +466,7 @@ result:
 It's worth noting that every function returns the `writer` itself for usage with arrow macros:
 
 ``` common-lisp
-(let ((writer (jzon:make-json-writer :stream *standard-output*)))
+(let ((writer (jzon:make-writer :stream *standard-output*)))
   (jzon:with-object writer
     (-> writer
         (jzon:write-key "key")

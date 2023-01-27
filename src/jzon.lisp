@@ -3,7 +3,8 @@
   (:export
    ;;; Read
    #:parse
-   ;;;; Incremental reader
+
+   ;;;; Streaming reader
    #:make-parser
    #:parse-next
    #:close-parser
@@ -28,8 +29,8 @@
    #:coerce-key
 
    ;;; Streaming Writer
-   #:json-writer
-   #:make-json-writer
+   #:writer
+   #:make-writer
 
    ;; Extensible serialization
    #:write-value
@@ -891,7 +892,7 @@ Example return value:
 ;;;   a VALUE OR array close
 ;;; :complete signals we have finished writing a toplevel value
 
-(defclass json-writer ()
+(defclass writer ()
   ((%stream :initarg :stream)
    (%coerce-key :initarg :coerce-key)
    (%pretty :initarg :pretty)
@@ -908,12 +909,12 @@ Example return value:
    :replacer nil
    :max-depth 128))
 
-(defun make-json-writer (&key
-                           (stream (make-broadcast-stream))
-                           (coerce-key #'coerce-key)
-                           (pretty nil)
-                           (replacer nil)
-                           (max-depth 128))
+(defun make-writer (&key
+                      (stream (make-broadcast-stream))
+                      (coerce-key #'coerce-key)
+                      (pretty nil)
+                      (replacer nil)
+                      (max-depth 128))
   "Create a writer for subsequent `write-value', `begin-object', et al calls.
   `:stream' must be a character or binary `stream'
   `:replacer' a function of two arguments, the key and the value of a KV pair.
@@ -925,11 +926,11 @@ Example return value:
   (let ((stream (cond
                   ((subtypep (stream-element-type stream) 'character) stream)
                   (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
-    (make-instance 'json-writer :stream stream
-                                :coerce-key (%ensure-function coerce-key)
-                                :pretty (and pretty t)
-                                :replacer replacer
-                                :max-depth max-depth)))
+    (make-instance 'writer :stream stream
+                           :coerce-key (%ensure-function coerce-key)
+                           :pretty (and pretty t)
+                           :replacer replacer
+                           :max-depth max-depth)))
 
 (defun %write-indentation (writer)
   "Indent `writer' depending on its depth, if it is set to pretty print."
@@ -999,7 +1000,7 @@ see `write-key'
 see `write-property'
 see `write-properties'
 see `end-object'"
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array)                     (progn (%write-indentation writer)
@@ -1008,7 +1009,7 @@ see `end-object'"
                                            (%write-indentation writer)))
       ((:object-key)                (setf (car %stack) :object-value))
       ((:object :object-value)      (error "Expecting object key"))
-      ((:complete)                  (error "Attempting to write object when value already written to json-writer")))
+      ((:complete)                  (error "Attempting to write object when value already written to writer")))
     (when (and %max-depth (> (incf %depth) %max-depth))
       (error "Exceeded maximum depth in writing object."))
     (push :object %stack)
@@ -1020,7 +1021,7 @@ see `end-object'"
 
 see `begin-object'
 see `with-object'"
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %coerce-key %stack %pretty) writer
     (let ((context (car %stack)))
       (case context
@@ -1041,7 +1042,7 @@ see `with-object'"
 
 (defun end-object (writer)
   "Finish writing an object to `writer'. Must match an opening `begin-object'."
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %stack %pretty %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
@@ -1076,7 +1077,7 @@ see `write-properties'"
 
 see `write-values'
 see `end-array'"
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array-value)          (progn
@@ -1084,7 +1085,7 @@ see `end-array'"
                                  (%write-indentation writer)))
       ((:object-key)           (setf (car %stack) :object-value))
       ((:object :object-value) (error "Expecting object key"))
-      ((:complete)             (error "Attempting to write array when value already written to json-writer")))
+      ((:complete)             (error "Attempting to write array when value already written to writer")))
     (push :array %stack)
     (when (and %max-depth (> (incf %depth) %max-depth))
       (error "Exceeded maximum depth in writing array."))
@@ -1093,7 +1094,7 @@ see `end-array'"
 
 (defun end-array (writer)
   "Finish writing an array to `writer'. Must match an opening `begin-array'."
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-slots (%stream %stack %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
@@ -1123,12 +1124,12 @@ see `write-values'"
 
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
-  (:method :around ((writer json-writer) value)
+  (:method :around ((writer writer) value)
     (with-slots (%stack %ref-stack %pretty %replacer) writer
       (let ((context (car %stack)))
         (case context
           ((:object :object-value) (error "Expecting object key"))
-          ((:complete)             (error "Attempting to write value when value already written to json-writer")))
+          ((:complete)             (error "Attempting to write value when value already written to writer")))
 
         (let ((prev-stack %ref-stack))
           (let ((path (member value prev-stack :test #'eq)))
@@ -1155,7 +1156,7 @@ see `write-values'"
                               ((nil)       (push :complete %stack))))
             (setf %ref-stack prev-stack)))))
     writer)
-  (:method ((writer json-writer) value)
+  (:method ((writer writer) value)
     (let ((coerce-key (slot-value writer '%coerce-key))
           (fields (coerced-fields value)))
       (with-object writer
@@ -1172,24 +1173,24 @@ see `write-values'"
                                                     (t 'null)))))
                      (write-key writer key)
                      (write-value writer coerced-value))))))
-  (:method ((writer json-writer) (value (eql 't)))
+  (:method ((writer writer) (value (eql 't)))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value (eql 'nil)))
+  (:method ((writer writer) (value (eql 'nil)))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value (eql 'null)))
+  (:method ((writer writer) (value (eql 'null)))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value number))
+  (:method ((writer writer) (value number))
     (%write-atom-value writer value))
   ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
-  (:method ((writer json-writer) (value real))
+  (:method ((writer writer) (value real))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value string))
+  (:method ((writer writer) (value string))
     (%write-atom-value writer value))
-  (:method ((writer json-writer) (value symbol))
+  (:method ((writer writer) (value symbol))
     (%write-atom-value writer (string value)))
-  (:method  ((writer json-writer) (value pathname))
+  (:method  ((writer writer) (value pathname))
     (%write-atom-value writer (uiop:native-namestring value)))
-  (:method ((writer json-writer) (value cons))
+  (:method ((writer writer) (value cons))
     ;; Try and guess alist/plist
     ;; TODO - this might be too hacky/brittle to have on by default
     (let* ((coerce-key (slot-value writer '%coerce-key))
@@ -1254,7 +1255,7 @@ see `write-values'"
          (with-array writer
            (write-value writer (car value))
            (write-value writer (cdr value)))))))
-  (:method ((writer json-writer) (value sequence))
+  (:method ((writer writer) (value sequence))
     (with-array writer
       (let ((replacer (slot-value writer '%replacer)))
         (if replacer
@@ -1274,7 +1275,7 @@ see `write-values'"
                  (lambda (x)
                    (write-value writer x))
                  value)))))
-  (:method ((writer json-writer) (value hash-table))
+  (:method ((writer writer) (value hash-table))
     (with-object writer
       (maphash (lambda (key value)
                  (let ((replacer (slot-value writer '%replacer)))
@@ -1296,7 +1297,7 @@ see `write-values'"
 (defun write-values (writer &rest values)
   "Convenience function to write multiple `values' to `writer'. Must be writing an array."
   (declare (dynamic-extent values))
-  (check-type writer json-writer)
+  (check-type writer writer)
   (unless (or values (member (slot-value writer '%stack) '(:array :array-value)))
     (error "Attempting to write multiple values outside of an array."))
   (map nil (lambda (x) (write-value writer x)) values)
@@ -1309,7 +1310,7 @@ see `write-values'"
 
 (defun write-property (writer key value)
   "Write an object property/key value pair."
-  (check-type writer json-writer)
+  (check-type writer writer)
   (write-key writer key)
   (write-value writer value))
 
@@ -1329,7 +1330,7 @@ see `write-values'"
 see `write-property'
 see `write-object'"
   (declare (dynamic-extent kvp))
-  (check-type writer json-writer)
+  (check-type writer writer)
   (loop
     :for cell :on kvp :by #'cddr
     :for (k . rest) := cell
@@ -1346,21 +1347,21 @@ see `write-object'"
                  :colour :red)
 "
   (declare (dynamic-extent kvp))
-  (check-type writer json-writer)
+  (check-type writer writer)
   (with-object writer
     (apply #'write-properties writer kvp)))
 
 ;; dynavar-based write functions
 (defvar *writer*)
 (eval-when (:load-toplevel :compile-toplevel :execute)
-  (setf (documentation '*writer* 'variable) "The active `json-writer' for the various `write-*' functions."))
+  (setf (documentation '*writer* 'variable) "The active `writer' for the various `write-*' functions."))
 
 (defmacro with-writer* ((&rest args &key &allow-other-keys) &body body)
-  "Create a new `json-writer' using `args' and bind it to `*writer*'
+  "Create a new `writer' using `args' and bind it to `*writer*'
 
-  `args' are a the same as `make-json-writer'"
+  `args' are a the same as `make-writer'"
   (let ((writer-sym (gensym "WRITER")))
-    `(let* ((,writer-sym (make-json-writer ,@args))
+    `(let* ((,writer-sym (make-writer ,@args))
             (*writer* ,writer-sym))
        ,@body
        ,writer-sym)))
@@ -1434,10 +1435,10 @@ see `write-object'"
   (check-type coerce-key (or symbol function))
   (let ((coerce-key (%ensure-function coerce-key)))
     (flet ((stringify-to (stream)
-             (let ((writer (make-json-writer :stream stream
-                                             :coerce-key coerce-key
-                                             :pretty (and pretty t)
-                                             :replacer replacer)))
+             (let ((writer (make-writer :stream stream
+                                        :coerce-key coerce-key
+                                        :pretty (and pretty t)
+                                        :replacer replacer)))
                (write-value writer element))))
       (cond
         ((null stream)

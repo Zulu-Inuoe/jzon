@@ -493,7 +493,7 @@
 (defmacro with-writer-to-string ((writer &key pretty max-depth) &body body)
   (let ((str-sym (gensym "STR")))
     `(with-output-to-string (,str-sym)
-       (let ((,writer (jzon:make-json-writer :stream ,str-sym :pretty ,pretty :max-depth ,max-depth)))
+       (let ((,writer (jzon:make-writer :stream ,str-sym :pretty ,pretty :max-depth ,max-depth)))
          ,@body))))
 
 (test writer-write-values-works
@@ -550,7 +550,7 @@
       (jzon:with-object writer))))
 
 (test write-properties-returns-writer
-  (let ((writer (jzon:make-json-writer)))
+  (let ((writer (jzon:make-writer)))
     (jzon:with-object writer
       (is (eq writer (jzon:write-properties writer 0 0))))))
 
