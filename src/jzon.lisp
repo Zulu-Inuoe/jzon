@@ -1191,7 +1191,6 @@ see `write-values'"
     (%write-atom-value writer value))
   (:method ((writer writer) (value number))
     (%write-atom-value writer value))
-  ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
   (:method ((writer writer) (value real))
     (%write-atom-value writer value))
   (:method ((writer writer) (value string))
