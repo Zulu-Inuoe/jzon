@@ -327,7 +327,7 @@ see `json-atom'"
            (setf frac-len 1))
 
        :parse-frac-loop
-         (let ((c (takec :done-frac)))
+         (let ((c (takec :done)))
            (when (or (char= c #\e) (char= c #\E))
              (go :parse-exp))
            (let ((digit (digit09-p c)))
@@ -335,13 +335,6 @@ see `json-atom'"
              (setf frac-val (+ (* frac-val 10) digit))
              (incf frac-len)))
          (go :parse-frac-loop)
-
-       :done-frac
-         (return
-           (values 
-            (float (* int-sign (+ int-val (/ frac-val (expt 10 frac-len))))
-                   0d0)
-            lc))
 
        :parse-exp
          (let ((c (takec :fail)))
@@ -364,13 +357,12 @@ see `json-atom'"
 
        :done
          (return
-           (values
-            (let ((exp-mult (expt 10 (* exp-sign exp-val))))
-              (float (* int-sign
-                        (+ (* int-val exp-mult)
-                        (/ (* frac-val exp-mult) (expt 10 frac-len))))
-                     0d0))
-            lc))
+             (values
+                (* int-sign
+                   (+ int-val (* frac-val (expt 10 (- frac-len))))
+                   (expt 10 (* exp-sign exp-val))
+                   1.0d0)
+                lc))
        :fail
          (return (values nil lc))))))
 
@@ -618,7 +610,7 @@ see `close-parser'"
                                         (if lookahead
                                           (%raise 'json-parse-error %pos "Unexpected character in JSON data '~C' (~A)" lookahead (char-name lookahead))
                                           (%raise 'json-eof-error %pos "End of input when reading number")))
-  
+
                                       (setf %lookahead lookahead)
                                       (setf %state (car %context))
                                       (values :value number))))))
