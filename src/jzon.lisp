@@ -337,7 +337,11 @@ see `json-atom'"
          (go :parse-frac-loop)
 
        :done-frac
-         (return (values (* int-sign (+ int-val (/ frac-val (expt 10.d0 frac-len)))) lc))
+         (return
+           (values 
+            (float (* int-sign (+ int-val (/ frac-val (expt 10 frac-len))))
+                   0d0)
+            lc))
 
        :parse-exp
          (let ((c (takec :fail)))
@@ -361,10 +365,11 @@ see `json-atom'"
        :done
          (return
            (values
-            (let ((exp-mult (expt 10d0 (* exp-sign exp-val))))
-              (* int-sign
-                (+ (* int-val exp-mult)
-                   (/ (* frac-val exp-mult) (expt 10.d0 frac-len)))))
+            (let ((exp-mult (expt 10 (* exp-sign exp-val))))
+              (float (* int-sign
+                        (+ (* int-val exp-mult)
+                        (/ (* frac-val exp-mult) (expt 10 frac-len))))
+                     0d0))
             lc))
        :fail
          (return (values nil lc))))))
