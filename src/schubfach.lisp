@@ -24,7 +24,7 @@
 ;;        CL's number system (hence the %->int32 and such macros
 ;;
 ;;        At the time of writing, performance here is still at least
-;;        2x the builtin writer on SBCL, with about 5x with (speed 3)
+;;        5x the builtin writer on SBCL, with about 7x with (speed 3)
 ;;
 
 (defpackage #:com.inuoe.jzon/schubfach
