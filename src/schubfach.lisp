@@ -32,6 +32,7 @@
   (:local-nicknames
     (#:ff #:org.shirakumo.float-features))
   (:export
+    #:write-float
     #:write-double))
 
 (in-package #:com.inuoe.jzon/schubfach)
@@ -64,11 +65,17 @@
       (%->int64 (mask-field (byte (- 64 ,bits-sym) 0)
                             (ash ,x-sym (- ,bits-sym)))))))
 
-(defmacro %ash32 (x bits)
+(defmacro %lash32 (x bits)
   `(%->int32 (ash ,x (logand ,bits 31))))
 
-(defmacro %ash64 (x bits)
+(defmacro %rash32 (x bits)
+  `(%->int32 (ash ,x (- (logand ,bits 31)))))
+
+(defmacro %lash64 (x bits)
   `(%->int64 (ash ,x (logand ,bits 63))))
+
+(defmacro %rash64 (x bits)
+  `(%->int64 (ash ,x (- (logand ,bits 63)))))
 
 (defmacro %float-to-raw-int-bits (x)
   `(the (unsigned-byte 32) (ff:single-float-bits ,x)))
@@ -121,25 +128,43 @@
                                   (incf i 2)))
                       gs))
 
-(declaim (inline %rop3))
-(defun %rop3 (g1 g0 cp)
-  (declare (type (signed-byte 64) g1 g0 cp))
-  (the (values (signed-byte 64) &optional)
-    (let* ((x1 (%multiply-high g0 cp))
-           (z (%->int64 (+ (%lsl64 (* g1 cp) 1) x1)))
-           (y1 (%multiply-high g1 cp)))
-      (logior (%->int64 (+ (%lsl64 z 63) y1))
-              (%lsl64 (- (logand z #x7FFFFFFFFFFFFFFF)) 63)))))
+(declaim (inline %rop2))
+(defun %rop2 (g cp)
+  (declare (type (signed-byte 64) g)
+           (type (signed-byte 32) cp))
+  (the (values (signed-byte 32) &optional)
+    (let ((x (%multiply-high g (%lash64 cp 32))))
+      (logior (%->int32 (%lsl64 (+ x) 31))
+              (%lsl32 (- (%->int32 x)) 31)))))
 
+;;
+;; todo - Replace both offset functions
+;;          https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster/
+;;
+(declaim (inline %offset32))
+(defun %offset32 (q0)
+  (declare (type (unsigned-byte 32) q0))
+  (cond
+    ((< q0 10)                  0)
+    ((< q0 100)                 1)
+    ((< q0 1000)                2)
+    ((< q0 10000)               3)
+    ((< q0 100000)              4)
+    ((< q0 1000000)             5)
+    ((< q0 10000000)            6)
+    ((< q0 100000000)           7)
+    ((< q0 1000000000)          8)
+    (t                          9)))
 
 (defun %write-fraction-digits (q0 last-pos pos pos-lim buf ds)
   (declare (type (signed-byte 32) q0 last-pos pos pos-lim)
-           (type (simple-base-string 24) buf)
+           (type (or (simple-base-string 15)
+                     (simple-base-string 24)) buf)
            (type (simple-array (unsigned-byte 16) (100)) ds))
   (the (values (integer 0 24) &optional)
     (cond
       ((> pos pos-lim)
-        (let* ((q1 (%->int32 (ash (* q0 1374389535) -37)))
+        (let* ((q1 (%->int32 (%rash64 (* q0 1374389535) 37)))
                (d (aref ds (- q0 (* q1 100)))))
           (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
           (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d)))
@@ -148,11 +173,12 @@
 
 (defun %write-significant-fraction-digits32 (q0 last-pos pos pos-lim buf ds)
   (declare (type (unsigned-byte 32) q0 last-pos pos pos-lim)
-           (type (simple-base-string 24) buf)
+           (type (or (simple-base-string 15)
+                     (simple-base-string 24)) buf)
            (type (simple-array (unsigned-byte 16) (100)) ds))
   (the (values (integer 0 24) &optional)
     (let* ((gp (* q0 1374389535))
-           (q1 (%->int32 (ash gp -37))))
+           (q1 (%->int32 (%rash64 gp 37))))
       (cond
         ((zerop (logior (logand gp #x1FC0000000)
                         last-pos))
@@ -171,6 +197,237 @@
             pos-lim
             buf
             ds))))))
+
+(declaim (inline %write-2-digits))
+(defun %write-2-digits (q0 pos buf ds)
+  (declare (type (signed-byte 32) q0)
+           (type (integer 0 26) pos)
+           (type (or (simple-base-string 15)
+                     (simple-base-string 24)) buf)
+           (type (simple-array (unsigned-byte 16) (100)) ds))
+  (the (values (integer 0 24) &optional)
+    (let ((d (aref ds q0)))
+      (setf (char buf (+ pos 0)) (code-char (ldb (byte 7 0) d)))
+      (setf (char buf (+ pos 1)) (code-char (ldb (byte 7 8) d)))
+      (+ pos 2))))
+
+(defun %write-positive-int-digits (q0 pos buf ds)
+  (declare (type (unsigned-byte 31) q0)
+           (type (integer 0 23) pos)
+           (type (or (simple-base-string 15)
+                     (simple-base-string 24)) buf)
+           (type (simple-array (unsigned-byte 16) (100)) ds))
+  (cond
+    ((< q0 100)
+      (cond
+        ((< q0 10)
+          (setf (char buf pos) (code-char (+ q0 (char-code #\0)))))
+        (t
+          (let ((d (aref ds q0)))
+            (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
+            (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d))))))
+      (values))
+    (t
+      (let* ((q1 (%->int32 (%rash64 (* q0 1374389535) 37)))
+             (d (aref ds (- q0 (* q1 100)))))
+
+        (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
+        (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d)))
+
+        (%write-positive-int-digits q1 (- pos 2) buf ds)))))
+
+(defun %write-float (x buf
+                      &aux
+                      (pos 0)
+                      (bits (%float-to-raw-int-bits x))
+                      (ds *digits*)
+                      (gs *gs*))
+  (declare (type single-float x)
+           (type (simple-base-string 15) buf)
+           (type (integer 0 14) pos)
+           (type (unsigned-byte 32) bits)
+           (type (simple-array (unsigned-byte 16) (100)) ds)
+           (type (simple-array (signed-byte 64) (1234)) gs))
+  (when (logbitp 31 bits)
+    (setf (char buf pos) #\-)
+    (incf pos))
+  (cond
+    ((zerop x)
+      (setf (char buf (+ pos 0)) #\0)
+      (setf (char buf (+ pos 1)) #\.)
+      (setf (char buf (+ pos 2)) #\0)
+      (+ pos 3))
+    (t
+      (let* ((ieee-exponent (ldb (byte 8 23) bits))
+             (ieee-mantissa (ldb (byte 23 0) bits))
+             (e (- ieee-exponent 150))
+             (m (logior ieee-mantissa #x800000))
+             (dv 0)
+             (exp 0))
+        (declare (type (signed-byte 32) e))
+        (declare (type (signed-byte 32) dv))
+        (declare (type (signed-byte 32) exp))
+        (cond
+          ((and (>= e -23)  (<= e 0) (zerop (logand (%lash32 m e) e)))
+            (setf dv (%rash32 m (- e))))
+          (t
+            (let ((exp-shift 0)
+                  (exp-corr 0)
+                  (cbl-shift 2))
+              (cond
+                ((zerop ieee-exponent)
+                  (setf e -149)
+                  (setf m ieee-mantissa)
+                  (when (< ieee-mantissa 8)
+                    (setf m (* m 10))
+                    (setf exp-shift 1)))
+                ((= ieee-exponent 255) (error "IllegalNumberError"))
+                ((and (zerop ieee-mantissa) (> ieee-exponent 1))
+                  (setf exp-corr 131007)
+                  (setf cbl-shift 1)))
+              ;(break)
+              (setf exp (%rash32 (- (* e 315653) exp-corr) 20))
+
+              (let* ((g1 (%->int64 (+ (aref gs (%lash32 (+ exp 324) 1)) 1)))
+                     (h (+ (%rash32 (* (- exp) 108853) 15) e 1))
+                     (cb (%lash32 m 2))
+                     (outm1 (- (logand m #x01) 1))
+                     (vb (%rop2 g1 (%lash32 cb h)))
+                     (vbls (+ (%rop2 g1 (%lash32 (- cb cbl-shift) h)) outm1))
+                     (vbrd (- outm1 (%rop2 g1 (%lash32 (+ cb 2) h))))
+                     (s (%rash32 vb 2)))
+                ;(break)
+                (when (or (< s 100)
+                          (progn
+                            ;; divide a positive int by 10
+                            (setf dv (%->int32 (%lsl64 (* s 3435973837) 35)))
+                            (let* ((sp10 (%->int32 (* dv 10)))
+                                   (sp40 (%lash32 sp10 2))
+                                   (upin (%->int32 (- vbls sp40))))
+                              (or (>= (logxor (%->int32 (+ sp40 vbrd 40)) upin) 0)
+                                  (progn
+                                    (setf dv (%->int32 (+ dv (%lsl32 (lognot upin) 31))))
+                                    (setf exp (%->int32 (+ exp 1)))
+                                    nil)))))
+                  (let* ((s4 (%lash32 s 2))
+                         (uin (%->int32 (- vbls s4))))
+                    (setf dv (%->int32
+                              (+ (%lsl32
+                                   (lognot
+                                     (if (< (logxor (+ s4 vbrd 4) uin) 0)
+                                       uin
+                                       (- (+ (logand vb #x3) (logand s #x1)) 3)))
+                                  31)
+                                 s)))
+                    (setf exp (%->int32 (- exp exp-shift)))))))))
+
+        (let ((len (%offset32 dv)))
+          (setf exp (%->int32 (+ exp len)))
+          (setf len (%->int32 (+ len 1)))
+          (cond
+            ((or (< exp -3) (>= exp 7))
+              (let ((last-pos (%write-significant-fraction-digits32 dv 0 (+ pos len) pos buf ds)))
+                (setf (char buf pos) (char buf (+ pos 1)))
+                (setf (char buf (+ pos 1)) #\.)
+                (setf pos
+                  (cond
+                    ((< last-pos (+ pos 3))
+                      (setf (char buf last-pos) #\0)
+                      (1+ last-pos))
+                    (t last-pos)))
+                (setf (char buf pos) #\E)
+                (incf pos)
+                (when (< exp 0)
+                  (setf (char buf pos) #\-)
+                  (incf pos)
+                  (setf exp (- exp)))
+                (cond
+                  ((< exp 10)
+                    (setf (char buf pos) (code-char (+ exp (char-code #\0))))
+                    (+ pos 1))
+                  (t (%write-2-digits exp pos buf ds)))))
+            ((< exp 0)
+              (let ((dot-pos (+ pos 1)))
+                (setf (char buf (+ pos 0)) #\0)
+                (setf (char buf (+ pos 2)) #\0)
+                (setf (char buf (+ pos 3)) #\0)
+                (decf pos exp)
+                (let ((last-pos (%write-significant-fraction-digits32 dv 0 (+ pos len) pos buf ds)))
+                  (setf (char buf dot-pos) #\.)
+                  last-pos)))
+            ((< exp (- len 1)) ;; + exp
+              (let ((last-pos (%write-significant-fraction-digits32 dv 0 (+ pos len) pos buf ds)))
+                (loop :repeat (1+ exp)
+                      :do (setf (char buf pos) (char buf (+ pos 1)))
+                          (incf pos))
+                (setf (char buf pos) #\.)
+                last-pos))
+            (t
+              (incf pos len)
+              (%write-positive-int-digits dv (- pos 1) buf ds)
+              (setf (char buf (+ pos 0)) #\.)
+              (setf (char buf (+ pos 1)) #\0)
+              (+ pos 2))))))))
+
+(defun stringify-float (x &aux (buf (make-array 15 :element-type 'base-char)))
+  (declare (dynamic-extent buf))
+  (check-type x single-float)
+  (let ((n (%write-float x buf)))
+    (subseq buf 0 n)))
+
+(defun write-float (x stream &aux (buf (make-array 15 :element-type 'base-char)))
+  (declare (dynamic-extent buf))
+  (check-type x single-float)
+  (check-type stream stream)
+  (let ((n (%write-float x buf)))
+    (write-string buf stream :end n)))
+
+
+
+(declaim (inline %rop3))
+#++
+(defun %rop3 (g1 g0 cp)
+  (declare (type (signed-byte 64) g1 g0 cp))
+  (the (values (signed-byte 64) &optional)
+    (let* ((x1 (%multiply-high g0 cp))
+           (z (%->int64 (+ (%lsl64 (* g1 cp) 1) x1)))
+           (y1 (%multiply-high g1 cp)))
+      (logior (%->int64 (+ (%lsl64 z 63) y1))
+              (%lsl64 (- (logand z #x7FFFFFFFFFFFFFFF)) 63)))))
+
+(defun %rop3 (g1 g0 cp)
+  (declare (type (signed-byte 64) g1 g0 cp))
+  (the (values (signed-byte 64) &optional)
+    (let ((x (%->int64 (+ (%multiply-high g0 cp) (%lsl64 (* g1 cp) 1)))))
+      (logior (%->int64 (+ (%multiply-high g1 cp) (%lsl64 x 63)))
+              (%lsl64 (- (logand x #x7FFFFFFFFFFFFFFF)) 63)))))
+
+;;
+;; todo - Replace both offset functions
+;;          https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster/
+;;
+(declaim (inline %offset64))
+(defun %offset64 (q0)
+  (declare (type (unsigned-byte 64) q0))
+  (cond
+    ((< q0 10)                  0)
+    ((< q0 100)                 1)
+    ((< q0 1000)                2)
+    ((< q0 10000)               3)
+    ((< q0 100000)              4)
+    ((< q0 1000000)             5)
+    ((< q0 10000000)            6)
+    ((< q0 100000000)           7)
+    ((< q0 1000000000)          8)
+    ((< q0 10000000000)         9)
+    ((< q0 100000000000)        10)
+    ((< q0 1000000000000)       11)
+    ((< q0 10000000000000)      12)
+    ((< q0 100000000000000)     13)
+    ((< q0 1000000000000000)    14)
+    ((< q0 10000000000000000)   15)
+    ((< q0 100000000000000000)  16)
+    (t                          17)))
 
 (declaim (inline %write-significant-fraction-digits64))
 (defun %write-significant-fraction-digits64 (q0 pos pos-lim buf ds &aux (q032 (ldb (byte 32 0) q0)))
@@ -195,18 +452,6 @@
             buf
             ds))))))
 
-(declaim (inline %write-2-digits))
-(defun %write-2-digits (q0 pos buf ds)
-  (declare (type (signed-byte 32) q0)
-           (type (integer 0 26) pos)
-           (type (simple-base-string 24) buf)
-           (type (simple-array (unsigned-byte 16) (100)) ds))
-  (the (values (integer 0 24) &optional)
-    (let ((d (aref ds q0)))
-      (setf (char buf (+ pos 0)) (code-char (ldb (byte 7 0) d)))
-      (setf (char buf (+ pos 1)) (code-char (ldb (byte 7 8) d)))
-      (+ pos 2))))
-
 (declaim (inline %write-3-digits))
 (defun %write-3-digits (q0 pos buf ds)
   (declare (type (signed-byte 32) q0)
@@ -214,58 +459,12 @@
            (type (simple-base-string 24) buf)
            (type (simple-array (unsigned-byte 16) (100)) ds))
   (the (values (integer 0 24) &optional)
-    (let* ((q1 (ash (* q0 1311) -17))
+    (let* ((q1 (%rash32 (* q0 1311) 17))
            (d (aref ds (- q0 (* q1 100)))))
       (setf (char buf (+ pos 0)) (code-char (+ q1 (char-code #\0))))
       (setf (char buf (+ pos 1)) (code-char (ldb (byte 7 0) d)))
       (setf (char buf (+ pos 2)) (code-char (ldb (byte 7 8) d)))
       (+ pos 3))))
-
-(defun %write-positive-int-digits (q0 pos buf ds)
-  (declare (type (unsigned-byte 31) q0)
-           (type (integer 0 23) pos)
-           (type (simple-base-string 24) buf)
-           (type (simple-array (unsigned-byte 16) (100)) ds))
-  (cond
-    ((< q0 100)
-      (cond
-        ((< q0 10)
-          (setf (char buf pos) (code-char (+ q0 (char-code #\0)))))
-        (t
-          (let ((d (aref ds q0)))
-            (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
-            (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d))))))
-      (values))
-    (t
-      (let* ((q1 (ldb (byte 32 0) (ash (* q0 1374389535) -37)))
-             (d (aref ds (- q0 (* q1 100)))))
-
-        (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
-        (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d)))
-
-        (%write-positive-int-digits q1 (- pos 2) buf ds)))))
-
-(declaim (inline %offset64))
-(defun %offset64 (q0)
-  (cond
-    ((< q0 10)                  0)
-    ((< q0 100)                 1)
-    ((< q0 1000)                2)
-    ((< q0 10000)               3)
-    ((< q0 100000)              4)
-    ((< q0 1000000)             5)
-    ((< q0 10000000)            6)
-    ((< q0 100000000)           7)
-    ((< q0 1000000000)          8)
-    ((< q0 10000000000)         9)
-    ((< q0 100000000000)        10)
-    ((< q0 1000000000000)       11)
-    ((< q0 10000000000000)      12)
-    ((< q0 100000000000000)     13)
-    ((< q0 1000000000000000)    14)
-    ((< q0 10000000000000000)   15)
-    ((< q0 100000000000000000)  16)
-    (t                          17)))
 
 (defun %write-double (x buf
                       &aux
@@ -295,19 +494,14 @@
              (exp 0))
         (declare (type (signed-byte 32) e))
         (declare (type (signed-byte 64) dv))
-        (declare (type (integer -325 324) exp))
+        (declare (type (signed-byte 32) exp))
         (cond
-          ((and (>= e -52) (<= e 0) (zerop (logand (%ash64 m e) e)))
-            ;; todo confirm that this is eq to
-            ;;    dv = m >> -e
-            (setf dv (ash m e)))
+          ((and (>= e -52) (<= e 0) (zerop (logand (%lash64 m e) e)))
+            (setf dv (%rash64 m (- e))))
           (t
             (let ((exp-shift 0)
                   (exp-corr 0)
                   (cbl-shift 2))
-              (declare (type (member 0 1) exp-shift))
-              (declare (type (member 0 131007) exp-corr))
-              (declare (type (member 1 2) cbl-shift))
               (cond
                 ((zerop ieee-exponent)
                   (setf e -1074)
@@ -320,18 +514,18 @@
                   (setf exp-corr 131007)
                   (setf cbl-shift 1)))
 
-              (setf exp (ash (- (* e 315653) exp-corr) -20))
+              (setf exp (%rash64 (- (* e 315653) exp-corr) 20))
 
-              (let* ((i (ash (+ exp 324) 1))
+              (let* ((i (%lash32 (+ exp 324) 1))
                      (g1 (aref gs (+ i 0)))
                      (g0 (aref gs (+ i 1)))
-                     (h (logand (+ (ash (* exp -108853) -15) e 2) 63))
-                     (cb (ash m 2))
+                     (h (%->int32 (+ (%rash32 (* exp -108853) 15) e 2)))
+                     (cb (%lash64 m 2))
                      (outm1 (- (logand m #x01) 1))
-                     (vb (%rop3 g1 g0 (%ash64 cb h)))
-                     (vbls (+ (%rop3 g1 g0 (%ash64 (- cb cbl-shift) h)) outm1))
-                     (vbrd (- outm1 (%rop3 g1 g0 (%ash64 (+ cb 2) h))))
-                     (s (ash vb -2)))
+                     (vb (%rop3 g1 g0 (%lash64 cb h)))
+                     (vbls (%->int64 (+ (%rop3 g1 g0 (%lash64 (- cb cbl-shift) h)) outm1)))
+                     (vbrd (%->int64 (- outm1 (%rop3 g1 g0 (%lash64 (+ cb 2) h)))))
+                     (s (%rash64 vb 2)))
                 (declare (type (integer 0 1233) i))
                 (declare (type (signed-byte 64) g1))
                 (declare (type (signed-byte 64) g0))
@@ -347,16 +541,16 @@
                             ;; divide a positive int by 10
                             (setf dv (truncate s 10))
                             (let* ((sp10 (* dv 10))
-                                   (sp40 (ash sp10 2))
+                                   (sp40 (%lash64 sp10 2))
                                    (upin (%->int32 (- vbls sp40))))
                               (or (>= (logxor (+ (%->int32 (+ sp40 vbrd)) 40) upin) 0)
                                   (progn
-                                    (incf dv (%lsl32 (lognot upin) 31))
-                                    (incf exp)
+                                    (setf dv (%->int64 (+ dv (%lsl32 (lognot upin) 31))))
+                                    (setf exp (%->int32 (+ exp 1)))
                                     nil)))))
-                  (let* ((s4 (ash s 2))
+                  (let* ((s4 (%lash64 s 2))
                          (uin (%->int32 (- vbls s4))))
-                    (setf dv (ldb (byte 64 0)
+                    (setf dv (%->int64
                                (+ (%lsl32
                                     (lognot
                                       (if (< (logxor (+ (%->int32 (+ s4 vbrd)) 4) uin) 0)
@@ -366,10 +560,10 @@
                                            -3)))
                                     31)
                                   s)))
-                    (decf exp exp-shift)))))))
+                    (setf exp (%->int32 (- exp exp-shift)))))))))
         (let ((len (%offset64 dv)))
-          (incf exp len)
-          (incf len 1)
+          (setf exp (%->int32 (+ exp len)))
+          (setf len (%->int32 (+ len 1)))
           (cond
             ((or (< exp -3) (>= exp 7))
               (let ((last-pos (%write-significant-fraction-digits64 dv (+ pos len) pos buf ds)))
