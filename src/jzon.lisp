@@ -999,6 +999,8 @@ Example return value:
       ((eql nil)    (write-string "false" %stream))
       ((eql null)   (write-string "null" %stream))
       (integer      (format %stream "~D" value))
+      (double-float (sf:write-double value %stream))
+      (single-float (sf:write-float value %stream))
       (real         (sf:write-double (coerce value 'double-float) %stream))
       (string       (%write-json-string value %stream)))))
 

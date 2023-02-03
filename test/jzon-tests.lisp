@@ -153,7 +153,7 @@
 
 (test parse-23456789012E66
   (is (= 2.3456789012d76 (jzon:parse "23456789012E66"))))
-  
+
 (test parse-0.000000000000000000000034567890120102012
   (is (= 0.000000000000000000000034567890120102012d0 (jzon:parse "0.000000000000000000000034567890120102012"))))
 
@@ -162,7 +162,7 @@
 
 ;; (test parse-4.9E-324
 ;;   (is (= 5d-324 (jzon:parse "4.9E-324"))))
-;; 
+;;
 ;; (test parse-4.8E-324
 ;;   (is (= 5d-324 (jzon:parse "4.8E-324"))))
 
@@ -680,6 +680,12 @@
 (test stringify-integers
   (is (string= "5" (jzon:stringify 5)))
   (is (string= "0" (jzon:stringify 0))))
+
+(test stringify-1.2d0
+  (is (string= "1.2" (jzon:stringify 1.2d0))))
+
+(test stringify-1.2s0
+  (is (string= "1.2" (jzon:stringify 1.2s0))))
 
 (test stringify-strings
   (is (string= "\"hello, world!\"" (jzon:stringify "hello, world!")))
