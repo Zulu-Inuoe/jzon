@@ -102,6 +102,7 @@
                           (i 0)
                           (pow5 1))
                       (declare (type (integer 0 1235) i)
+                               ;; var pow5 = BigInt(1)
                                (type (integer 1) pow5))
                       (loop :while (< i 650)
                             :do (let ((av (+ (ash pow5 (- (- (integer-length pow5) 126))) 1)))
