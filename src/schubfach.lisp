@@ -21,7 +21,7 @@
 ;;        defining numerical ranges of variables. The Java and Scala
 ;;        versions use signed types everywhere, and this can often
 ;;        get in the way of optimizations and code readability with
-;;        CL's number system (hence the %->int32 and such macros
+;;        CL's number system (hence the %int32 and such macros
 ;;
 ;;        At the time of writing, performance here is still at least
 ;;        5x the builtin writer on SBCL, with about 7x with (speed 3)
@@ -37,135 +37,137 @@
 
 (in-package #:com.inuoe.jzon/schubfach)
 
-(defmacro %->int32 (x)
-  (let ((x-sym (gensym "X")))
-    `(let ((,x-sym (ldb (byte 32 0) ,x)))
-      (logior (ldb (byte 31 0) ,x-sym)
-              (- (mask-field (byte 1 31) ,x-sym))))))
+(defmacro %int (size integer)
+  (check-type size (integer 1))
+  (let ((integer-sym (gensym (string '#:integer))))
+    `(let ((,integer-sym (ldb (byte ,size 0) ,integer)))
+      (logior (ldb (byte (1- ,size) 0) ,integer-sym)
+              (- (mask-field (byte 1 (1- ,size)) ,integer-sym))))))
 
-(defmacro %->int64 (x)
-  (let ((x-sym (gensym "X")))
-    `(let ((,x-sym (ldb (byte 64 0) ,x)))
-      (logior (ldb (byte 63 0) ,x-sym)
-              (- (mask-field (byte 1 63) ,x-sym))))))
+(defmacro %<< (size integer count)
+  (check-type size (integer 1))
+  `(%int ,size (ash ,integer (logand ,count (1- ,size)))))
 
-(defmacro %lsl32 (x bits)
-  (let ((x-sym (gensym (string '#:x)))
+(defmacro %>> (size integer count)
+  (check-type size (integer 1))
+  `(%int ,size (ash ,integer (- (logand ,count (1- ,size))))))
+
+(defmacro %>>> (size integer bits)
+  (check-type size (integer 1))
+  (let ((integer-sym (gensym (string '#:integer)))
         (bits-sym (gensym (string '#:bits))))
-  `(let ((,x-sym (ldb (byte 32 0) ,x))
-         (,bits-sym (logand ,bits 31)))
-    (%->int32 (mask-field (byte (- 32 ,bits-sym) 0)
-                          (ash ,x-sym (- ,bits-sym)))))))
+  `(let ((,integer-sym (ldb (byte ,size 0) ,integer))
+         (,bits-sym (logand ,bits (1- ,size))))
+    (%int ,size (mask-field (byte (- ,size ,bits-sym) 0)
+                              (ash ,integer-sym (- ,bits-sym)))))))
 
-(defmacro %lsl64 (x bits)
-  (let ((x-sym (gensym (string '#:x)))
-        (bits-sym (gensym (string '#:bits))))
-    `(let ((,x-sym (ldb (byte 64 0) ,x))
-           (,bits-sym ,(logand bits 63)))
-      (%->int64 (mask-field (byte (- 64 ,bits-sym) 0)
-                            (ash ,x-sym (- ,bits-sym)))))))
+(defmacro %int32 (integer)
+  `(%int 32 ,integer))
 
-(defmacro %lash32 (x bits)
-  `(%->int32 (ash ,x (logand ,bits 31))))
+(defmacro %<<32 (integer count)
+  `(%<< 32 ,integer ,count))
 
-(defmacro %rash32 (x bits)
-  `(%->int32 (ash ,x (- (logand ,bits 31)))))
+(defmacro %>>32 (integer count)
+  `(%>> 32 ,integer ,count))
 
-(defmacro %lash64 (x bits)
-  `(%->int64 (ash ,x (logand ,bits 63))))
+(defmacro %>>>32 (integer count)
+  `(%>>> 32 ,integer ,count))
 
-(defmacro %rash64 (x bits)
-  `(%->int64 (ash ,x (- (logand ,bits 63)))))
+(defmacro %int64 (integer)
+  `(%int 64 ,integer))
 
-(defmacro %float-to-raw-int-bits (x)
-  `(the (unsigned-byte 32) (ff:single-float-bits ,x)))
+(defmacro %<<64 (integer count)
+  `(%<< 64 ,integer ,count))
 
-(defmacro %double-to-raw-long-bits (x)
-  `(the (unsigned-byte 64) (ff:double-float-bits ,x)))
+(defmacro %>>64 (integer count)
+  `(%>> 64 ,integer ,count))
+
+(defmacro %>>>64 (integer count)
+  `(%>>> 64 ,integer ,count))
+
+(defparameter *%offsets* (make-array 65
+                                     :element-type '(unsigned-byte 64)
+                                     :initial-contents '(5088146770730811392 5088146770730811392 5088146770730811392 5088146770730811392
+                                                         5088146770730811392 5088146770730811392 5088146770730811392 5088146770730811392
+                                                         4889916394579099648 4889916394579099648 4889916394579099648 4610686018427387904
+                                                         4610686018427387904 4610686018427387904 4610686018427387904 4323355642275676160
+                                                         4323355642275676160 4323355642275676160 4035215266123964416 4035215266123964416
+                                                         4035215266123964416 3746993889972252672 3746993889972252672 3746993889972252672
+                                                         3746993889972252672 3458764413820540928 3458764413820540928 3458764413820540928
+                                                         3170534127668829184 3170534127668829184 3170534127668829184 2882303760517117440
+                                                         2882303760517117440 2882303760517117440 2882303760517117440 2594073385265405696
+                                                         2594073385265405696 2594073385265405696 2305843009203693952 2305843009203693952
+                                                         2305843009203693952 2017612633060982208 2017612633060982208 2017612633060982208
+                                                         2017612633060982208 1729382256910170464 1729382256910170464 1729382256910170464
+                                                         1441151880758548720 1441151880758548720 1441151880758548720 1152921504606845976
+                                                         1152921504606845976 1152921504606845976 1152921504606845976 864691128455135132
+                                                         864691128455135132  864691128455135132  576460752303423478  576460752303423478
+                                                         576460752303423478  576460752303423478  576460752303423478  576460752303423478
+                                                         576460752303423478)))
+
+(defparameter *%digits* (let ((ds (make-array 100 :element-type '(unsigned-byte 16)))
+                              (i 0)
+                              (j 0))
+                           (declare (type (integer 0) i j))
+                           (loop :while (< j 10)
+                                 :for k :of-type (integer 0) := 0
+                                 :do (loop :while (< k 10)
+                                           :do (setf (aref ds i)
+                                                     (logior (ash (+ k (char-code #\0)) 8)
+                                                             (ash (+ j (char-code #\0)) 0)))
+                                               (incf i)
+                                               (incf k))
+
+
+                                     (incf j))
+                           ds))
+
+(defparameter *%gs* (let* ((gs (make-array 1234 :element-type '(signed-byte 64)))
+                           (i 0)
+                           (pow5 1))
+                       (declare (type (integer 0 1235) i)
+                                ;; var pow5 = BigInt(1)
+                                (type (integer 1) pow5))
+                       (loop :while (< i 650)
+                             :do (let ((av (+ (ash pow5 (- (- (integer-length pow5) 126))) 1)))
+                                   (setf (aref gs (- 648 i)) (logand (%int64 (ash av -63)) #x7FFFFFFFFFFFFFFF))
+                                   (setf (aref gs (- 649 i)) (logand (%int64 av) #x7FFFFFFFFFFFFFFF))
+                                   (setf pow5 (* pow5 5))
+                                   (incf i 2)))
+                       (setf pow5 5)
+                       (loop :while (< i 1234)
+                             :do (let ((inv (+ (truncate (ash 1 (+ (integer-length pow5) 125))
+                                                         pow5)
+                                               1)))
+                                   (setf (aref gs i) (logand (%int64 (ash inv -63)) #x7FFFFFFFFFFFFFFF))
+                                   (setf (aref gs (+ i 1)) (logand (%int64 inv) #x7FFFFFFFFFFFFFFF))
+                                   (setf pow5 (* pow5 5))
+                                   (incf i 2)))
+                       gs))
 
 (defmacro %multiply-high (x y)
   #+sbcl `(sb-kernel:%multiply-high ,x ,y)
   #-sbcl `(ldb (byte 64 64) (* ,x ,y)))
-
-(defparameter *offsets* (make-array 65
-                                    :element-type '(unsigned-byte 64)
-                                    :initial-contents '(5088146770730811392 5088146770730811392 5088146770730811392 5088146770730811392
-                                                        5088146770730811392 5088146770730811392 5088146770730811392 5088146770730811392
-                                                        4889916394579099648 4889916394579099648 4889916394579099648 4610686018427387904
-                                                        4610686018427387904 4610686018427387904 4610686018427387904 4323355642275676160
-                                                        4323355642275676160 4323355642275676160 4035215266123964416 4035215266123964416
-                                                        4035215266123964416 3746993889972252672 3746993889972252672 3746993889972252672
-                                                        3746993889972252672 3458764413820540928 3458764413820540928 3458764413820540928
-                                                        3170534127668829184 3170534127668829184 3170534127668829184 2882303760517117440
-                                                        2882303760517117440 2882303760517117440 2882303760517117440 2594073385265405696
-                                                        2594073385265405696 2594073385265405696 2305843009203693952 2305843009203693952
-                                                        2305843009203693952 2017612633060982208 2017612633060982208 2017612633060982208
-                                                        2017612633060982208 1729382256910170464 1729382256910170464 1729382256910170464
-                                                        1441151880758548720 1441151880758548720 1441151880758548720 1152921504606845976
-                                                        1152921504606845976 1152921504606845976 1152921504606845976 864691128455135132
-                                                        864691128455135132  864691128455135132  576460752303423478  576460752303423478
-                                                        576460752303423478  576460752303423478  576460752303423478  576460752303423478
-                                                        576460752303423478)))
-
-(defparameter *digits* (let ((ds (make-array 100 :element-type '(unsigned-byte 16)))
-                             (i 0)
-                             (j 0))
-                          (declare (type (integer 0) i j))
-                          (loop :while (< j 10)
-                                :for k :of-type (integer 0) := 0
-                                :do (loop :while (< k 10)
-                                          :do (setf (aref ds i)
-                                                    (logior (ash (+ k (char-code #\0)) 8)
-                                                            (ash (+ j (char-code #\0)) 0)))
-                                              (incf i)
-                                              (incf k))
-
-
-                                    (incf j))
-                          ds))
-
-(defparameter *gs* (let* ((gs (make-array 1234 :element-type '(signed-byte 64)))
-                          (i 0)
-                          (pow5 1))
-                      (declare (type (integer 0 1235) i)
-                               ;; var pow5 = BigInt(1)
-                               (type (integer 1) pow5))
-                      (loop :while (< i 650)
-                            :do (let ((av (+ (ash pow5 (- (- (integer-length pow5) 126))) 1)))
-                                  (setf (aref gs (- 648 i)) (logand (%->int64 (ash av -63)) #x7FFFFFFFFFFFFFFF))
-                                  (setf (aref gs (- 649 i)) (logand (%->int64 av) #x7FFFFFFFFFFFFFFF))
-                                  (setf pow5 (* pow5 5))
-                                  (incf i 2)))
-                      (setf pow5 5)
-                      (loop :while (< i 1234)
-                            :do (let ((inv (+ (truncate (ash 1 (+ (integer-length pow5) 125))
-                                                        pow5)
-                                              1)))
-                                  (setf (aref gs i) (logand (%->int64 (ash inv -63)) #x7FFFFFFFFFFFFFFF))
-                                  (setf (aref gs (+ i 1)) (logand (%->int64 inv) #x7FFFFFFFFFFFFFFF))
-                                  (setf pow5 (* pow5 5))
-                                  (incf i 2)))
-                      gs))
 
 (declaim (inline %rop2))
 (defun %rop2 (g cp)
   (declare (type (signed-byte 64) g)
            (type (signed-byte 32) cp))
   (the (values (signed-byte 32) &optional)
-    (let ((x (%multiply-high g (%lash64 cp 32))))
-      (logior (%->int32 (%lsl64 (+ x) 31))
-              (%lsl32 (- (%->int32 x)) 31)))))
+    (let ((x (%multiply-high g (%<<64 cp 32))))
+      (logior (%int32 (%>>>64 (+ x) 31))
+              (%>>>32 (- (%int32 x)) 31)))))
 
 ;;
 ;; https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster/
 ;;
 (declaim (inline %digit-count))
-(defun %digit-count (q0 &aux (offsets (load-time-value *offsets*)))
+(defun %digit-count (q0 &aux (offsets (load-time-value *%offsets*)))
   (declare (type (unsigned-byte 64) q0))
   (declare (type (simple-array (unsigned-byte 64) (65)) offsets))
-  (%->int32 (%rash64 (%->int64 (+ (aref offsets (- 64 (integer-length q0)))
-                                q0))
-                      58)))
+  (%int32 (%>>64 (%int64 (+ (aref offsets (- 64 (integer-length q0)))
+                                  q0))
+                  58)))
 
 (defun %write-fraction-digits (q p pos-lim buf ds)
   (declare (type (signed-byte 32) q p pos-lim)
@@ -176,7 +178,7 @@
     (let ((q0 q)
           (pos p))
       (loop :while (> pos pos-lim)
-            :do (let* ((q1 (%->int32 (%rash64 (* q0 1374389535) 37)))
+            :do (let* ((q1 (%int32 (%>>64 (* q0 1374389535) 37)))
                        (d (aref ds (- q0 (* q1 100)))))
                   (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
                   (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d)))
@@ -192,11 +194,11 @@
     (let* ((q0 q)
            (q1 0)
            (pos p))
-      (loop :while (let ((qp (%->int64 (* q0 1374389535))))
-                     (setf q1 (%->int32 (%rash64 qp 37)))
+      (loop :while (let ((qp (%int64 (* q0 1374389535))))
+                     (setf q1 (%int32 (%>>64 qp 37)))
                      (zerop (logand qp #x1FC0000000)))
             :do (setf q0 q1)
-                (setf pos (%->int32 (- pos 2))))
+                (setf pos (%int32 (- pos 2))))
       (let ((d (aref ds (- q0 (* q1 100)))))
         (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
         (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d)))
@@ -210,7 +212,7 @@
 (declaim (inline %write-2-digits))
 (defun %write-2-digits (q0 pos buf ds)
   (declare (type (signed-byte 32) q0)
-           (type (integer 0 26) pos)
+           (type (integer 0 22) pos)
            (type (or (simple-base-string 15)
                      (simple-base-string 24)) buf)
            (type (simple-array (unsigned-byte 16) (100)) ds))
@@ -237,7 +239,7 @@
             (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d))))))
       (values))
     (t
-      (let* ((q1 (%->int32 (%rash64 (* q0 1374389535) 37)))
+      (let* ((q1 (%int32 (%>>64 (* q0 1374389535) 37)))
              (d (aref ds (- q0 (* q1 100)))))
 
         (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
@@ -245,12 +247,15 @@
 
         (%write-positive-int-digits q1 (- pos 2) buf ds)))))
 
+(defmacro %float-to-raw-int-bits (x)
+  `(the (unsigned-byte 32) (ff:single-float-bits ,x)))
+
 (defun %write-float (x buf
                       &aux
                       (pos 0)
                       (bits (%float-to-raw-int-bits x))
-                      (ds *digits*)
-                      (gs *gs*))
+                      (ds *%digits*)
+                      (gs *%gs*))
   (declare (type single-float x)
            (type (simple-base-string 15) buf)
            (type (integer 0 14) pos)
@@ -278,8 +283,8 @@
         (declare (type (signed-byte 32) e10))
         (cond
           ((zerop e2) (setf m10 m2))
-          ((and (>= e2 -23) (<= e2 0) (zerop (logand (%lash32 m2 e2) e2)))
-            (setf m10 (%rash32 m2 (- e2))))
+          ((and (>= e2 -23) (<= e2 0) (zerop (logand (%<<32 m2 e2) e2)))
+            (setf m10 (%>>32 m2 (- e2))))
           (t
             (let ((e10-corr 0)
                   (e2-corr 0)
@@ -296,45 +301,41 @@
                   (setf e2-corr 131007)
                   (setf cbl-corr 1)))
 
-              (setf e10 (%rash32 (- (* e2 315653) e2-corr) 20))
+              (setf e10 (%>>32 (- (* e2 315653) e2-corr) 20))
 
-              (let* ((g (%->int64 (+ (aref gs (%lash32 (+ e10 324) 1)) 1)))
-                     (h (+ (%rash32 (* (- e10) 108853) 15) e2 1))
-                     (cb (%lash32 m2 2))
+              (let* ((g (%int64 (+ (aref gs (%<<32 (+ e10 324) 1)) 1)))
+                     (h (+ (%>>32 (* (- e10) 108853) 15) e2 1))
+                     (cb (%<<32 m2 2))
                      (vb-corr (- (logand m2 #x01) 1))
-                     (vb (%rop2 g (%lash32 cb h)))
-                     (vbl (+ (%rop2 g (%lash32 (- cb cbl-corr) h)) vb-corr))
-                     (vbr (- (%rop2 g (%lash32 (+ cb 2) h)) vb-corr)))
-                ;(break)
+                     (vb (%rop2 g (%<<32 cb h)))
+                     (vbl (+ (%rop2 g (%<<32 (- cb cbl-corr) h)) vb-corr))
+                     (vbr (- (%rop2 g (%<<32 (+ cb 2) h)) vb-corr)))
                 (when (or (< vb 400)
                           (progn
                             ;; divide a positive int by 40
-                            (setf m10 (%->int32 (%rash64 (* vb 107374183) 32)))
-                            (let* ((vb40 (%->int32 (* m10 40)))
-                                   (diff (%->int32 (- vbl vb40))))
-                                 ;;(vb40 - vbr + 40 ^ diff) >= 0
-                              (or (>= (logxor (%->int32 (+ vb40 (- vbr) 40)) diff) 0)
+                            (setf m10 (%int32 (%>>64 (* vb 107374183) 32)))
+                            (let* ((vb40 (%int32 (* m10 40)))
+                                   (diff (%int32 (- vbl vb40))))
+                              (or (>= (logxor (%int32 (+ vb40 (- vbr) 40)) diff) 0)
                                   (progn
-                                    (setf m10 (%->int32 (+ m10 (%lsl32 (lognot diff) 31))))
-                                    (setf e10 (%->int32 (+ e10 1)))
+                                    (setf m10 (%int32 (+ m10 (%>>>32 (lognot diff) 31))))
+                                    (setf e10 (%int32 (+ e10 1)))
                                     nil)))))
-                  (setf m10 (%rash32 vb 2))
+                  (setf m10 (%>>32 vb 2))
                   (let* ((vb4 (logand vb #xFFFFFFFC))
-                         (diff (%->int32 (- vbl vb4))))
-                    (setf m10 (%->int32
+                         (diff (%int32 (- vbl vb4))))
+                    (setf m10 (%int32
                                 (+ m10
-                                   (%lsl32
+                                   (%>>>32
                                      (lognot
-                                       ;; if ((vb4 - vbr + 4 ^ diff) < 0) diff
-                                       ;; else (vb & 0x3) + (m10 & 0x1) - 3
-                                       (if (< (logxor (%->int32 (+ vb4 (- vb4) 4)) diff) 0)
+                                       (if (< (logxor (%int32 (+ vb4 (- vb4) 4)) diff) 0)
                                          diff
                                          (+ (logand vb #x3) (logand m10 #x1) -3)))
                                      31))))
-                    (setf e10 (%->int32 (- e10 e10-corr)))))))))
+                    (setf e10 (%int32 (- e10 e10-corr)))))))))
 
         (let ((len (%digit-count m10)))
-          (setf e10 (%->int32 (+ e10 len -1)))
+          (setf e10 (%int32 (+ e10 len -1)))
           (cond
             ((or (< e10 -3) (>= e10 7))
               (let ((last-pos (%write-significant-fraction-digits32 m10 (+ pos len) pos buf ds)))
@@ -346,7 +347,7 @@
                       (setf (char buf last-pos) #\0)
                       (1+ last-pos))
                     (t last-pos)))
-                (setf (char buf (+ pos 0)) #\E)
+                (setf (char buf (+ pos 0)) #\e)
                 (setf (char buf (+ pos 1)) #\-)
                 (incf pos)
                 (when (< e10 0)
@@ -387,33 +388,21 @@
     (subseq buf 0 n)))
 
 (defun write-float (x stream &aux (buf (make-array 15 :element-type 'base-char)))
+  "Write the `single-float' `x' to `stream', which must be a character output stream."
   (declare (dynamic-extent buf))
   (check-type x single-float)
   (check-type stream stream)
   (let ((n (%write-float x buf)))
     (write-string buf stream :end n)))
 
-
-
 (declaim (inline %rop3))
-#++
 (defun %rop3 (g1 g0 cp)
   (declare (type (signed-byte 64) g1 g0 cp))
   (the (values (signed-byte 64) &optional)
-    (let* ((x1 (%multiply-high g0 cp))
-           (z (%->int64 (+ (%lsl64 (* g1 cp) 1) x1)))
-           (y1 (%multiply-high g1 cp)))
-      (logior (%->int64 (+ (%lsl64 z 63) y1))
-              (%lsl64 (- (logand z #x7FFFFFFFFFFFFFFF)) 63)))))
+    (let ((x (%int64 (+ (%multiply-high g0 cp) (%>>>64 (* g1 cp) 1)))))
+      (logior (%int64 (+ (%multiply-high g1 cp) (%>>>64 x 63)))
+              (%>>>64 (- (logand x #x7FFFFFFFFFFFFFFF)) 63)))))
 
-(defun %rop3 (g1 g0 cp)
-  (declare (type (signed-byte 64) g1 g0 cp))
-  (the (values (signed-byte 64) &optional)
-    (let ((x (%->int64 (+ (%multiply-high g0 cp) (%lsl64 (* g1 cp) 1)))))
-      (logior (%->int64 (+ (%multiply-high g1 cp) (%lsl64 x 63)))
-              (%lsl64 (- (logand x #x7FFFFFFFFFFFFFFF)) 63)))))
-
-(declaim (inline %write-significant-fraction-digits64))
 (defun %write-significant-fraction-digits64 (q p pl buf ds)
   (declare (type (unsigned-byte 64) q)
            (type (integer 0 23) p)
@@ -421,12 +410,12 @@
            (type (simple-base-string 24) buf)
            (type (simple-array (unsigned-byte 16) (100)) ds))
   (the (values (integer 0 24) &optional)
-    (let* ((q0 (%->int32 q))
+    (let* ((q0 (%int32 q))
            (pos p)
            (pos-lim pl))
       (when (/= q0 q)
-        (let* ((q1 (%->int32 (%lsl64 (%multiply-high q 6189700196426901375) 25)))
-               (r1 (%->int32 (- q (* q1 100000000))))
+        (let* ((q1 (%int32 (%>>>64 (%multiply-high q 6189700196426901375) 25)))
+               (r1 (%int32 (- q (* q1 100000000))))
                (posm8 (- pos 8)))
           (cond
             ((zerop r1)
@@ -445,19 +434,22 @@
            (type (simple-base-string 24) buf)
            (type (simple-array (unsigned-byte 16) (100)) ds))
   (the (values (integer 0 24) &optional)
-    (let* ((q1 (%rash32 (* q0 1311) 17))
+    (let* ((q1 (%>>32 (* q0 1311) 17))
            (d (aref ds (- q0 (* q1 100)))))
       (setf (char buf (+ pos 0)) (code-char (+ q1 (char-code #\0))))
       (setf (char buf (+ pos 1)) (code-char (ldb (byte 7 0) d)))
       (setf (char buf (+ pos 2)) (code-char (ldb (byte 7 8) d)))
       (+ pos 3))))
 
+(defmacro %double-to-raw-long-bits (x)
+  `(the (unsigned-byte 64) (ff:double-float-bits ,x)))
+
 (defun %write-double (x buf
                       &aux
                       (pos 0)
                       (bits (%double-to-raw-long-bits x))
-                      (ds (load-time-value *digits*))
-                      (gs (load-time-value *gs*)))
+                      (ds (load-time-value *%digits*))
+                      (gs (load-time-value *%gs*)))
   (declare (type double-float x)
            (type (simple-base-string 24) buf)
            (type (integer 0 23) pos)
@@ -483,8 +475,8 @@
         (declare (type (signed-byte 32) e10))
         (cond
           ((zerop e2) (setf m10 m2))
-          ((and (>= e2 -52) (<= e2 0) (zerop (logand (%lash64 m2 e2) e2)))
-            (setf m10 (%rash64 m2 (- e2))))
+          ((and (>= e2 -52) (<= e2 0) (zerop (logand (%<<64 m2 e2) e2)))
+            (setf m10 (%>>64 m2 (- e2))))
           (t
             (let ((e10-corr 0)
                   (e2-corr 0)
@@ -501,41 +493,40 @@
                   (setf e2-corr 131007)
                   (setf cbl-corr 1)))
 
-              (setf e10 (%rash64 (- (* e2 315653) e2-corr) 20))
+              (setf e10 (%>>64 (- (* e2 315653) e2-corr) 20))
 
-              (let* ((i (%lash32 (+ e10 324) 1))
+              (let* ((i (%<<32 (+ e10 324) 1))
                      (g1 (aref gs (+ i 0)))
                      (g0 (aref gs (+ i 1)))
-                     (h (%->int32 (+ (%rash32 (* (- e10) 108853) 15) e2 2)))
-                     (cb (%lash64 m2 2))
+                     (h (%int32 (+ (%>>32 (* (- e10) 108853) 15) e2 2)))
+                     (cb (%<<64 m2 2))
                      (vb-corr (- (logand m2 #x01) 1))
-                     (vb (%rop3 g1 g0 (%lash64 cb h)))
-                     (vbl (%->int64 (+ (%rop3 g1 g0 (%lash64 (- cb cbl-corr) h)) vb-corr)))
-                     (vbr (%->int64 (- (%rop3 g1 g0 (%lash64 (+ cb 2) h)) vb-corr))))
+                     (vb (%rop3 g1 g0 (%<<64 cb h)))
+                     (vbl (%int64 (+ (%rop3 g1 g0 (%<<64 (- cb cbl-corr) h)) vb-corr)))
+                     (vbr (%int64 (- (%rop3 g1 g0 (%<<64 (+ cb 2) h))        vb-corr))))
                 (when (or (< vb 400)
                           (progn
                             ;; divide a positive int by 40
                             (setf m10 (%multiply-high vb 461168601842738792))
-                            (let* ((vb40 (%->int32 (* m10 40)))
-                                   (diff (%->int32 (- vbl vb40))))
-                                   ;;   ((vb40 - vbr).toInt + 40 ^ diff) >= 0
-                              (or (>= (logxor (+ (%->int32 (- vb40 vbr)) 40) diff) 0)
+                            (let* ((vb40 (%int32 (* m10 40)))
+                                   (diff (%int32 (- vbl vb40))))
+                              (or (>= (logxor (+ (%int32 (- vb40 vbr)) 40) diff) 0)
                                   (progn
-                                    (setf m10 (%->int64 (+ m10 (%lsl32 (lognot diff) 31))))
-                                    (setf e10 (%->int32 (+ e10 1)))
+                                    (setf m10 (%int64 (+ m10 (%>>>32 (lognot diff) 31))))
+                                    (setf e10 (%int32 (+ e10 1)))
                                     nil)))))
-                  (setf m10 (%rash64 vb 2))
+                  (setf m10 (%>>64 vb 2))
                   (let* ((vb4 (logand vb #xFFFFFFFFFFFFFFFC))
-                         (diff (%->int32 (- vbl vb4))))
-                    (setf m10 (+ m10 (%lsl32
+                         (diff (%int32 (- vbl vb4))))
+                    (setf m10 (+ m10 (%>>>32
                                        (lognot
-                                         (if (< (logxor (+ (%->int32 (- vb4 vbr)) 4) diff) 0)
+                                         (if (< (logxor (+ (%int32 (- vb4 vbr)) 4) diff) 0)
                                            diff
                                            (+ (logand vb #x3) (logand m10 #x1) -3)))
                                        31)))
                     (setf e10 (- e10 e10-corr))))))))
         (let ((len (%digit-count m10)))
-          (setf e10 (%->int32 (+ e10 len -1)))
+          (setf e10 (%int32 (+ e10 len -1)))
           (cond
             ((or (< e10 -3) (>= e10 7))
               (let ((last-pos (%write-significant-fraction-digits64 m10 (+ pos len) pos buf ds)))
@@ -547,7 +538,7 @@
                       (setf (char buf last-pos) #\0)
                       (1+ last-pos))
                     (t last-pos)))
-                (setf (char buf pos) #\E)
+                (setf (char buf (+ pos 0)) #\e)
                 (setf (char buf (+ pos 1)) #\-)
                 (incf pos)
                 (when (< e10 0)
@@ -578,7 +569,7 @@
                 last-pos))
             (t
               (incf pos len)
-              (%write-positive-int-digits (%->int32 m10) pos buf ds)
+              (%write-positive-int-digits (%int32 m10) pos buf ds)
               (setf (char buf (+ pos 0)) #\.)
               (setf (char buf (+ pos 1)) #\0)
               (+ pos 2))))))))
@@ -590,6 +581,7 @@
     (subseq buf 0 n)))
 
 (defun write-double (x stream &aux (buf (make-array 24 :element-type 'base-char)))
+  "Write the `double-float' `x' to `stream', which must be a character output stream."
   (declare (dynamic-extent buf))
   (check-type x double-float)
   (check-type stream stream)
