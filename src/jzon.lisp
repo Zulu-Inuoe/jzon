@@ -66,6 +66,7 @@
    #:with-object*
    #:write-object*)
   (:local-nicknames
+    (#:el #:com.inuoe.jzon/eisel-lemire)
     (#:sf #:com.inuoe.jzon/schubfach))
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
@@ -281,18 +282,17 @@ see `json-atom'"
                       (setf lc c)
                       (go ,on-eof))
                     c)))
-      (prog ((int-sign 1)
-             (int-val 0)
-             (frac-val 0)
-             (frac-len 0)
+      (prog ((sign 1)
+             (mantissa 0)
+             (exp10 0)
              (exp-sign 1)
              (exp-val 0)
              (lc c))
-         (declare (type (integer 0) int-val frac-val exp-val frac-len)
-                  (type (member -1 1) int-sign exp-sign))
+         (declare (type (integer 0) mantissa exp-val)
+                  (type (member -1 1) sign exp-sign))
          (let ((c c))
            (when (char= c #\-)
-             (setf int-sign -1)
+             (setf sign -1)
              (setf c (takec :fail)))
 
            (when (char= c #\0)
@@ -303,11 +303,11 @@ see `json-atom'"
 
            (let ((digit (digit19-p c)))
              (unless digit (go :fail))
-             (setf int-val digit)
+             (setf mantissa digit)
              (go :parse-int)))
 
        :done-0
-         (return (values (if (plusp int-sign) 0 -0.0d0) lc))
+         (return (values (if (plusp sign) 0 -0.0d0) lc))
 
        :parse-int
          (let ((c (takec :done-int)))
@@ -316,18 +316,18 @@ see `json-atom'"
              ((#\e #\E) (go :parse-exp)))
            (let ((digit (digit09-p c)))
              (unless digit (go :fail))
-             (setf int-val (+ (* int-val 10) digit))))
+             (setf mantissa (+ (* mantissa 10) digit))))
          (go :parse-int)
 
        :done-int
-         (return (values (* int-sign int-val) lc))
+         (return (values (* mantissa sign) lc))
 
        :parse-frac
          (let* ((c (takec :fail))
                 (digit (digit09-p c)))
            (unless digit (go :fail))
-           (setf frac-val digit)
-           (setf frac-len 1))
+           (setf mantissa (+ (* mantissa 10) digit))
+           (decf exp10))
 
        :parse-frac-loop
          (let ((c (takec :done)))
@@ -335,8 +335,8 @@ see `json-atom'"
              (go :parse-exp))
            (let ((digit (digit09-p c)))
              (unless digit (go :fail))
-             (setf frac-val (+ (* frac-val 10) digit))
-             (incf frac-len)))
+             (setf mantissa (+ (* mantissa 10) digit))
+             (decf exp10)))
          (go :parse-frac-loop)
 
        :parse-exp
@@ -350,21 +350,22 @@ see `json-atom'"
            (let ((digit (digit09-p c)))
              (unless digit (go :fail))
              (setf exp-val digit)))
-
        :parse-exp-loop
-         (let* ((c (takec :done))
-                (digit (digit09-p c)))
+        (let* ((c (takec :done))
+               (digit (digit09-p c)))
            (unless digit (go :fail))
            (setf exp-val (+ (* exp-val 10) digit)))
          (go :parse-exp-loop)
-
+         
        :done
+         (setf exp10 (+ exp10 (* exp-sign exp-val)))
          (return
              (values
-                (* int-sign
-                   (+ int-val (* frac-val (expt 10 (- frac-len))))
-                   (expt 10 (* exp-sign exp-val))
-                   1.0d0)
+                (or (el:make-double mantissa exp10 (minusp sign))
+                    (* mantissa
+                      (expt 10 exp10)
+                      sign
+                      1.0d0))
                 lc))
        :fail
          (return (values nil lc))))))
