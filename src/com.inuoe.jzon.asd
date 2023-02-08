@@ -8,4 +8,4 @@
                #:float-features
                #:uiop)
   :components ((:file "schubfach")
-               (:file "jzon")))
+               (:file "jzon" :depends-on ("schubfach"))))
