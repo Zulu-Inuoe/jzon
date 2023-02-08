@@ -1,5 +1,5 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (flet ((#1=#:require (package)
+  (flet ((#1=#:|| (package)
           (unless (find-package package)
             (cond
               ((and (find-package '#:ql) (find-symbol (string '#:quickload) '#:ql))
@@ -18,27 +18,15 @@
 
 (in-package #:com.inuoe.jzon/eisel-lemire)
 
-(defmacro %uint (size integer)
-  (check-type size (integer 1))
-  `(ldb (byte ,size 0) ,integer))
-
-(defmacro %<<u (size integer count)
-  (check-type size (integer 1))
-  `(%uint ,size (ash ,integer (logand ,count (1- ,size)))))
-
-(defmacro %>>u (size integer count)
-  (check-type size (integer 1))
-  `(%uint ,size (ash ,integer (- (logand ,count (1- ,size))))))
-
 (defmacro %uint64 (integer)
-  `(%uint 64 ,integer))
+  `(ldb (byte 64 0) ,integer))
 
 (defmacro %<<u64 (integer count)
-  `(%<<u 64 ,integer ,count))
+  `(ldb (byte 64 0) (ash ,integer (logand ,count 63))))
 
 (defmacro %>>u64 (integer count)
-  `(%>>u 64 ,integer ,count))
-  
+  `(ldb (byte 64 0) (ash ,integer (- (logand ,count 63)))))
+
 
 ;; detailedPowersOfTen contains 128-bit mantissa approximations (rounded down)
 ;; to the powers of 10. For example:
@@ -53,7 +41,7 @@
 ;; https://github.com/google/wuffs/blob/ba3818cb6b473a2ed0b38ecfc07dbbd3a97e8ae7/script/print-mpb-powers-of-10.go
 (defparameter *%detailed-powers-of-ten-min*
               (make-array 696 :element-type '(unsigned-byte 64)
-                              :initial-contents 
+                              :initial-contents
                               '(#x1732C869CD60E453    ; 1e-348
                                 #x0E7FBD42205C8EB4    ; 1e-347
                                 #x521FAC92A873B261    ; 1e-346
@@ -754,7 +742,7 @@
 
 (defparameter *%detailed-powers-of-ten-max*
               (make-array 696 :element-type '(unsigned-byte 64)
-                              :initial-contents 
+                              :initial-contents
                               '(#xFA8FD5A0081C0288    ; 1e-348
                                 #x9C99E58405118195    ; 1e-347
                                 #xC3C05EE50655E1FA    ; 1e-346
@@ -1469,27 +1457,26 @@
          (lo (ldb (byte 64 0) (* x y))))
     (values hi lo)))
 
-(defun make-double (man exp10 neg)
-  (declare (optimize (speed 3) (safety 0)))
-  (when (and (typep man '(unsigned-byte 64))
+(defun make-double (mantissa exp10 neg)
+  (when (and (typep mantissa '(unsigned-byte 64))
              (typep exp10 '(signed-byte 32)))
     (cond
-      ((zerop man)
+      ((zerop mantissa)
         (if neg -0.0d0 0.0d0))
       ((or (< exp10 -348) (< 347 exp10))
         nil)
       (t
-        (let* ((clz (- 64 (integer-length man)))
-               (man (%<<u64 man clz))
+        (let* ((clz (- 64 (integer-length mantissa)))
+               (mantissa (%<<u64 mantissa clz))
                (float64-exponent-bias 1023)
-               (ret-exp-2 (%uint64 (- (%uint64 (+ (%>>u64 (* 217706 exp10) 16) 64 float64-exponent-bias)) clz))))
-          (multiple-value-bind (xhi xlo) (%mul64 man (aref *%detailed-powers-of-ten-max* (- exp10 -348)))
-            (when (and (= (logand xhi #x1FF) #x1FF) (< (%uint64 (+ xlo man)) man))
-              (multiple-value-bind (yhi ylo) (%mul64 man (aref *%detailed-powers-of-ten-min* (- exp10 -348)))
-                (let* ((merged-hi xhi)
-                       (merged-lo (%uint64 (+ xlo yhi)))
-                       (merged-hi (if (< merged-lo xlo) (%uint64 (1+ merged-hi)) merged-hi)))
-                  (when (and (= (logand merged-hi #x1FF) #x1FF) (zerop (%uint64 (1+ merged-lo))) (< (%uint64 (+ ylo man)) man))
+               (ret-exp-2 (%uint64 (- (%uint64 (+ (%>>u64 (* 217706 exp10) 16) 64 float64-exponent-bias)) clz)))
+               (idx (- exp10 -348)))
+          (multiple-value-bind (xhi xlo) (%mul64 mantissa (aref #.*%detailed-powers-of-ten-max* idx))
+            (when (and (= (logand xhi #x1FF) #x1FF) (< (%uint64 (+ xlo mantissa)) mantissa))
+              (multiple-value-bind (yhi ylo) (%mul64 mantissa (aref #.*%detailed-powers-of-ten-min* idx))
+                (let* ((merged-lo (%uint64 (+ xlo yhi)))
+                       (merged-hi (if (< merged-lo xlo) (%uint64 (1+ xhi)) xhi)))
+                  (when (and (= (logand merged-hi #x1FF) #x1FF) (zerop (%uint64 (1+ merged-lo))) (< (%uint64 (+ ylo mantissa)) mantissa))
                     ;; todo can we clean this return-from?
                     (return-from make-double nil))
                   (setf xhi merged-hi)
@@ -1506,12 +1493,12 @@
                   (when (> (%>>u64 ret-mantissa 53) 0)
                     (setf ret-mantissa (%>>u64 ret-mantissa 1))
                     (setf ret-exp-2 (%uint64 (+ ret-exp-2 1))))
-      
+
                   ;;
                   ;; ret-exp-2 is a uint64. Zero or underflow means that we're in subnormal
                   ;; float64 space. #x7FF or above means that we're in Inf/NaN float64 space.
-                  ;; 
+                  ;;
                   (unless (>= (%uint64 (- ret-exp-2 1)) (- #x7FF 1))
                     (let ((ret-bits (logior (%<<u64 ret-exp-2 52) (logand ret-mantissa #x000FFFFFFFFFFFFF) (if neg #x8000000000000000 0))))
                       (ff:bits-double-float ret-bits))))))))))))
-              
+

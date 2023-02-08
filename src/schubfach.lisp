@@ -1,5 +1,5 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (flet ((#1=#:require (package)
+  (flet ((#1=#:|| (package)
           (unless (find-package package)
             (cond
               ((and (find-package '#:ql) (find-symbol (string '#:quickload) '#:ql))
