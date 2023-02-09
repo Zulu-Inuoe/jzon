@@ -7,5 +7,6 @@
                #:flexi-streams
                #:float-features
                #:uiop)
-  :components ((:file "schubfach")
-               (:file "jzon" :depends-on ("schubfach"))))
+  :components ((:file "eisel-lemire")
+               (:file "schubfach")
+               (:file "jzon" :depends-on ("eisel-lemire" "schubfach"))))

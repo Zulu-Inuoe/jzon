@@ -1,14 +1,14 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (flet ((#1=#:require (package)
+  (flet ((#1=#:|| (package)
           (unless (find-package package)
             (cond
-              ((and (find-package '#:ql) (find-symbol '#:quickload '#:ql))
-                (funcall (find-symbol '#:quickload '#:ql) package))
-              ((and (find-package '#:asdf) (find-symbol '#:load-system '#:asdf))
-                (funcall (find-symbol '#:load-system '#:asdf) package))
+              ((and (find-package '#:ql) (find-symbol (string '#:quickload) '#:ql))
+                (funcall (find-symbol (string '#:quickload) '#:ql) package))
+              ((and (find-package '#:asdf) (find-symbol (string '#:load-system) '#:asdf))
+                (funcall (find-symbol (string '#:load-system) '#:asdf) package))
               (t
                 (require package))))))
-    (require '#:float-features)))
+    (#1# '#:float-features)))
 
 ;;
 ;; This implementation was ported from the Scala version in
