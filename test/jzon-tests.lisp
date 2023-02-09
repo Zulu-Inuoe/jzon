@@ -518,10 +518,10 @@
 (def-suite writer :in jzon)
 (in-suite writer)
 
-(defmacro with-writer-to-string ((writer &key pretty max-depth) &body body)
+(defmacro with-writer-to-string ((writer &key pretty max-depth coerce-key) &body body)
   (let ((str-sym (gensym "STR")))
     `(with-output-to-string (,str-sym)
-       (let ((,writer (jzon:make-writer :stream ,str-sym :pretty ,pretty :max-depth ,max-depth)))
+       (let ((,writer (jzon:make-writer :stream ,str-sym :pretty ,pretty :max-depth ,max-depth :coerce-key ,coerce-key)))
          ,@body))))
 
 (test writer-write-values-works
@@ -611,6 +611,17 @@
   (is (string= "\"hello\"" (with-output-to-string (stream)
                              (jzon:with-writer* (:stream stream)
                                (jzon:write-value* "hello"))))))
+
+(test writer-coerce-key-symbol-is-not-coerced-to-fn-eagerly
+  (is (string= "{\"HELLO\":42}"
+               (let ((key-fn (make-symbol (string '#:test-coerce-key))))
+                 (with-writer-to-string (jzon:*writer* :coerce-key key-fn)
+                   (setf (symbol-function key-fn) #'string-upcase)
+                   (jzon:write-object* "hello" 42))))))
+
+(test writer-defaults-nil-coerce-key
+  (is (string= "{\"hello\":42}" (with-writer-to-string (jzon:*writer* :coerce-key nil)
+                                  (jzon:write-object* "hello" 42)))))
 
 (def-suite stringify :in jzon)
 

@@ -920,14 +920,14 @@ Example return value:
 
 (defun make-writer (&key
                       (stream (make-broadcast-stream))
-                      (coerce-key #'coerce-key)
+                      coerce-key
                       (pretty nil)
                       (replacer nil)
                       (max-depth 128))
   "Create a writer for subsequent `write-value', `begin-object', et al calls.
   `:stream' must be a character or binary `stream'
   `:replacer' a function of two arguments, the key and the value of a KV pair.
-  `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
+  `:coerce-key' is a designator for a function of one argument, and is used to coerce object keys into non-nil string designators
 
  see `coerce-key'"
   (check-type stream stream)
@@ -936,7 +936,7 @@ Example return value:
                   ((subtypep (stream-element-type stream) 'character) stream)
                   (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
     (make-instance 'writer :stream stream
-                           :coerce-key (%ensure-function coerce-key)
+                           :coerce-key (or coerce-key #'coerce-key)
                            :pretty (and pretty t)
                            :replacer replacer
                            :max-depth max-depth)))
