@@ -44,38 +44,39 @@
 ;;  https://github.com/google/wuffs/blob/ba3818cb6b473a2ed0b38ecfc07dbbd3a97e8ae7/script/print-mpb-powers-of-10.go
 ;;
 ;;
-(defun %gen-powers-of-ten-tables ()
-  (let* ((min +%pow10-min+)
-         (max +%pow10-max+)
-         (count (+ 1 (- min) max ))
-         ;; N is large enough so that (1<<N) is easily bigger than 1e310.
-         (n 2048)
-         ;; 1214 is 1023 + 191. 1023 is the bias for IEEE 754 double-precision floating
-         ;;point. 191 is ((3 * 64) - 1) and we work with multiples-of-64-bit mantissas.
-         (bias 1214)
-         (min-table (make-array count :element-type '(unsigned-byte 64)))
-         (max-table (make-array count :element-type '(unsigned-byte 64))))
-    (loop :for e :from min :upto max
-          :for idx :from 0
-          :do (let ((z (cond
-                         ((plusp e)
-                           (* (ash 1 n) (expt 10 (+ e))))
-                         (t
-                           (truncate (ash 1 n) (expt 10 (- e))))))
-                    (n (- n)))
-                (loop :while (>= z (ash 1 128))
-                      :do (setf z (ash z -1))
-                          (incf n))
-                (let* ((approx-n (ldb (byte 32 0) (+ (ash (* 217706 e) -16) 1087)))
-                       (biased-n (ldb (byte 32 0) (+ bias n))))
-                  (unless (= approx-n biased-n)
-                    (error "biased-n approximation: have ~A, want ~A" approx-n biased-n))
-
-                  (let ((hi (ldb (byte 64 64) z))
-                        (lo (ldb (byte 64 0) z)))
-                    (setf (aref min-table idx) lo)
-                    (setf (aref max-table idx) hi)))))
-    (values min-table max-table)))
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun %gen-powers-of-ten-tables ()
+    (let* ((min +%pow10-min+)
+           (max +%pow10-max+)
+           (count (+ 1 (- min) max ))
+           ;; N is large enough so that (1<<N) is easily bigger than 1e310.
+           (n 2048)
+           ;; 1214 is 1023 + 191. 1023 is the bias for IEEE 754 double-precision floating
+           ;;point. 191 is ((3 * 64) - 1) and we work with multiples-of-64-bit mantissas.
+           (bias 1214)
+           (min-table (make-array count :element-type '(unsigned-byte 64)))
+           (max-table (make-array count :element-type '(unsigned-byte 64))))
+      (loop :for e :from min :upto max
+            :for idx :from 0
+            :do (let ((z (cond
+                           ((plusp e)
+                             (* (ash 1 n) (expt 10 (+ e))))
+                           (t
+                             (truncate (ash 1 n) (expt 10 (- e))))))
+                      (n (- n)))
+                  (loop :while (>= z (ash 1 128))
+                        :do (setf z (ash z -1))
+                            (incf n))
+                  (let* ((approx-n (ldb (byte 32 0) (+ (ash (* 217706 e) -16) 1087)))
+                         (biased-n (ldb (byte 32 0) (+ bias n))))
+                    (unless (= approx-n biased-n)
+                      (error "biased-n approximation: have ~A, want ~A" approx-n biased-n))
+  
+                    (let ((hi (ldb (byte 64 64) z))
+                          (lo (ldb (byte 64 0) z)))
+                      (setf (aref min-table idx) lo)
+                      (setf (aref max-table idx) hi)))))
+      (values min-table max-table))))
 
 (defvar *%detailed-powers-of-ten-min*)
 (defvar *%detailed-powers-of-ten-max*)
