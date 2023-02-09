@@ -67,6 +67,7 @@
    #:write-object*)
   (:local-nicknames
     (#:el #:com.inuoe.jzon/eisel-lemire)
+    (#:rtd #:com.inuoe.jzon/ratio-to-double)
     (#:sf #:com.inuoe.jzon/schubfach))
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
@@ -362,10 +363,7 @@ see `json-atom'"
          (return
              (values
                 (or (el:make-double mantissa exp10 (minusp sign))
-                    (* mantissa
-                      (expt 10 exp10)
-                      sign
-                      1.0d0))
+                    (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
                 lc))
        :fail
          (return (values nil lc))))))

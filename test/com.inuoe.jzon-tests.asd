@@ -9,5 +9,6 @@
   (#:alexandria
    #:fiveam
    #:flexi-streams
+   #:float-features
    #:com.inuoe.jzon
    #:uiop))

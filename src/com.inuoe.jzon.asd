@@ -8,5 +8,6 @@
                #:float-features
                #:uiop)
   :components ((:file "eisel-lemire")
+               (:file "ratio-to-double")
                (:file "schubfach")
-               (:file "jzon" :depends-on ("eisel-lemire" "schubfach"))))
+               (:file "jzon" :depends-on ("eisel-lemire" "ratio-to-double" "schubfach"))))
