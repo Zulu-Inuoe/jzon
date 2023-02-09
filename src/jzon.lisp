@@ -65,8 +65,11 @@
    #:end-object*
    #:with-object*
    #:write-object*)
+  (:local-nicknames
+    (#:sf #:com.inuoe.jzon/schubfach))
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
+  (:import-from #:float-features)
   (:import-from #:uiop))
 
 (in-package #:com.inuoe.jzon)
@@ -996,8 +999,9 @@ Example return value:
       ((eql nil)    (write-string "false" %stream))
       ((eql null)   (write-string "null" %stream))
       (integer      (format %stream "~D" value))
-      ;; TODO - Double-check any edge-cases with ~F and if ~E might be more appropriate
-      (real         (format %stream "~F" value))
+      (double-float (sf:write-double value %stream))
+      (single-float (sf:write-float value %stream))
+      (real         (sf:write-double (coerce value 'double-float) %stream))
       (string       (%write-json-string value %stream)))))
 
 (defun begin-object (writer)

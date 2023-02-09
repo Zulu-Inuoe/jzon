@@ -5,5 +5,7 @@
   :license "MIT"
   :depends-on (#:closer-mop
                #:flexi-streams
+               #:float-features
                #:uiop)
-  :components ((:file "jzon")))
+  :components ((:file "schubfach")
+               (:file "jzon" :depends-on ("schubfach"))))
