@@ -6,27 +6,29 @@ A correct and safe(er) JSON [RFC 8259][JSONRFC] parser with batteries-included.
 
 #### Table of Contents
 * [Overview](#overview)
-* [Usage](#usage)
-  * [Type Mappings](#type-mappings)
-  * [Reading](#reading)
-  * [Writing](#writing)
-    * [Symbol key case](#symbol-key-case)
-    * [Custom Serialization](#custom-serialization)
-      * [coerced-fields](#coerced-fields)
-  * [Features](#features)
-    * [Unambiguous values](#unambiguous-values)
-    * [Strict spec compliance](#string-spec-compliance)
-    * [Safety](#safety)
-    * [Simplicity](#simplicity)
-    * [Object key pooling](#object-key-pooling)
+* [Type Mappings](#type-mappings)
+* [Reading](#reading)
+  * [Incremental Parser](#incremental-parser)
+    * [Incremental Parser Example](#incremental-parser-example)
+* [Writing](#writing)
+  * [Symbol key case](#symbol-key-case)
+  * [Incremental Writer](#incremental-writer)
+    * [Example](#incremental-writer-example)
+* [Custom Serialization](#custom-serialization)
+  * [coerced-fields](#coerced-fields)
+  * [write-value](#write-value)
+* [Features](#features)
+  * [Safety](#safety)
+  * [Correctness](#correctness)
+  * [Simplicity](#simplicity)
+  * [Performance](#performance)
 * [Dependencies](#dependencies)
 * [License](#license)
+* [Alternatives](#alternatives)
 
-# Usage
+# Type Mappings
 
-## Type Mappings
-
-jzon maps types per the following chart:
+`jzon` cannonically maps types per the following chart:
 
 | JSON   | CL                      |
 |--------|-------------------------|
@@ -40,7 +42,9 @@ jzon maps types per the following chart:
 
 **Note** the usage of symbol `cl:null` as a sentinel for JSON `null`
 
-## Reading
+These are the values returned by the [reading](#reading) functions, though when [writing](#writing), other values are supported.
+
+# Reading
 
 `jzon:parse` will parse JSON and produce a CL value:
 
@@ -66,7 +70,7 @@ jzon maps types per the following chart:
 * string
 * (vector (unsigned-byte 8)) - octets in utf-8
 * stream - character or binary in utf-8
-* pathname - `parse` will open the file for reading
+* pathname - `jzon:parse` will open the file for reading in utf-8
 
 `jzon:parse` also accepts the follwing keyword arguments:
 * `:allow-comments` This allows the given JSON to contain cpp-style `// line comments` and `/* block comments */`.
@@ -87,9 +91,9 @@ jzon maps types per the following chart:
 (jzon:parse "[ { \"x\": 1, \"y\": 1 }, { \"x\": 1, \"y\": 1 } ]" :key-fn #'alexandria:make-keyword)
 ```
 
-### Incremental/Streaming Reader
+## Incremental Parser
 
-In addition to `jzon:parse`, `jzon` exposes an incremental parser for reading JSON in parts:
+In addition to `jzon:parse`, `jzon:with-parser` exposes an incremental parser for reading JSON in parts:
 
 ```lisp
 (jzon:with-parser (parser "{\"x\": 1, \"y\": [2, 3], \"live\": false}")
@@ -103,7 +107,7 @@ In addition to `jzon:parse`, `jzon` exposes an incremental parser for reading JS
   (jzon:parse-next parser)  ; => :end-array
   (jzon:parse-next parser)  ; => :object-key, "live"
   (jzon:parse-next parser)  ; => :value, nil
-  (jzon:parse-next parser) ; => :end-object
+  (jzon:parse-next parser)  ; => :end-object
   (jzon:parse-next parser)) ; => nil
 ```
 
@@ -124,7 +128,10 @@ The relevant functions for the incremental parser are:
   * nil - The parser is complete
 `jzon:close-parser parser` - Close a parser, closing any opened streams and allocated objects
 
-As an example, `jzon:parse` could be approximately defined as follows using this API:
+
+### Incremental Parser Example
+
+`jzon:parse` could be approximately defined as follows:
 
 ```lisp
 (defun my/jzon-parse (in)
@@ -147,9 +154,9 @@ As an example, `jzon:parse` could be approximately defined as follows using this
               (:end-object    (finish-value (pop stack))))))))))
 ```
 
-## Writing
+# Writing
 
-`stringify` will serialize an object to JSON:
+`jzon:stringify` will serialize an object to JSON:
 
 ``` common-lisp
 (jzon:stringify #("Hello, world!" 5 2.2 #(null)))
@@ -162,7 +169,7 @@ As an example, `jzon:parse` could be approximately defined as follows using this
 * `:coerce-element` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
 * `:coerce-key` A function for coercing key values to strings. See [Custom Serialization](#custom-serialization)
 
-In addition to the mappings defined in [Type Mappings](#type-mappings), `stringify` accepts the following types of values:
+In addition to the mappings defined in [Type Mappings](#type-mappings), `jzon:stringify` accepts the following types of values:
 
 
 | CL                | JSON                                                                |
@@ -180,9 +187,9 @@ In addition to the mappings defined in [Type Mappings](#type-mappings), `stringi
 
 †: On supported implementations where structure slots are available via the MOP.
 
-These coercion rules only apply when using the default `:coerce-element` and `:coerce-key`.
+**Note**: These coercion rules only apply when using the default `:coerce-element` and `:coerce-key`.
 
-### Symbol key case
+## Symbol key case
 
 When symbols are used as keys in objects, their names will be downcased, unless they contain mixed-case characters.
 
@@ -209,9 +216,120 @@ result:
 
 This is particularly important when serializing CLOS objects per [Custom Serialization](#custom-serialization).
 
-### Custom Serialization
+## Incrmental Writer
 
-`stringify` allows serializing any values not covered in the [Type Mappings](#type-mappings) in an few different ways.
+In addition to `jzon:stringify`, `jzon` also provides an imperative, streaming writer for writing JSON.
+
+The following are the available functions for writing:
+
+### General
+
+* `jzon:write-value` - Writes any value to the writer. Usable when writing a toplevel value, object property value, or array element.
+
+**Note**: This is a `generic-function` you can specialize your values on. See [custom serialization](#custom-serialization) for more information.
+
+### Object
+
+* `jzon:with-object`
+* `jzon:begin-object`
+* `jzon:write-key`
+* `json:write-property`
+* `json:write-properties`
+* `json:end-object`
+* `jzon:write-object`
+
+### Array
+
+* `jzon:with-array`
+* `jzon:begin-array`
+* `jzon:write-values`
+* `json:end-array`
+* `jzon:write-array`
+
+**Note** all functions have `*`-suffixed variants which use the `jzon:*writer*` variable, such as `jzon:write-value*`
+
+### Incremental Writer Example
+
+Using the plain variants:
+
+``` common-lisp
+(let ((writer (jzon:make-writer :stream *standard-output* :pretty t)))
+  (jzon:with-object writer
+    (jzon:write-properties writer :age 24 "colour" "blue")
+    (jzon:write-key writer 42)
+    (jzon:write-value writer #(1 2 3))
+
+    (jzon:write-key writer "an-array")
+    (jzon:with-array writer
+      (jzon:write-values writer :these :are :array :elements))
+
+    (jzon:write-key writer "another array")
+    (jzon:write-array writer :or "you" "can" "use these" "helpers")))
+```
+
+Using the `*` variants:
+
+``` common-lisp
+(jzon:with-writer* (:stream *standard-output* :pretty t)
+  (jzon:with-object*
+    (jzon:write-properties* :age 24 "colour" "blue")
+    (jzon:write-key* 42)
+    (jzon:write-value* #(1 2 3))
+
+    (jzon:write-key* "an-array")
+    (jzon:with-array*
+      (jzon:write-values* :these :are :array :elements))
+
+    (jzon:write-key* "another array")
+    (jzon:write-array* :or "you" "can" "use these" "helpers")))
+```
+
+result:
+
+``` json
+{
+  "age": 24,
+  "colour": "blue",
+  "42": [
+    1,
+    2,
+    3
+  ],
+  "an-array": [
+    "THESE",
+    "ARE",
+    "ARRAY",
+    "ELEMENTS"
+  ],
+  "another array": [
+    "OR",
+    "you",
+    "can",
+    "use these",
+    "helpers"
+  ]
+}
+```
+
+Every function returns the `jzon:writer` itself for usage with arrow macros:
+
+``` common-lisp
+(let ((writer (jzon:make-writer :stream *standard-output*)))
+  (jzon:with-object writer
+    (-> writer
+        (jzon:write-key "key")
+        (jzon:write-value "value")
+        (jzon:begin-array)
+        (jzon:write-value 1)
+        (jzon:end-array))))`
+```
+
+
+# Custom Serialization
+
+When using either `jzon:stringify` or `jzon:write-value`, you can customize writing of any values not covered in the [Type Mappings](#type-mappings) in an few different ways.
+
+## standard-object
 
 By default, if your object is a `standard-object`, it will be serialized as a JSON object, using each of its **bound** slots as keys.
 
@@ -277,30 +395,11 @@ Similarly if we `(jzon:stringify (make-instance 'object) :pretty t :stream t)`:
 Note that here we have `nil` representing `false`, `null`, and `[]`. This is done by examining the `:type` of each slot.
 If no type is provided, `nil` shall serialize as `null`.
 
-`stringify` recurses, so if we have:
+## coerced-fields
 
-``` common-lisp
-(jzon:stringify (make-instance 'object :coordinate (make-instance 'coordinate)) :pretty t :stream t)
-```
+`jzon:coerced-fields` is a generic function which calculates the JSON object key/value pairs when writing and is a simple way to add custom serialization for your values.
 
-We'll have:
-
-``` json
-{
-  "alive": false,
-  "coordinate": {
-    "x": 0,
-    "y": 0
-  },
-  "children": []
-}
-```
-
-#### coerced-fields
-
-If you wish more control over how your object is serialized, the most straightforward way is to specialize `coerced-fields`.
-
-Consider our previous `coordinate` class. If we always wanted to serialize only the `x` and `y` slots, and wanted to rename them, we could specialize `coerced-fields` as follows:
+Consider our previous `coordinate` class. If we always wanted to serialize only the `x` and `y` slots, and wanted to rename them, we could specialize `jzon:coerced-fields` as follows:
 
 ``` common-lisp
 (defmethod jzon:coerced-fields ((coordinate coordinate))
@@ -317,21 +416,19 @@ This results in:
 }
 ```
 
-`coerced-fields` should a list of 'fields', which are two (or three) element lists of the form:
+`jzon:coerced-fields` should a list of 'fields', which are two (or three) element lists of the form:
 
 ``` common-lisp
 (name value &optional type)
 ```
 
-The `name` can be any suitable key name. In particular, integers are allowed coerced to their decimal string representation.
+* `name` can be any suitable key name. In particular, integers are allowed coerced to their decimal string representation.
+* `value` can be any value - it'll be coerced if necessary.
+* `type` is used as `:type` above, in order to resolve ambiguities with `nil`.
 
-The `value` can be any value - it'll be coerced if necessary.
+### Example: Including only some slots
 
-The `type` is used as `:type` above, in order to resolve ambiguities with `nil`.
-
-##### Including only some slots
-
-If the default `coerced-fields` gives you most of what you want, you can exclude/rename/add fields by specializing an `:around` method as follows:
+If the default `jzon:coerced-fields` gives you most of what you want, you can exclude/rename/add fields by specializing an `:around` method as follows:
 
 ``` common-lisp
 (defmethod jzon:coerced-fields :around ((coordinate coordinate))
@@ -357,8 +454,11 @@ This would result in the following:
 }
 ```
 
-#### write-value
+## write-value
+
 For more fine-grained control, you can specialize a method on `jzon:write-value`.
+
+This allows you to emit whatever value you wish for a given object.
 
 `jzon:write-value writer value`
 
@@ -374,108 +474,6 @@ For more fine-grained control, you can specialize a method on `jzon:write-value`
 
 See [writer](#writer) for the available functions.
 
-### writer
-
-In addition to `jzon:stringify`, jzon also provides an imperative, streaming writer for writing JSON.
-
-The following are the available functions for writing:
-
-#### General
-* `jzon:write-value` - Writes any value to the writer. Usable when writing a toplevel value, object property value, or array element.
-
-#### Object
-* `jzon:with-object`
-* `jzon:begin-object`
-* `jzon:write-key`
-* `json:write-property`
-* `json:write-properties`
-* `json:end-object`
-* `jzon:write-object`
-
-#### Array
-* `jzon:with-array`
-* `jzon:begin-array`
-* `jzon:write-values`
-* `json:end-array`
-* `jzon:write-array`
-
-**Note** all functions have `*`-suffixed variants which use the `jzon:*writer*` variable, such as `jzon:write-value*`
-
-### Example
-
-Using the plain variants:
-
-``` common-lisp
-(let ((writer (jzon:make-writer :stream *standard-output* :pretty t)))
-  (jzon:with-object writer
-    (jzon:write-properties writer :age 24 "colour" "blue")
-    (jzon:write-key writer 42)
-    (jzon:write-value writer #(1 2 3))
-
-    (jzon:write-key writer "an-array")
-    (jzon:with-array writer
-      (jzon:write-values writer :these :are :array :elements))
-
-    (jzon:write-key writer "another array")
-    (jzon:write-array writer :or "you" "can" "use these" "helpers")))
-```
-
-Using the `*` variants:
-``` common-lisp
-(jzon:with-writer* (:stream *standard-output* :pretty t)
-  (jzon:with-object*
-    (jzon:write-properties* :age 24 "colour" "blue")
-    (jzon:write-key* 42)
-    (jzon:write-value* #(1 2 3))
-
-    (jzon:write-key* "an-array")
-    (jzon:with-array*
-      (jzon:write-values* :these :are :array :elements))
-
-    (jzon:write-key* "another array")
-    (jzon:write-array* :or "you" "can" "use these" "helpers")))
-```
-
-result:
-
-``` json
-{
-  "age": 24,
-  "colour": "blue",
-  "42": [
-    1,
-    2,
-    3
-  ],
-  "an-array": [
-    "THESE",
-    "ARE",
-    "ARRAY",
-    "ELEMENTS"
-  ],
-  "another array": [
-    "OR",
-    "you",
-    "can",
-    "use these",
-    "helpers"
-  ]
-}
-```
-
-It's worth noting that every function returns the `writer` itself for usage with arrow macros:
-
-``` common-lisp
-(let ((writer (jzon:make-writer :stream *standard-output*)))
-  (jzon:with-object writer
-    (-> writer
-        (jzon:write-key "key")
-        (jzon:write-value "value")
-        (jzon:begin-array)
-        (jzon:write-value 1)
-        (jzon:end-array))))`
-```
-
 # Features
 
 This section notes some of jzon's more noteworthy features.
@@ -485,18 +483,7 @@ In general, jzon strives for (in order):
 * Safety
 * Correctness
 * Simplicity
-* Interoperability
 * Performance
-
-## Unambiguous values
-
-Values are never ambiguous between `[]`, `false`, `{}`, `null`, or a missing key, as in some other json parsers.
-
-## Strict spec compliance
-
-This parser is written against [RFC 8259][JSONRFC] and strives to adhere strictly for maximum compliance and little surprises.
-
-Also, this has been tested against the [JSONTestSuite][JSONTestSuite]. See the [JSONTestSuite](JSONTestSuite/) directory in this repo for making & running the tests.
 
 ## Safety
 
@@ -507,28 +494,65 @@ Also, this has been tested against the [JSONTestSuite][JSONTestSuite]. See the [
 
 jzon is meant to be safe in the face of untrusted JSON and will error on otherwise 'reasonable' input out-of-the-box.
 
-jzon's `parse` is also type-safe, and shall not, for example:
+### Type Safety
+
+jzon's `jzon:parse` is also type-safe, and shall not, for example:
 
 ``` common-lisp
 CL-USER> (parse 2)
 ; Debugger entered on #<SB-SYS:MEMORY-FAULT-ERROR {1003964833}>
 ```
-.. as in [some](https://github.com/Rudolph-Miller/jonathan) other [libraries](https://github.com/madnificent/jsown).
+.. as in [some](https://github.com/Rudolph-Miller/jonathan) other [libraries][jsown].
 
-jzon also chooses to (by default) keep object keys as strings. This is done rather than using symbols via `intern` because over time, symbols will continue to be allocated and because they are in a package, will not be collected by the garbage collector, causing a memory leak.
+### Avoid Infinite Interning
+
+`jzon` also chooses to (by default) keep object keys as strings. This is done rather than using symbols via `intern` because over time, symbols will continue to be allocated and because they are in a package, will not be collected by the garbage collector, causing a memory leak.
+
+### Avoid Stack Exhaustion
+
+`jzon:parse` is written in an iterative way which avoids exhausting the call stack. In addition, we provide `:max-depth` to guard against unreasonable inputs.
+For even more control, you can make use of the `jzon:with-parser` API's to avoid consing large amounts of user-inputed data to begin with.
+
+## Correctness
+
+This parser is written against [RFC 8259][JSONRFC] and strives to adhere strictly for maximum compliance and little surprises.
+
+Also, this has been tested against the [JSONTestSuite][JSONTestSuite]. See the [JSONTestSuite](JSONTestSuite/) directory in this repo for making & running the tests.
+
+In short, `jzon` is the only CL JSON library which correctly:
+* *declines* all invalid inputs per that suite
+* *accepts* all valid inputs per that suite
+
+Additionally, `jzon` is one of a couple which never hard crash due to edge-cases like deeply nested objects/arrays.
+
+### Unambiguous values
+
+Values are never ambiguous between `[]`, `false`, `{}`, `null`, or a missing key.
+
+### Compatible Float IO
+
+While more work is doubtlessly necessary to validate further, care has been taken to ensure floating-point values are not lost between `(jzon:parse (jzon:stringify f))`, even across CL implementations.
+
+In particular, certain edge-case values such as subnormals shall parse `===` with JavaScript parsing libraries.
 
 ## Simplicity
 
-You call `parse`, and you get a reasonable standard CL object back.
+You call `jzon:parse`, and you get a reasonable standard CL object back.
 
 * No custom data structures or accessors required
 * No worrying about key case auto conversion or hyphens/underscores being converted.
 * No worrying about what package symbols are interned in (no symbols).
-* No worrying about dynamic variables affecting a parse as in cl-json, jonathan, jsown. Everything affecting `parse` is given at the call-site.
+* No worrying about dynamic variables affecting a parse as in cl-json, jonathan, jsown. Everything affecting `jzon:parse` is given at the call-site.
 
-`parse` also accepts either a string, octet vector, stream, or pathname for simpler usage over libraries requiring one or the other, or having separate parse functions.
+`jzon:parse` also accepts either a string, octet vector, stream, or pathname for simpler usage over libraries requiring one or the other, or having separate parse functions.
 
-## Object key pooling
+## Performance
+
+While parsing, `jzon` at worst performs at 50% the speed of [jsown][jsown], while outperforming all other libraries.
+
+And this is all-the-while having the safety and correctness guarantees noted above.
+
+### Object key pooling
 
 `jzon` will use a key pool per-parse, causing shared keys in a nested JSON object to share keys:
 
@@ -541,13 +565,20 @@ This optimizes for the common case of reading a JSON payload containing many dup
 
 ## `base-string` coercion
 
-When possible, strings will be coerced to `cl:base-string`. This can lead to upwards of 1/4 memory usage per string on implementations like SBCL, which store `string`s internally as UTF32, while `base-string` can be represented in 8 bits per char.
+When possible, strings will be coerced to `cl:simple-base-string`. This can lead to upwards of 1/4 memory usage per string on implementations like SBCL, which store `string`s internally as UTF32, while `base-string` can be represented in 8 bits per char.
 
 # Dependencies
 
 * [closer-mop](https://github.com/pcostanza/closer-mop)
 * [flexi-streams](https://github.com/edicl/flexi-streams)
+* [float-features](https://github.com/Shinmera/float-features)
 * [uiop](https://gitlab.common-lisp.net/asdf/asdf)
+
+# License
+
+See [LICENSE](LICENSE).
+
+`jzon` was originally a fork of [st-json](https://marijnhaverbeke.nl/st-json/), but I ended up scrapping all of the code except for for the function decoding Unicode.
 
 # Alternatives
 
@@ -555,20 +586,20 @@ There are many CL JSON libraries available, and I defer to Sabra Crolleton's def
 
 But for posterity, included in this repository is a set of tests and results for the following libraries:
 
-* cl-json
-* jonathan
-* json-streams
-* jsown
-* shasht
-* yason
+* [cl-json][cl-json]
+* [jonathan][jonathan]
+* [json-streams][json-streams]
+* [jsown][jsown]
+* [shasht][shasht]
+* [yason][yason]
 
-No ill-will is meant for these other libraries. I simply want `jzon` to be better and become a true de-facto library in the world of JSON-in-cl once and for all.
-
-# License
-
-See [LICENSE](LICENSE).
-
-jzon was originally a fork of [st-json](https://marijnhaverbeke.nl/st-json/), but I ended up scrapping all of the code except for for the function decoding Unicode.
+I believe `jzon` to be the superiour choice and hope to become the new, true de-facto library in the world of JSON-in-CL once and for all.
 
 [JSONRFC]: https://tools.ietf.org/html/rfc8259
 [JSONTestSuite]: https://github.com/nst/JSONTestSuite
+[jsown]: https://github.com/madnificent/jsown
+[cl-json]: https://cl-json.common-lisp.dev/cl-json.html
+[jonathan]: https://github.com/Rudolph-Miller/jonathan
+[json-streams]: https://github.com/rotatef/json-streams
+[shasht]: https://github.com/yitzchak/shasht
+[yason]: https://github.com/phmarek/yason
