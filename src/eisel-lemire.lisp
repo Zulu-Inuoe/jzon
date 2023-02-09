@@ -71,7 +71,7 @@
                          (biased-n (ldb (byte 32 0) (+ bias n))))
                     (unless (= approx-n biased-n)
                       (error "biased-n approximation: have ~A, want ~A" approx-n biased-n))
-  
+
                     (let ((hi (ldb (byte 64 64) z))
                           (lo (ldb (byte 64 0) z)))
                       (setf (aref min-table idx) lo)

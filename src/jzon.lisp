@@ -357,7 +357,7 @@ see `json-atom'"
            (unless digit (go :fail))
            (setf exp-val (+ (* exp-val 10) digit)))
          (go :parse-exp-loop)
-         
+
        :done
          (setf exp10 (+ exp10 (* exp-sign exp-val)))
          (return

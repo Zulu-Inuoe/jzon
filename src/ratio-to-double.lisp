@@ -20,7 +20,7 @@
 ;; numbers, where SBCL's rouding model causes us to lose data
 ;; in the course of (jzon:parse (jzon:stringify x))
 ;; due to the way that it rounds rationals close to 0
-;; eg: 4.9d-324 yields 0.0 on SBCL 
+;; eg: 4.9d-324 yields 0.0 on SBCL
 ;;
 
 (defpackage #:com.inuoe.jzon/ratio-to-double
