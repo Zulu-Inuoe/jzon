@@ -140,23 +140,26 @@
   (signals (jzon:json-parse-error)
     (jzon:parse "0e")))
 
+(test parses-zero
+  (is (eql 0 (jzon:parse "0"))))
+
 (test parses-negative-zero.0
-  (is (= -0.0d0 (jzon:parse "-0.0"))))
+  (is (= (ff:bits-double-float #x8000000000000000) (jzon:parse "-0.0"))))
 
 (test parses-negative-zero
-  (is (= -0.0d0 (jzon:parse "-0"))))
+  (is (= (ff:bits-double-float #x8000000000000000) (jzon:parse "-0"))))
 
 (test parse-1.31300000121E8
-  (is (= 1.31300000121d8 (jzon:parse "1.31300000121E8"))))
+  (is (= (ff:bits-double-float #x419F4DEA807BE76D) (jzon:parse "1.31300000121E8"))))
 
 (test parse--1.31300000121E8
-  (is (= -1.31300000121d8 (jzon:parse "-1.31300000121E8"))))
+  (is (= (ff:bits-double-float #xC19F4DEA807BE76D) (jzon:parse "-1.31300000121E8"))))
 
 (test parse-23456789012E66
-  (is (= 2.3456789012d76 (jzon:parse "23456789012E66"))))
+  (is (= (ff:bits-double-float #x4FC9EE093A64B854) (jzon:parse "23456789012E66"))))
 
 (test parse-0.000000000000000000000034567890120102012
-  (is (= 0.000000000000000000000034567890120102012d0 (jzon:parse "0.000000000000000000000034567890120102012"))))
+  (is (= (ff:bits-double-float #x3B44E51F35466432) (jzon:parse "0.000000000000000000000034567890120102012"))))
 
 (test parse-5e-324
   (is (= (ff:bits-double-float #x0000000000000001) (jzon:parse "5e-324"))))
