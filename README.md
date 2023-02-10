@@ -582,10 +582,10 @@ See [writer](#incremental-writer) for the available functions.
 
 In writing `jzon`, we prioritize the following properties, in order:
 
-* [Safety][#safety]
-* [Correctness][#correctness]
-* [Simplicity][#simplicity]
-* [Performance][#performance]
+* [Safety](#safety)
+* [Correctness](#correctness)
+* [Simplicity](#simplicity)
+* [Performance](#performance)
 
 ## Safety
 
