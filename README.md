@@ -195,18 +195,29 @@ The relevant functions for the incremental parser are:
 `jzon:stringify` will serialize an object to JSON:
 
 ``` common-lisp
-(jzon:stringify #("Hello, world!" 5 2.2 #(null)))
-; => "[\"Hello, world!\",5,2.2,[null]]"
+(jzon:stringify #("Hello, world!" 5 2.2 #(null)) :stream t :pretty t)
+; =>
+```
+```json
+[
+  "Hello, world!",
+  5,
+  2.2,
+  [
+    null
+  ]
+]
 ```
 
 `jzon:stringify` accepts the following keyword arguments:
+
 * `:stream` A destination like in `format`, or a `pathname`. Like `format`, returns a string if `nil`.
 * `:pretty` If true, output pretty-formatted JSON.
-* `:coerce-element` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
 * `:coerce-key` A function for coercing key values to strings. See [Custom Serialization](#custom-serialization)
+* `:replacer` A function which takes a key and value as an argument, and returns t or nil, indicating whether the KV pair should be written.
+    - Optionally returns a second value, indicating the value to be stringified in place of the given value.
 
-In addition to the mappings defined in [Type Mappings](#type-mappings), `jzon:stringify` accepts the following types of values:
-
+`jzon:stringify` will make use of the `jzon:write-value` generic function, so in addition to [Type Mappings](#type-mappings), `jzon:stringify` accepts the following types of values:
 
 | CL                | JSON                                                                |
 |-------------------|---------------------------------------------------------------------|
@@ -223,7 +234,7 @@ In addition to the mappings defined in [Type Mappings](#type-mappings), `jzon:st
 
 †: On supported implementations where structure slots are available via the MOP.
 
-**Note**: These coercion rules only apply when using the default `:coerce-element` and `:coerce-key`.
+Please see [Custom Serialization](#custom-serialization) for more details.
 
 ## Symbol key case
 
