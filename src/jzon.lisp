@@ -196,6 +196,7 @@ see `json-atom'"
                 ((not (%whitespace-p char))
                  (return char))))))
 
+(declaim (inline %control-char-p))
 (defun %control-char-p (c)
   "Returns true if `c' is a control character per RFC 8259."
   (declare (type character c))
@@ -426,7 +427,7 @@ see `json-atom'"
                                                 (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
                                                   (return (%read-json-string step pos string-accum max-string-length)))
 
-                                                (when (<= #x00 (char-code c) #x1F)
+                                                (when (%control-char-p c)
                                                   (%raise 'json-parse-error pos "Unexpected control character in string '~A' (~A)" c (char-name c)))
 
                                                 (unless (typep c 'base-char)
