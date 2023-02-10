@@ -137,18 +137,18 @@ see `json-atom'"
 (declaim (inline %step))
 (defun %step (step)
   (declare (function step))
-  (values (the (or null character) (funcall step))))
+  (the (values (or null character) &optional) (funcall step)))
 
 (declaim (inline %read-string))
 (defun %read-string (read-string)
   (declare (function read-string))
-  (values (the simple-string (funcall read-string))))
+  (the (values simple-string &optional) (funcall read-string)))
 
 (declaim (inline %key-fn))
 (defun %key-fn (key-fn str)
   (declare (function key-fn))
   (declare (simple-string str))
-  (values (the t (funcall key-fn str))))
+  (the (values t &optional) (funcall key-fn str)))
 
 (declaim (inline %whitespace-p))
 (defun %whitespace-p (char)
@@ -270,9 +270,11 @@ see `json-atom'"
 
 (defun %read-json-number (step c)
   "Reads an RFC 8259 number, starting with `c'."
-  (flet ((digit09-p (c &aux (val (- (char-code c) (char-code #\0))))
+  (declare (type function step))
+  (declare (type character c))
+  (flet ((digit09-p (c &aux (val (- (char-code c) #.(char-code #\0))))
            (and (<= 0 val 9) val))
-         (digit19-p (c &aux (val (- (char-code c) (char-code #\0))))
+         (digit19-p (c &aux (val (- (char-code c) #.(char-code #\0))))
            (and (<= 1 val 9) val))
          (ends-number-p (c)
            (or (%whitespace-p c) (find c "]},/"))))
@@ -290,8 +292,12 @@ see `json-atom'"
              (exp-sign 1)
              (exp-val 0)
              (lc c))
-         (declare (type (integer 0) mantissa exp-val)
-                  (type (member -1 1) sign exp-sign))
+         (declare (type (member -1 1) sign))
+         (declare (type (integer 0) mantissa))
+         (declare (type integer exp10))
+         (declare (type (member -1 1) exp-sign))
+         (declare (type (integer 0) exp-val))
+         (declare (type (or null character) lc))
          (let ((c c))
            (when (char= c #\-)
              (setf sign -1)
@@ -352,6 +358,7 @@ see `json-atom'"
            (let ((digit (digit09-p c)))
              (unless digit (go :fail))
              (setf exp-val digit)))
+
        :parse-exp-loop
         (let* ((c (takec :done))
                (digit (digit09-p c)))
