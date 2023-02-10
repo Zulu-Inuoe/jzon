@@ -580,14 +580,12 @@ See [writer](#incremental-writer) for the available functions.
 
 # Features
 
-This section notes some of jzon's more noteworthy features.
+In writing `jzon`, we prioritize the following properties, in order:
 
-In general, jzon strives for (in order):
-
-* Safety
-* Correctness
-* Simplicity
-* Performance
+* [Safety][#safety]
+* [Correctness][#correctness]
+* [Simplicity][#simplicity]
+* [Performance][#performance]
 
 ## Safety
 
@@ -596,21 +594,24 @@ In general, jzon strives for (in order):
 * Nesting level of arrays/objects
 * Length of strings
 
-jzon is meant to be safe in the face of untrusted JSON and will error on otherwise 'reasonable' input out-of-the-box.
+We should be safe in the face of untrusted JSON and will error on 'unreasonable' input out-of-the-box, such as deeply nested objects or overly long strings.
 
 ### Type Safety
 
-jzon's `jzon:parse` is also type-safe, and shall not, for example:
+All of `jzon`'s public API's are type safe, issuing `cl:type-error` as appropriate.
 
-``` common-lisp
+Some other JSON parsers will make dangerous use of features like `optimize (safety 0) (speed 3)` in unreasonable places can cause errors such as:
+
+``` lisp
 CL-USER> (parse 2)
 ; Debugger entered on #<SB-SYS:MEMORY-FAULT-ERROR {1003964833}>
 ```
-.. as in [some](https://github.com/Rudolph-Miller/jonathan) other [libraries][jsown].
+
+... which are unreasonable.
 
 ### Avoid Infinite Interning
 
-`jzon` also chooses to (by default) keep object keys as strings. This is done rather than using symbols via `intern` because over time, symbols will continue to be allocated and because they are in a package, will not be collected by the garbage collector, causing a memory leak.
+`jzon` chooses to (by default) keep object keys as strings. Some libraries choose to `intern` object keys in some package. This is dangerous in the face of untrusted JSON, as every unique key read will be added to that package and never garbage collected.
 
 ### Avoid Stack Exhaustion
 
@@ -621,7 +622,7 @@ For even more control, you can make use of the `jzon:with-parser` API's to avoid
 
 This parser is written against [RFC 8259][JSONRFC] and strives to adhere strictly for maximum compliance and few surprises.
 
-Also, this has been tested against the [JSONTestSuite][JSONTestSuite]. See the [JSONTestSuite](JSONTestSuite/) directory in this repo for making & running the tests.
+It also has been tested against the [JSONTestSuite][JSONTestSuite]. See the [JSONTestSuite](JSONTestSuite/) directory in this repo for making & running the tests.
 
 In short, `jzon` is the only CL JSON library which correctly:
 * *declines* all invalid inputs per that suite
@@ -641,7 +642,8 @@ In particular, certain edge-case values such as subnormals shall parse `===` wit
 
 ## Simplicity
 
-You call `jzon:parse`, and you get a reasonable standard CL object back.
+You call `jzon:parse`, and you get a reasonably standard CL object back.
+You call `jzon:stringify` with a reasonably standard CL object and you should get reasonable JSON.
 
 * No custom data structures or accessors required
 * No worrying about key case auto conversion or hyphens/underscores being converted.
@@ -649,6 +651,8 @@ You call `jzon:parse`, and you get a reasonable standard CL object back.
 * No worrying about dynamic variables affecting a parse as in cl-json, jonathan, jsown. Everything affecting `jzon:parse` is given at the call-site.
 
 `jzon:parse` also accepts either a string, octet vector, stream, or pathname for simpler usage over libraries requiring one or the other, or having separate parse functions.
+
+Finally, all public API's strive to have good defaults so things 'Just Work'.
 
 ## Performance
 
