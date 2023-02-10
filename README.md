@@ -1,20 +1,21 @@
 # jzon
 
-A correct and safe(er) JSON [RFC 8259][JSONRFC] parser with batteries-included.
+A correct and safe(er) JSON [RFC 8259][JSONRFC] parser with batteries included.
 
 [![Actions Status](https://github.com/Zulu-Inuoe/jzon/workflows/ci/badge.svg)](https://github.com/Zulu-Inuoe/jzon/actions)
 
 #### Table of Contents
-* [Overview](#overview)
+
 * [Type Mappings](#type-mappings)
 * [Reading](#reading)
   * [Incremental Parser](#incremental-parser)
-    * [Incremental Parser Example](#incremental-parser-example)
+    * [Example](#incremental-parser-example)
 * [Writing](#writing)
   * [Symbol key case](#symbol-key-case)
   * [Incremental Writer](#incremental-writer)
     * [Example](#incremental-writer-example)
 * [Custom Serialization](#custom-serialization)
+  * [standard-object](#standard-object)
   * [coerced-fields](#coerced-fields)
   * [write-value](#write-value)
 * [Features](#features)
@@ -62,6 +63,8 @@ These are the values returned by the [reading](#reading) functions, though when 
   \"item\": false,
   \"parent\": null
 }")
+; =>
+#<HASH-TABLE :TEST EQUAL :COUNT 6 {1003ECDC93}>
 ```
 
 `jzon:parse` reads input from its single argument and returns a parsed value per [Type Mappings](#type-mappings).
@@ -216,7 +219,7 @@ result:
 
 This is particularly important when serializing CLOS objects per [Custom Serialization](#custom-serialization).
 
-## Incrmental Writer
+## Incremental Writer
 
 In addition to `jzon:stringify`, `jzon` also provides an imperative, streaming writer for writing JSON.
 
@@ -550,7 +553,7 @@ You call `jzon:parse`, and you get a reasonable standard CL object back.
 
 While parsing, `jzon` at worst performs at 50% the speed of [jsown][jsown], while outperforming all other libraries.
 
-And this is all-the-while having the safety and correctness guarantees noted above.
+And this is all while having the safety and correctness guarantees noted above.
 
 ### Object key pooling
 
@@ -563,7 +566,7 @@ In this example, the string `x` is shared (eq) between all 3 objects.
 
 This optimizes for the common case of reading a JSON payload containing many duplicate keys.
 
-## `base-string` coercion
+### `base-string` coercion
 
 When possible, strings will be coerced to `cl:simple-base-string`. This can lead to upwards of 1/4 memory usage per string on implementations like SBCL, which store `string`s internally as UTF32, while `base-string` can be represented in 8 bits per char.
 
