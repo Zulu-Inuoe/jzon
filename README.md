@@ -54,17 +54,25 @@ These are the values returned by the [reading](#reading) functions, though when 
 {
   \"name\": \"Rock\",
   \"coords\": {
-    \"map\": \"stony_hill\",
     \"x\": 5,
-    \"y\": 10
+    \"y\": 7
   },
   \"attributes\": [\"fast\", \"hot\"],
   \"physics\": true,
   \"item\": false,
   \"parent\": null
 }")
-; =>
-#<HASH-TABLE :TEST EQUAL :COUNT 6 {1003ECDC93}>
+; => #<HASH-TABLE :TEST EQUAL :COUNT 6 {1003ECDC93}>
+
+(defparameter *ht* *)
+
+(string= (gethash *ht* "name") "Rock")                  ; => t
+(= (gethash (gethash *ht* "coords") "x") 5)             ; => t
+(= (gethash (gethash *ht* "coords") "y") 7)             ; => t
+(equalp (gethash *ht* "attributes") #("fast" "hot"))    ; => t
+(eq (gethash *ht* "physics") "t")                       ; => t
+(eq (gethash *ht* "item") nil)                          ; => t
+(eq (gethash *ht* "parent") 'null)                      ; => t
 ```
 
 `jzon:parse in` reads input from `in` and returns a parsed value per [Type Mappings](#type-mappings).
@@ -85,13 +93,36 @@ These are the values returned by the [reading](#reading) functions, though when 
 **Tip**: `key-fn` can be supplied as `#'identity` in order to disable [key pooling](#object-key-pooling):
 
 ``` common-lisp
-(jzon:parse "[ { \"x\": 1, \"y\": 1 }, { \"x\": 1, \"y\": 1 } ]" :key-fn #'identity)
+(jzon:parse "[ { \"x\": 1, \"y\": 2 }, { \"x\": 3, \"y\": 4 } ]" :key-fn #'identity)
+
+(defparameter *v* *)
+
+(gethash "x" (aref *v* 0)) ; => 1
+(gethash "y" (aref *v* 0)) ; => 2
 ```
+
+This may speed up parsing on certain JSON as we do not have to build the string lookup table.
 
 **Tip**: `alexandria:make-keyword` or equivalent can be used to make object keys into symbols:
 
 ``` common-lisp
-(jzon:parse "[ { \"x\": 1, \"y\": 1 }, { \"x\": 1, \"y\": 1 } ]" :key-fn #'alexandria:make-keyword)
+(jzon:parse "[ { \"x\": 1, \"y\": 2 }, { \"x\": 3, \"y\": 4 } ]" :key-fn #'alexandria:make-keyword)
+
+(defparameter *v* *)
+
+(gethash :|x| (aref *v* 0)) ; => 1
+(gethash :|y| (aref *v* 0)) ; => 2
+```
+
+.. or if you want to follow as default CL does, you can `string-upcase` before `intern`ing:
+
+```lisp
+(jzon:parse "[ { \"x\": 1, \"y\": 2 }, { \"x\": 3, \"y\": 4 } ]" :key-fn (lambda (k) (alexandria:make-keyword (string-upcase k))))
+
+(defparameter *v* *)
+
+(gethash :x (aref *v* 0)) ; => 1
+(gethash :y (aref *v* 0)) ; => 2
 ```
 
 ## Incremental Parser
