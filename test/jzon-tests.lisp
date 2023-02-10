@@ -974,6 +974,16 @@
                                                 t)) ;; Gotta return t or it'll remove the elements
                 (coerce (nreverse keys) 'vector)))))
 
+(test stringify-replacer-is-called-on-list-elements-with-element-indexes
+  (is (equalp #(0 1 2)
+              (let ((keys (list)))
+                (jzon:stringify '(t t t) :replacer (lambda (k v)
+                                                (declare (ignore v))
+                                                (when k
+                                                  (push k keys))
+                                                t)) ;; Gotta return t or it'll remove the elements
+                (coerce (nreverse keys) 'vector)))))
+
 (test stringify-replacer-is-only-called-with-nil-on-toplevel-value
   (is (equalp '(#(1 2 3))
               (let ((called-on (list)))

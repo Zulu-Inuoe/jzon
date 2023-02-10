@@ -1005,26 +1005,6 @@ Example return value:
                  (write-char c stream))))))
   (write-char #.(char "\"" 0) stream))
 
-(defun %write-atom-value (writer value)
-  "Write a JSON atom per `json-atom'."
-  (with-slots (%stream %stack) writer
-    (case (car %stack)
-      ((:array :object)
-       (%write-indentation writer))
-      ((:array-value)
-       (write-char #\, %stream)
-       (%write-indentation writer)))
-
-    (etypecase value
-      ((eql t)      (write-string "true" %stream))
-      ((eql nil)    (write-string "false" %stream))
-      ((eql null)   (write-string "null" %stream))
-      (integer      (format %stream "~D" value))
-      (double-float (sf:write-double value %stream))
-      (single-float (sf:write-float value %stream))
-      (real         (sf:write-double (coerce value 'double-float) %stream))
-      (string       (%write-json-string value %stream)))))
-
 (defun begin-object (writer)
   "Begin writing an object to `writer'.
 
@@ -1154,6 +1134,25 @@ see `write-values'"
        (progn ,@body)
        (end-array ,writer-sym))))
 
+(defun %write-json-atom (writer value)
+  "Write a JSON atom per `json-atom'."
+  (with-slots (%stream %stack) writer
+    (case (car %stack)
+      ((:array :object)
+       (%write-indentation writer))
+      ((:array-value)
+       (write-char #\, %stream)
+       (%write-indentation writer)))
+
+    (etypecase value
+      ((eql t)      (write-string "true" %stream))
+      ((eql nil)    (write-string "false" %stream))
+      ((eql null)   (write-string "null" %stream))
+      (integer      (format %stream "~D" value))
+      (double-float (sf:write-double value %stream))
+      (string       (%write-json-string value %stream)))))
+
+
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
   (:method :around ((writer writer) value)
@@ -1205,29 +1204,89 @@ see `write-values'"
                                                     (t 'null)))))
                      (write-key writer key)
                      (write-value writer coerced-value))))))
+  ;;; `json-atom' specializations
   (:method ((writer writer) (value (eql 't)))
-    (%write-atom-value writer value))
+    (%write-json-atom writer value))
   (:method ((writer writer) (value (eql 'nil)))
-    (%write-atom-value writer value))
+    (%write-json-atom writer value))
   (:method ((writer writer) (value (eql 'null)))
-    (%write-atom-value writer value))
-  (:method ((writer writer) (value number))
-    (%write-atom-value writer value))
-  (:method ((writer writer) (value real))
-    (%write-atom-value writer value))
+    (%write-json-atom writer value))
+  (:method ((writer writer) (value integer))
+    (%write-json-atom writer value))
+  (:method ((writer writer) (value double-float))
+    (%write-json-atom writer value))
   (:method ((writer writer) (value string))
-    (%write-atom-value writer value))
+    (%write-json-atom writer value))
+
+  ;;; array
+  (:method ((writer writer) (value simple-vector))
+    (call-next-method))
+
+  ;; object
+  (:method ((writer writer) (value hash-table))
+    (with-object writer
+      (maphash (let ((replacer (slot-value writer '%replacer)))
+                 (if replacer
+                   (lambda (key x)
+                     (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                            (when write-p
+                                              (write-key writer key)
+                                              (write-value writer (if value-changed-p new-value x))))
+                         (funcall replacer key x)))
+                   (lambda (key x)
+                     (write-key writer key)
+                     (write-value writer x))))
+             value)))
+  
+  ;;; reals handling
+  (:method ((writer writer) (value single-float))
+    (with-slots (%stream %stack) writer
+      (case (car %stack)
+        ((:array :object)
+         (%write-indentation writer))
+        ((:array-value)
+         (write-char #\, %stream)
+         (%write-indentation writer)))
+      (sf:write-float value %stream)))
+  (:method ((writer writer) (value ratio))
+    (%write-json-atom writer (rtd:ratio-to-double value)))
+  (:method ((writer writer) (value real))
+    (%write-json-atom writer (coerce value 'double-float)))
+  
+  ;;; Symbols
   (:method ((writer writer) (value symbol))
-    (%write-atom-value writer (string value)))
+    (%write-json-atom writer (string value)))
+  
+  ;;; Pathnames
   (:method  ((writer writer) (value pathname))
-    (%write-atom-value writer (uiop:native-namestring value)))
+    (%write-json-atom writer (uiop:native-namestring value)))
+
+  ;;; Sequence support
+  (:method ((writer writer) (value sequence))
+    (with-array writer
+      (let ((replacer (slot-value writer '%replacer)))
+        (map nil
+             (if replacer 
+               ;; Apply the replacer to each element in the sequence, with the index as its key
+               (let ((i 0))
+                 (lambda (x)
+                   (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                          (when write-p
+                                            (write-value writer (if value-changed-p new-value x))))
+                     (funcall replacer i x))
+                   (incf i)))
+               (lambda (x)
+                 (write-value writer x)))
+              value))))
+
+  ;;; alist/plist detection
   (:method ((writer writer) (value cons))
     ;; Try and guess alist/plist
     ;; TODO - this might be too hacky/brittle to have on by default
     (let* ((coerce-key (slot-value writer '%coerce-key))
            (replacer (slot-value writer '%replacer))
            (alist-keys (and (every #'consp value)
-                            (loop :for (k . v) :in value
+                            (loop :for (k) :in value
                                   :for key := (and (or (characterp k) (symbolp k) (stringp k))
                                                    (funcall coerce-key k))
                                   :unless key
@@ -1244,85 +1303,40 @@ see `write-values'"
       (cond
         (alist-keys
          (with-object writer
-           (loop :for (k . v) :in value
+           (loop :for (k . x) :in value
                  :for key :in alist-keys
                  :do
                     (if replacer
-                      (multiple-value-call
-                          (lambda (write-p &optional (new-value nil value-changed-p))
-                            (when write-p
-                              (write-key writer key)
-                              (if value-changed-p
-                                  (write-value writer new-value)
-                                  (write-value writer v))))
-                        (funcall replacer key v))
+                      (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                             (when write-p
+                                               (write-key writer key)
+                                               (write-value writer (if value-changed-p new-value x))))
+                        (funcall replacer key x))
                         (progn
                           (write-key writer key)
-                          (write-value writer v))))))
+                          (write-value writer x))))))
         (plist-keys
          (with-object writer
-           (loop :for (k v . rest) :on value :by #'cddr
+           (loop :for (k x) :on value :by #'cddr
                  :for key :in plist-keys
                  :do
                     (if replacer
-                          (multiple-value-call
-                              (lambda (write-p &optional (new-value nil value-changed-p))
-                                (when write-p
-                                  (write-key writer key)
-                                  (if value-changed-p
-                                      (write-value writer new-value)
-                                      (write-value writer v))))
-                            (funcall replacer key v))
+                          (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                                 (when write-p
+                                                   (write-key writer key)
+                                                   (write-value writer (if value-changed-p new-value x))))
+                            (funcall replacer key x))
                         (progn
                           (write-key writer key)
-                          (write-value writer v))))))
+                          (write-value writer x))))))
         ((listp (cdr value))
-         ;; If it looks like a proper list, then consider it a list
-         (with-array writer
-           (loop :for x :in value
-                 :do (write-value writer x))))
+         ;; If it looks like a proper list, then consider it a sequence
+         (call-next-method))
         (t
          ;; Otherwise consider it a 2-element tuple
          (with-array writer
            (write-value writer (car value))
-           (write-value writer (cdr value)))))))
-  (:method ((writer writer) (value sequence))
-    (with-array writer
-      (let ((replacer (slot-value writer '%replacer)))
-        (if replacer
-            ;; Apply the replacer to each value in the array, with the index as its key
-            (map nil
-                 (let ((i 0))
-                   (lambda (x)
-                     (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
-                                            (when write-p
-                                              (if value-changed-p
-                                                  (write-value writer new-value)
-                                                  (write-value writer x))))
-                       (funcall replacer i x))
-                     (incf i)))
-                 value)
-            (map nil
-                 (lambda (x)
-                   (write-value writer x))
-                 value)))))
-  (:method ((writer writer) (value hash-table))
-    (with-object writer
-      (maphash (lambda (key value)
-                 (let ((replacer (slot-value writer '%replacer)))
-                   (if replacer
-                       (multiple-value-call
-                           (lambda (write-pair &optional (new-value nil value-changed-p))
-                             (when write-pair
-                               (write-key writer key)
-                               (if value-changed-p
-                                   (write-value writer new-value)
-                                   (write-value writer value))))
-                         (funcall replacer key value))
-                       (progn
-                         (write-key writer key)
-                         (write-value writer value)))))
-             value))))
+           (write-value writer (cdr value))))))))
 
 ;;; Additional convenience functions/macros
 (defun write-values (writer &rest values)
