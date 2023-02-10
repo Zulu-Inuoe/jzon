@@ -728,6 +728,33 @@
   ;; So instead, parse and verify structure matches
   (is (equalp (ph "x" 100 "y" 45 "name" "Rock") (recode (ph "x" 100 "y" 45 "name" "Rock")))))
 
+(test stringify-coerce-key-writes-integers-base-10
+  (with-standard-io-syntax
+    (is (string= "{\"10\":10}" (jzon:stringify (ph 10 10))))
+    
+    (let ((*print-base* 2))
+      (is (string= "{\"10\":10}" (jzon:stringify (ph 10 10)))))))
+
+(test stringify-coerce-key-writes-single-floats-without-s0
+  (with-standard-io-syntax
+    (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5s0 1.5s0))))
+    (let ((*read-default-float-format* 'double-float))
+      (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5s0 1.5s0)))))))
+
+(test stringify-coerce-key-writes-double-floats-without-d0
+  (with-standard-io-syntax
+    (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5d0 1.5d0))))
+    (let ((*read-default-float-format* 'double-float))
+      (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5s0 1.5s0)))))))
+
+(test stringify-coerce-key-writes-rationals-like-floats
+  (with-standard-io-syntax
+    (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 3/2 3/2))))))
+    
+(test stringify-coerce-key-ignores-print-base
+  (let ((*print-base* 2))
+    (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 3/2 3/2))))))
+
 (defclass test-class ()
   ((a
     :initarg :a
