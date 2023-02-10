@@ -223,7 +223,7 @@ This is particularly important when serializing CLOS objects per [Custom Seriali
 
 ## Incremental Writer
 
-In addition to `jzon:stringify`, `jzon:with-writer` exposes an incremental writer for writing JSON in parts.
+In addition to `jzon:stringify`, `jzon:make-writer` exposes an incremental writer for writing JSON in parts.
 
 ``` common-lisp
 (jzon:with-writer* (:stream *standard-output* :pretty t)
@@ -266,11 +266,24 @@ In addition to `jzon:stringify`, `jzon:with-writer` exposes an incremental write
 }
 ```
 
-`jzon:with-writer` and `jzon:make-writer` accept the same arguments as `jzon:stringify`.
+`jzon:make-writer` and `jzon:with-writer*` accept the same arguments as `jzon:stringify`, *except* `:stream` must be an open `cl:stream`.
 
-**Note** all writer functions have `*`-suffixed variants which omit the `writer` parameter and instead use the `jzon:*writer*` variable.
+**Note** all writer functions have `*`-suffixed variants which use the `jzon:*writer*` variable and omit the first `writer` parameter.
 
-The relevant functions for the incremental parser are:
+eg instead of
+```lisp
+(let ((writer (jzon:make-writer)))
+  (write-value writer "foo"))
+```
+we can use
+```lisp
+(jzon:with-writer* ()
+  (write-value* "foo"))
+```
+
+### Incremental Writer Functions
+
+The relevant functions for the incremental writer are:
 
 `jzon:write-value writer value` - Writes any `value` to the `writer`. Usable when writing a toplevel value, array element, or object property value.
 
