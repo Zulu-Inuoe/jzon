@@ -525,10 +525,11 @@ see `close-parser'"))
                       (max-string-length (min #x100000 array-dimension-limit))
                       key-fn)
   "Construct a `parser' Read a JSON value from `in', which may be a vector, a stream, or a pathname.
- `:max-depth' controls the maximum depth of the object/array nesting
- `:allow-comments' controls whether or not single-line // comments are allowed.
- `:allow-trailing-comma' controls whether or not a single comma `,' is allowed after all elements of an array or object.
- `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool
+ `:max-depth' controls the maximum depth allowed when nesting arrays or objects.
+ `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
+ `:allow-trailing-comma' controls if we allow a single comma `,' after all elements of an array or object.
+ `:max-string-length' controls the maximum length allowed when reading a string key or value.
+ `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool.
 
 see `next'
 see `close-parser'"
@@ -780,10 +781,11 @@ see `close-parser'"
                    (max-string-length (min #x100000 array-dimension-limit))
                    key-fn)
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
- `:max-depth' controls the maximum depth of the object/array nesting
- `:allow-comments' controls whether or not single-line // comments are allowed.
- `:allow-trailing-comma' controls whether or not a single comma `,' is allowed after all elements of an array or object.
- `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool"
+ `:max-depth' controls the maximum depth allowed when nesting arrays or objects.
+ `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
+ `:allow-trailing-comma' controls if we allow a single comma `,' after all elements of an array or object.
+ `:max-string-length' controls the maximum length allowed when reading a string key or value.
+ `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool."
   (check-type max-depth (or (integer 1) null))
   (check-type key-fn (or null symbol function))
   (check-type max-string-length (integer 1 (#.array-dimension-limit)))

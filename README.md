@@ -84,11 +84,11 @@ These are the values returned by the [reading](#reading) functions, though when 
 * pathname - `jzon:parse` will open the file for reading in utf-8
 
 `jzon:parse` also accepts the follwing keyword arguments:
-* `:allow-comments` - *false* This allows the given JSON to contain cpp-style `// line comments` and `/* block comments */`.
-* `:allow-trailing-comma` - *false* This allows for a single trailing comma after the final element in a JSON array or object.
-* `:max-depth` This controls the maximum depth to allow arrays/objects to nest. Can be a positive integer, or `nil` to disable depth tests.
-* `:max-string-length` This controls the maximum length of strings. This applies for both keys and values. Must be a positive integer no larger than `array-dimension-limit`.
-* `:key-fn` A function of one argument responsible for 'interning' object keys. Should accept a `simple-string` and return the 'interned' key
+* `:max-depth` controls the maximum depth allowed when nesting arrays or objects.
+* `:allow-comments` controls if we allow single-line // comments and /**/ multiline block comments.
+* `:allow-trailing-comma` controls if we allow a single comma `,` after all elements of an array or object.
+* `:max-string-length` controls the maximum length allowed when reading a string key or value.
+* `:key-fn` is a function of one value which 'pools' object keys, or null for the default pool.
 
 **Tip**: `key-fn` can be supplied as `#'identity` in order to disable [key pooling](#object-key-pooling):
 
