@@ -468,6 +468,23 @@ see `json-atom'"
             read-string
             pos)))
 
+(defclass %parser-state ()
+  ((%state
+    :initform nil
+    :type symbol)
+   (%lookahead
+    :initform nil
+    :type (or null character))
+   (%context
+    :initform (list)
+    :type list)
+   (%encountered-top-value
+    :initform nil
+    :type boolean)
+   (%depth
+    :initform 0
+    :type (integer 0))))
+
 (defclass parser ()
   ((%step
     :type function)
@@ -489,23 +506,11 @@ see `json-atom'"
    (%max-string-length
     :initform (min #x100000 array-dimension-limit)
     :type (integer 1 (#.array-dimension-limit)))
-   (%state
-    :initform nil
-    :type symbol)
-   (%lookahead
-    :initform nil
-    :type (or null character))
-   (%context
-    :initform (list)
-    :type list)
-   (%encountered-top-value
-    :initform nil
-    :type boolean)
-   (%depth
-    :initform 0
-    :type (integer 0))
    (%close-action
-    :type (or null function)))
+    :type (or null function))
+   (%parser-state
+    :initform (make-instance '%parser-state)
+    :type %parser-state))
   (:documentation "An incremental JSON parser.
 
 see `make-parser'
@@ -583,13 +588,13 @@ see `close-parser'"
     (unwind-protect (locally ,@body)
       (close-parser ,name))))
 
-(defun %parse-next (parser %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
-  (declare (type parser parser)
+(defun %parse-next (%parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
+  (declare (type %parser-state %parser-state)
            (type function %step %read-string %pos %key-fn)
            (type (or null (integer 1)) %max-depth)
            (type boolean %allow-trailing-comma)
            (type boolean %allow-comments))
-  (with-slots (%state %context %lookahead %depth %encountered-top-value) parser
+  (with-slots (%state %lookahead %context %encountered-top-value %depth) %parser-state
     (labels ((read-element (lc)
               (declare (type character lc))
               (macrolet ((expect (string value)
@@ -737,8 +742,8 @@ see `close-parser'"
   (check-type parser parser)
   (when (null (slot-value parser '%close-action))
     (error 'json-error :format-control "The parser has been closed."))
-  (with-slots (%step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments) parser
-    (%parse-next parser %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)))
+  (with-slots (%step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments %parser-state) parser
+    (%parse-next %parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)))
 
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
@@ -781,53 +786,52 @@ see `close-parser'"
   (check-type max-depth (or (integer 1) null))
   (check-type key-fn (or null symbol function))
   (check-type max-string-length (integer 1 (#.array-dimension-limit)))
-  ;; Make sure it's a bound function
-  (when (and key-fn (symbolp key-fn)) (fdefinition key-fn))
-
-  (typecase in
-    (pathname
-     (with-open-file (in in :direction :input :external-format :utf-8)
-       (parse in :max-depth max-depth :allow-comments allow-comments :key-fn key-fn)))
-    ((vector (unsigned-byte 8))
-     (flexi-streams:with-input-from-sequence (stream in)
-       (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
-         (parse stream :max-depth max-depth :allow-comments allow-comments :key-fn key-fn))))
-    (t
-      (with-parser (parser in
-                          :max-depth max-depth :allow-comments allow-comments
-                          :allow-trailing-comma allow-trailing-comma
-                          :max-string-length max-string-length
-                          :key-fn (or (and key-fn (%ensure-function key-fn))
-                                      (%make-string-pool)))
-
-        (let (top stack key)
-          (declare (dynamic-extent stack key))
-          (flet ((finish-value (value)
-                    (typecase stack
-                      (null
-                        (setf top value))
-                      ((cons list)
-                        (push value (the list (car stack))))
-                      ((cons hash-table)
-                        (setf (gethash (pop key) (the hash-table (car stack))) value)))))
-              (declare (dynamic-extent #'finish-value))
-              (let ((%step (slot-value parser '%step))
-                    (%read-string (slot-value parser '%read-string))
-                    (%pos (slot-value parser '%pos))
-                    (%key-fn (slot-value parser '%key-fn))
-                    (%max-depth (slot-value parser '%max-depth))
-                    (%allow-trailing-comma (slot-value parser '%allow-trailing-comma))
-                    (%allow-comments (slot-value parser '%allow-comments)))
-                (loop
-                  (multiple-value-bind (evt value) (%parse-next parser %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
-                    (ecase evt
-                      ((nil)          (return top))
-                      (:value         (finish-value value))
-                      (:begin-array   (push (list) stack))
-                      (:end-array     (finish-value (coerce (the list (nreverse (pop stack))) 'simple-vector)))
-                      (:begin-object  (push (make-hash-table :test 'equal) stack))
-                      (:object-key    (push value key))
-                      (:end-object    (finish-value (pop stack)))))))))))))
+  (let ((key-fn (etypecase key-fn
+                  (null (%make-string-pool))
+                  (function key-fn)
+                  (symbol (fdefinition key-fn)))))
+    (typecase in
+      (pathname
+       (with-open-file (in in :direction :input :external-format :utf-8)
+         (parse in :max-depth max-depth :allow-comments allow-comments :key-fn key-fn)))
+      ((vector (unsigned-byte 8))
+       (flexi-streams:with-input-from-sequence (stream in)
+         (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
+           (parse stream :max-depth max-depth :allow-comments allow-comments :key-fn key-fn))))
+      (t
+        (multiple-value-bind (%step %read-string %pos)
+            (etypecase in
+              (simple-string (%make-fns-simple-string in max-string-length))
+              (string (%make-fns-string in max-string-length))
+              (stream (%make-fns-stream in max-string-length)))
+          (declare (dynamic-extent %step %read-string %pos))
+          (let ((%parser-state (make-instance '%parser-state))
+                (%key-fn key-fn)
+                (%max-depth max-depth)
+                (%allow-trailing-comma (and allow-trailing-comma t))
+                (%allow-comments (and allow-comments t))
+                top stack key)
+            (declare (dynamic-extent %key-fn %parser-state stack key))
+            (macrolet ((finish-value (value)
+                         `(let ((value ,value))
+                            (typecase stack
+                              (null
+                                (setf top value))
+                              ((cons list)
+                                (push value (the list (car stack))))
+                              ((cons hash-table)
+                                (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+              (loop
+                (multiple-value-bind (evt value) (%parse-next %parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
+                  (declare (dynamic-extent evt))
+                  (ecase evt
+                    ((nil)          (return top))
+                    (:value         (finish-value value))
+                    (:begin-array   (push (list) stack))
+                    (:end-array     (finish-value (coerce (the list (nreverse (pop stack))) 'simple-vector)))
+                    (:begin-object  (push (make-hash-table :test 'equal) stack))
+                    (:object-key    (push value key))
+                    (:end-object    (finish-value (pop stack)))))))))))))
 
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
