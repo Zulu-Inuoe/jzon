@@ -223,56 +223,7 @@ This is particularly important when serializing CLOS objects per [Custom Seriali
 
 ## Incremental Writer
 
-In addition to `jzon:stringify`, `jzon` also provides an imperative, streaming writer for writing JSON.
-
-The following are the available functions for writing:
-
-### General
-
-* `jzon:write-value` - Writes any value to the writer. Usable when writing a toplevel value, object property value, or array element.
-
-**Note**: This is a `generic-function` you can specialize your values on. See [custom serialization](#custom-serialization) for more information.
-
-### Object
-
-* `jzon:with-object`
-* `jzon:begin-object`
-* `jzon:write-key`
-* `json:write-property`
-* `json:write-properties`
-* `json:end-object`
-* `jzon:write-object`
-
-### Array
-
-* `jzon:with-array`
-* `jzon:begin-array`
-* `jzon:write-values`
-* `json:end-array`
-* `jzon:write-array`
-
-**Note** all functions have `*`-suffixed variants which use the `jzon:*writer*` variable, such as `jzon:write-value*`.
-
-### Incremental Writer Example
-
-Using the plain variants:
-
-``` common-lisp
-(let ((writer (jzon:make-writer :stream *standard-output* :pretty t)))
-  (jzon:with-object writer
-    (jzon:write-properties writer :age 24 "colour" "blue")
-    (jzon:write-key writer 42)
-    (jzon:write-value writer #(1 2 3))
-
-    (jzon:write-key writer "an-array")
-    (jzon:with-array writer
-      (jzon:write-values writer :these :are :array :elements))
-
-    (jzon:write-key writer "another array")
-    (jzon:write-array writer :or "you" "can" "use these" "helpers")))
-```
-
-Using the `*` variants:
+In addition to `jzon:stringify`, `jzon:with-writer` exposes an incremental writer for writing JSON in parts.
 
 ``` common-lisp
 (jzon:with-writer* (:stream *standard-output* :pretty t)
@@ -287,11 +238,10 @@ Using the `*` variants:
 
     (jzon:write-key* "another array")
     (jzon:write-array* :or "you" "can" "use these" "helpers")))
+; =>
 ```
 
-result:
-
-``` json
+```json
 {
   "age": 24,
   "colour": "blue",
@@ -316,7 +266,144 @@ result:
 }
 ```
 
-Every function returns the `jzon:writer` itself for usage with arrow macros:
+`jzon:with-writer` and `jzon:make-writer` accept the same arguments as `jzon:stringify`.
+
+**Note** all writer functions have `*`-suffixed variants which omit the `writer` parameter and instead use the `jzon:*writer*` variable.
+
+The relevant functions for the incremental parser are:
+
+`jzon:write-value writer value` - Writes any `value` to the `writer`. Usable when writing a toplevel value, array element, or object property value.
+
+```lisp
+(jzon:write-value* "Hello, world")
+```
+
+**Note**: This is a `generic-function` you can specialize your values on. See [custom serialization](#custom-serialization) for more information.
+
+`jzon:with-array writer` - Open a block to begin writing array values.
+
+```lisp
+(jzon:with-array*
+  (jzon:write-value* 0)
+  (jzon:write-value* 1)
+  (jzon:write-value* 2))
+```
+
+`jzon:begin-array writer` - Begin writing an array
+
+```lisp
+(jzon:begin-array*)
+(jzon:write-value* 0)
+(jzon:write-value* 1)
+(jzon:write-value* 2)
+(jzon:end-array*)
+```
+
+`jzon:write-values writer &rest values*` - Write several array values.
+```lisp
+(jzon:with-array*
+  (jzon:write-values* 0 1 2))
+```
+
+`json:end-array writer` - Finish writing an array.
+
+```lisp
+(jzon:begin-array*)
+(jzon:write-value* 0)
+(jzon:write-value* 1)
+(jzon:write-value* 2)
+(jzon:end-array*)
+```
+
+`jzon:write-array` - Open a new array, write its values, and close it.
+
+```lisp
+(jzon:write-array* 0 1 2)
+```
+
+`jzon:with-object writer` - Open a block where you can begin writing object properties.
+
+```lisp
+(jzon:with-object*
+  (jzon:write-property* "age" 42))
+```
+
+`jzon:begin-object writer` - Begin writing an object.
+
+```lisp
+(jzon:begin-object*)
+(jzon:write-property* "age" 42)
+(jzon:end-object*)
+```
+
+`jzon:write-key writer key` - Write an object key.
+
+```lisp
+(jzon:with-object*
+  (jzon:write-key* "age")
+  (jzon:write-value* 42))
+```
+
+`json:write-property writer key value` - Write an object key and value.
+
+```lisp
+(jzon:with-object*
+  (jzon:write-property* "age" 42))
+```
+
+`jzon:write-properties writer &rest key* value*` - Write several object keys and values.
+
+```lisp
+(jzon:with-object*
+  (jzon:write-properties* "age" 42
+                          "colour" "blue"
+                          "x" 0
+                          "y" 10))
+```
+
+`json:end-object writer` - Finish writing an object.
+
+```lisp
+(jzon:begin-object*)
+(jzon:write-property* "age" 42)
+(jzon:end-object*)
+```
+
+`jzon:write-object writer &rest key* value*` - Open a new object, write its keys and values, and close it.
+
+```lisp
+(jzon:write-object* "age" 42
+                    "colour" "blue"
+                    "x" 0
+                    "y" 10)
+```
+
+
+### Incremental Writer Example
+
+`jzon:stringify` could be approximately defined as follows:
+
+```lisp
+(defun my/jzon-stringify (value)
+  (labels ((recurse (value)
+             (etypecase value
+               (jzon:json-atom
+                 (jzon:write-value* value))
+               (vector
+                 (jzon:with-array*
+                   (map nil #'recurse value)))
+               (hash-table
+                 (jzon:with-object*
+                   (maphash (lambda (k v)
+                              (jzon:write-key* k)
+                              (recurse v))
+                            value))))))
+    (with-output-to-string (s)
+      (jzon:with-writer* (:stream s)
+        (recurse value)))))
+```
+
+**Tip**: Every function returns the `jzon:writer` itself for usage with arrow macros:
 
 ``` common-lisp
 (let ((writer (jzon:make-writer :stream *standard-output*)))
@@ -328,7 +415,6 @@ Every function returns the `jzon:writer` itself for usage with arrow macros:
         (jzon:write-value 1)
         (jzon:end-array))))`
 ```
-
 
 # Custom Serialization
 
@@ -467,7 +553,7 @@ This allows you to emit whatever value you wish for a given object.
 
 `jzon:write-value writer value`
 
-`writer` is a [writer](#writer) on which any of the writer functions may be called to serialize your object in any desired way.
+`writer` is a [writer](#incremental-writer) on which any of the writer functions may be called to serialize your object in any desired way.
 
 
 ``` common-lisp
@@ -477,7 +563,7 @@ This allows you to emit whatever value you wish for a given object.
   (jzon:write-array writer 1 2))
 ```
 
-See [writer](#writer) for the available functions.
+See [writer](#incremental-writer) for the available functions.
 
 # Features
 
