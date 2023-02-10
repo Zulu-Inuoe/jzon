@@ -222,17 +222,21 @@ The relevant functions for the incremental parser are:
 | CL                | JSON                                                                |
 |-------------------|---------------------------------------------------------------------|
 | symbol            | string (`symbol-name`), but see [Symbol key case](#symbol-key-case) |
+| pathname          | string (`uiop:native-namestring`)                                   |
 | real              | number                                                              |
 | alist\*           | object                                                              |
 | plist\*           | object                                                              |
+| cons†             | array                                                               |
 | list              | array                                                               |
 | sequence          | array                                                               |
 | standard-object   | object                                                              |
-| structure-object† | object                                                              |
+| structure-object‡ | object                                                              |
 
 \*: Heuristic depending on the key values - Detects alists/plists by testing each key to be a character, string, or symbol.
 
-†: On supported implementations where structure slots are available via the MOP.
+†: Heuristic based on a `cons` with a non-list `cdr` - `(jzon:stringify (cons 1 2))` => `[1,2]`.
+
+‡: On supported implementations where structure slots are available via the MOP.
 
 Please see [Custom Serialization](#custom-serialization) for more details.
 
