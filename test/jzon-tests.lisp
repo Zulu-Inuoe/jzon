@@ -164,6 +164,9 @@
 (test parse-97924.49742786969
   (is (= (ff:bits-double-float #x40F7E847F576ED07) (jzon:parse "97924.49742786969"))))
 
+(test parse-22057.311791265754
+  (is (= (ff:bits-double-float #x40D58A53F4635A66) (jzon:parse "22057.311791265754"))))
+
 (test parse-5e-324
   (is (= (ff:bits-double-float #x0000000000000001) (jzon:parse "5e-324"))))
 
