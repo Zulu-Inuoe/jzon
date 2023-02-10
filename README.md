@@ -646,14 +646,14 @@ We should be safe in the face of untrusted JSON and will error on 'unreasonable'
 
 All of `jzon`'s public API's are type safe, issuing `cl:type-error` as appropriate.
 
-Some other JSON parsers will make dangerous use of features like `optimize (safety 0) (speed 3)` in unreasonable places can cause errors such as:
+Some other JSON parsers will make dangerous use of features like `optimize (safety 0) (speed 3)` without type-checking their public API:
 
 ``` lisp
 CL-USER> (parse 2)
 ; Debugger entered on #<SB-SYS:MEMORY-FAULT-ERROR {1003964833}>
 ```
 
-... which are unreasonable.
+Such errors are unreasonable.
 
 ### Avoid Infinite Interning
 
@@ -692,13 +692,13 @@ You call `jzon:parse`, and you get a reasonably standard CL object back.
 You call `jzon:stringify` with a reasonably standard CL object and you should get reasonable JSON.
 
 * No custom data structures or accessors required
-* No worrying about key case auto conversion or hyphens/underscores being converted.
+* No worrying about key case auto conversion on strings, nor or hyphens/underscores replacement on symbols.
 * No worrying about what package symbols are interned in (no symbols).
 * No worrying about dynamic variables affecting a parse as in cl-json, jonathan, jsown. Everything affecting `jzon:parse` is given at the call-site.
 
 `jzon:parse` also accepts either a string, octet vector, stream, or pathname for simpler usage over libraries requiring one or the other, or having separate parse functions.
 
-Finally, all public API's strive to have good defaults so things 'Just Work'.
+Finally, all public API's strive to have reasonable defaults so things 'Just Work'.
 
 ## Performance
 
@@ -708,14 +708,17 @@ And this is all while having the safety and correctness guarantees noted above.
 
 ### Object key pooling
 
-`jzon` will use a key pool per-parse, causing shared keys in a nested JSON object to share keys:
+By default, `jzon` will keep track of object keys each `jzon:parse` (or `jzon:make-parser`), causing `string=` keys in a nested JSON object to be shared (`eq`):
 
 ``` common-lisp
 (jzon:parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]")
 ```
+
 In this example, the string `x` is shared (eq) between all 3 objects.
 
 This optimizes for the common case of reading a JSON payload containing many duplicate keys.
+
+**Tip**: This behaviour may be altered by supplying a different `:key-fn` to `jzon:parse` or `jzon:make-parser`.
 
 ### `base-string` coercion
 
