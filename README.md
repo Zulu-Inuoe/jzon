@@ -121,6 +121,7 @@ both `jzon:with-parser` and `jzon:make-parser` receive the same arguments as `jz
 The relevant functions for the incremental parser are:
 
 `jzon:make-parser in` - Construct a parser from `in`, which may be any of the inputs applicable to `jzon:parse`
+
 `jzon:parse-next parser` - Parse the next token from `parser`. Returns two values, depending on the token:
   * `:value`, `<value>` - The parser encountered a `json-atom`, `<value>` is the value of the atom
   * `:begin-object`, `nil` - The parser encountered an object opening
@@ -129,6 +130,7 @@ The relevant functions for the incremental parser are:
   * `:begin-array`, `nil` - The parser encountered an array opening
   * `:close-array`, `nil` - The parser encountered an array closing
   * nil - The parser is complete
+
 `jzon:close-parser parser` - Close a parser, closing any opened streams and allocated objects
 
 
@@ -168,7 +170,7 @@ The relevant functions for the incremental parser are:
 
 `jzon:stringify` accepts the following keyword arguments:
 * `:stream` A destination like in `format`, or a `pathname`. Like `format`, returns a string if `nil`.
-* `:pretty` If true, output pretty-formatted JSON
+* `:pretty` If true, output pretty-formatted JSON.
 * `:coerce-element` A function for coercing 'non-native' values to JSON. See [Custom Serialization](#custom-serialization)
 * `:coerce-key` A function for coercing key values to strings. See [Custom Serialization](#custom-serialization)
 
@@ -249,7 +251,7 @@ The following are the available functions for writing:
 * `json:end-array`
 * `jzon:write-array`
 
-**Note** all functions have `*`-suffixed variants which use the `jzon:*writer*` variable, such as `jzon:write-value*`
+**Note** all functions have `*`-suffixed variants which use the `jzon:*writer*` variable, such as `jzon:write-value*`.
 
 ### Incremental Writer Example
 
@@ -419,7 +421,7 @@ This results in:
 }
 ```
 
-`jzon:coerced-fields` should a list of 'fields', which are two (or three) element lists of the form:
+`jzon:coerced-fields` should return a list of 'fields', which are two (or three) element lists of the form:
 
 ``` common-lisp
 (name value &optional type)
@@ -514,11 +516,11 @@ CL-USER> (parse 2)
 ### Avoid Stack Exhaustion
 
 `jzon:parse` is written in an iterative way which avoids exhausting the call stack. In addition, we provide `:max-depth` to guard against unreasonable inputs.
-For even more control, you can make use of the `jzon:with-parser` API's to avoid consing large amounts of user-inputed data to begin with.
+For even more control, you can make use of the `jzon:with-parser` API's to avoid consing large amounts of user-supplied data to begin with.
 
 ## Correctness
 
-This parser is written against [RFC 8259][JSONRFC] and strives to adhere strictly for maximum compliance and little surprises.
+This parser is written against [RFC 8259][JSONRFC] and strives to adhere strictly for maximum compliance and few surprises.
 
 Also, this has been tested against the [JSONTestSuite][JSONTestSuite]. See the [JSONTestSuite](JSONTestSuite/) directory in this repo for making & running the tests.
 
@@ -596,7 +598,7 @@ But for posterity, included in this repository is a set of tests and results for
 * [shasht][shasht]
 * [yason][yason]
 
-I believe `jzon` to be the superiour choice and hope to become the new, true de-facto library in the world of JSON-in-CL once and for all.
+I believe `jzon` to be the superiour choice and hope for it to become the new, true de-facto library in the world of JSON-in-CL once and for all.
 
 [JSONRFC]: https://tools.ietf.org/html/rfc8259
 [JSONTestSuite]: https://github.com/nst/JSONTestSuite
