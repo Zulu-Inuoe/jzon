@@ -67,7 +67,7 @@ These are the values returned by the [reading](#reading) functions, though when 
 #<HASH-TABLE :TEST EQUAL :COUNT 6 {1003ECDC93}>
 ```
 
-`jzon:parse` reads input from its single argument and returns a parsed value per [Type Mappings](#type-mappings).
+`jzon:parse in` reads input from `in` and returns a parsed value per [Type Mappings](#type-mappings).
 
 `in` can be any of the following:
 * string
@@ -76,8 +76,8 @@ These are the values returned by the [reading](#reading) functions, though when 
 * pathname - `jzon:parse` will open the file for reading in utf-8
 
 `jzon:parse` also accepts the follwing keyword arguments:
-* `:allow-comments` This allows the given JSON to contain cpp-style `// line comments` and `/* block comments */`.
-* `:allow-trailing-comma` This allows for a single trailing comma after the final element in a JSON array or object.
+* `:allow-comments` - *false* This allows the given JSON to contain cpp-style `// line comments` and `/* block comments */`.
+* `:allow-trailing-comma` - *false* This allows for a single trailing comma after the final element in a JSON array or object.
 * `:max-depth` This controls the maximum depth to allow arrays/objects to nest. Can be a positive integer, or `nil` to disable depth tests.
 * `:max-string-length` This controls the maximum length of strings. This applies for both keys and values. Must be a positive integer no larger than `array-dimension-limit`.
 * `:key-fn` A function of one argument responsible for 'interning' object keys. Should accept a `simple-string` and return the 'interned' key
