@@ -267,7 +267,9 @@ see `json-atom'"
                  (setf element-type 'character)))
           :finally (return (if (zerop (fill-pointer string-accum))
                              ""
-                             (make-array (fill-pointer string-accum) :element-type element-type :initial-contents string-accum))))))
+                             (if (eq element-type 'base-char)
+                               (make-array (fill-pointer string-accum) :element-type 'base-char :initial-contents string-accum)
+                               (make-array (fill-pointer string-accum) :element-type 'character :initial-contents string-accum)))))))
 
 (defun %read-json-number (step c)
   "Reads an RFC 8259 number, starting with `c'."
@@ -409,29 +411,37 @@ see `json-atom'"
                                               (when (<= (length in) j)
                                                 (%raise 'json-eof-error pos "Unexpected end of input when reading string."))
                                               (let ((c (char in j)))
-                                                (when (char= c #.(char "\"" 0))
-                                                  (let ((len (- j i)))
-                                                    (when (< max-string-length len)
-                                                      (setf i (+ i (1+ max-string-length)))
-                                                      (%raise 'json-parse-error pos "Maximum string length exceeded"))
-                                                    (when (zerop len)
-                                                      (setf i (1+ j))
-                                                      (return ""))
-                                                    (return
-                                                      (loop :with ret := (make-array len :element-type element-type)
-                                                            :for k :from 0 :below len
-                                                            :do (setf (char ret k) (char in (+ i k)))
-                                                            :finally
-                                                            (setf i (1+ j))
-                                                            (return ret)))))
-                                                (when (char= c #\\) ;; we need to worry about escape sequences, unicode, etc.
-                                                  (return (%read-json-string step pos string-accum max-string-length)))
-
-                                                (when (%control-char-p c)
-                                                  (%raise 'json-parse-error pos "Unexpected control character in string '~A' (~A)" c (char-name c)))
-
-                                                (unless (typep c 'base-char)
-                                                  (setf element-type 'character))))))))
+                                                (case c
+                                                  (#.(char "\"" 0)
+                                                    (let ((len (- j i)))
+                                                      (when (< max-string-length len)
+                                                        (setf i (+ i (1+ max-string-length)))
+                                                        (%raise 'json-parse-error pos "Maximum string length exceeded"))
+                                                      (when (zerop len)
+                                                        (setf i (1+ j))
+                                                        (return ""))
+                                                      (return
+                                                        (if (eq element-type 'base-char)
+                                                          (loop :with ret := (make-array len :element-type 'base-char)
+                                                                :for k :from 0 :below len
+                                                                :do (setf (char ret k) (char in (+ i k)))
+                                                                :finally
+                                                                (setf i (1+ j))
+                                                                (return ret))
+                                                          (loop :with ret := (make-array len :element-type 'character)
+                                                                :for k :from 0 :below len
+                                                                :do (setf (char ret k) (char in (+ i k)))
+                                                                :finally
+                                                                (setf i (1+ j))
+                                                                (return ret))))))
+                                                  (#\\ ;; we need to worry about escape sequences, unicode, etc.
+                                                    (return (%read-json-string step pos string-accum max-string-length)))
+                                                  (t
+                                                    (when (%control-char-p c)
+                                                      (%raise 'json-parse-error pos "Unexpected control character in string '~A' (~A)" c (char-name c)))
+                                                   
+                                                    (unless (typep c 'base-char)
+                                                      (setf element-type 'character))))))))))
                     (values step
                             read-string
                             pos))))))
