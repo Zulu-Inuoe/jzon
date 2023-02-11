@@ -417,23 +417,20 @@ see `json-atom'"
                                                       (when (< max-string-length len)
                                                         (setf i (+ i (1+ max-string-length)))
                                                         (%raise 'json-parse-error pos "Maximum string length exceeded"))
-                                                      (when (zerop len)
-                                                        (setf i (1+ j))
-                                                        (return ""))
                                                       (return
-                                                        (if (eq element-type 'base-char)
-                                                          (loop :with ret := (make-array len :element-type 'base-char)
-                                                                :for k :from 0 :below len
-                                                                :do (setf (char ret k) (char in (+ i k)))
-                                                                :finally
-                                                                (setf i (1+ j))
-                                                                (return ret))
-                                                          (loop :with ret := (make-array len :element-type 'character)
-                                                                :for k :from 0 :below len
-                                                                :do (setf (char ret k) (char in (+ i k)))
-                                                                :finally
-                                                                (setf i (1+ j))
-                                                                (return ret))))))
+                                                        (prog1 (cond
+                                                                 ((zerop len) "")
+                                                                 ((eq element-type 'base-char)
+                                                                   (loop :with ret := (make-array len :element-type 'base-char)
+                                                                         :for k :from 0 :below len
+                                                                         :do (setf (char ret k) (char in (+ i k)))
+                                                                         :finally (return ret)))
+                                                                 (t
+                                                                   (loop :with ret := (make-array len :element-type 'character)
+                                                                         :for k :from 0 :below len
+                                                                         :do (setf (char ret k) (char in (+ i k)))
+                                                                         :finally (return ret))))
+                                                          (setf i (1+ j))))))
                                                   (#\\ ;; we need to worry about escape sequences, unicode, etc.
                                                     (return (%read-json-string step pos string-accum max-string-length)))
                                                   (t
