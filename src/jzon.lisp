@@ -436,7 +436,7 @@ see `json-atom'"
                                                   (t
                                                     (when (%control-char-p c)
                                                       (%raise 'json-parse-error pos "Unexpected control character in string '~A' (~A)" c (char-name c)))
-                                                   
+
                                                     (unless (typep c 'base-char)
                                                       (setf element-type 'character))))))))))
                     (values step
@@ -1504,7 +1504,7 @@ see `write-object'"
         ((pathnamep stream)
          (with-open-file (stream stream :direction :output
                                         :if-does-not-exist :create
-                                        :if-exists :overwrite
+                                        :if-exists :supersede
                                         :external-format :utf-8)
            (stringify-to stream))
          nil)
