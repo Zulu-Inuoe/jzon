@@ -179,8 +179,8 @@ The relevant functions for the incremental parser are:
                   ((cons list)          (push value (car stack)))
                   ((cons hash-table)    (setf (gethash (pop key) (car stack)) value)))))
         (loop
-          (multiple-value-bind (evt value) (jzon:parse-next parser)
-            (ecase evt
+          (multiple-value-bind (event value) (jzon:parse-next parser)
+            (ecase event
               ((nil)          (return top))
               (:value         (finish-value value))
               (:begin-array   (push (list) stack))
