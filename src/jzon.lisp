@@ -816,7 +816,7 @@ see `close-parser'"
                 (%max-depth max-depth)
                 (%allow-trailing-comma (and allow-trailing-comma t))
                 (%allow-comments (and allow-comments t))
-                top stack key)
+                top stack key len)
             (declare (dynamic-extent %key-fn %parser-state stack key))
             (macrolet ((finish-value (value)
                          `(let ((value ,value))
@@ -824,7 +824,8 @@ see `close-parser'"
                               (null
                                 (setf top value))
                               ((cons list)
-                                (push value (the list (car stack))))
+                                (push value (the list (car stack)))
+                                (incf (car len)))
                               ((cons hash-table)
                                 (setf (gethash (pop key) (the hash-table (car stack))) value))))))
               (loop
@@ -833,8 +834,18 @@ see `close-parser'"
                   (ecase evt
                     ((nil)          (return top))
                     (:value         (finish-value value))
-                    (:begin-array   (push (list) stack))
-                    (:end-array     (finish-value (coerce (the list (nreverse (pop stack))) 'simple-vector)))
+                    (:begin-array   (push (list) stack)
+                                    (push 0 len))
+                    (:end-array     (let ((elements (pop stack))
+                                          (length (pop len)))
+                                      (finish-value
+                                        (if (zerop length)
+                                          #()
+                                          (loop :with array := (make-array length)
+                                                :for i :from (1- length) :downto 0
+                                                :for elt :in elements
+                                                :do (setf (aref array i) elt)
+                                                :finally (return array))))))
                     (:begin-object  (push (make-hash-table :test 'equal) stack))
                     (:object-key    (push value key))
                     (:end-object    (finish-value (pop stack)))))))))))))
