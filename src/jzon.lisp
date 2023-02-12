@@ -533,7 +533,7 @@ see `close-parser'"))
 
 see `next'
 see `close-parser'"
-  (check-type max-depth (or (integer 1) null))
+  (check-type max-depth (or null (integer 1 #xFFFF)))
   (check-type max-string-length (integer 1 (#.array-dimension-limit)))
   (check-type key-fn (or null symbol function))
 
@@ -958,7 +958,7 @@ Example return value:
 
  see `coerce-key'"
   (check-type stream stream)
-  (check-type max-depth (or null (integer 1)))
+  (check-type max-depth (or null (integer 1 #xFFFF)))
   (let ((stream (cond
                   ((subtypep (stream-element-type stream) 'character) stream)
                   (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
@@ -966,7 +966,7 @@ Example return value:
                            :coerce-key (or coerce-key #'coerce-key)
                            :pretty (and pretty t)
                            :replacer replacer
-                           :max-depth max-depth)))
+                           :max-depth (or max-depth #xFFFF))))
 
 (defun %write-indentation (writer)
   "Indent `writer' depending on its depth, if it is set to pretty print."
@@ -1027,8 +1027,10 @@ see `end-object'"
       ((:object-key)                (setf (car %stack) :object-value))
       ((:object :object-value)      (error "Expecting object key"))
       ((:complete)                  (error "Attempting to write object when value already written to writer")))
-    (when (and %max-depth (> (incf %depth) %max-depth))
+
+    (when (= %depth %max-depth)
       (error "Exceeded maximum depth in writing object."))
+    (incf %depth)
     (push :object %stack)
     (write-char #\{ %stream))
   writer)
@@ -1067,8 +1069,7 @@ see `with-object'"
         (:object-key (error "Attempting to close object before writing key value"))
         (t           (error "Attempting to close object while in ~A" context)))
       (pop %stack)
-      (when %max-depth
-        (decf %depth))
+      (decf %depth)
       (when (eq context :object-value)
         (%write-indentation writer)))
     (write-char #\} %stream)
@@ -1104,8 +1105,9 @@ see `end-array'"
       ((:object :object-value) (error "Expecting object key"))
       ((:complete)             (error "Attempting to write array when value already written to writer")))
     (push :array %stack)
-    (when (and %max-depth (> (incf %depth) %max-depth))
+    (when (= %depth %max-depth)
       (error "Exceeded maximum depth in writing array."))
+    (incf %depth)
     (write-char #\[ %stream))
   writer)
 
@@ -1118,8 +1120,7 @@ see `end-array'"
         ((:array :array-value))
         (t (error "Attempting to close array while in ~A" context)))
       (pop %stack)
-      (when %max-depth
-        (decf %depth))
+      (decf %depth)
       (when (eq context :array-value)
         (%write-indentation writer)))
     (write-char #\] %stream)
@@ -1242,7 +1243,7 @@ see `write-values'"
                      (write-key writer key)
                      (write-value writer x))))
              value)))
-  
+
   ;;; reals handling
   (:method ((writer writer) (value single-float))
     (with-slots (%stream %stack) writer
@@ -1257,11 +1258,11 @@ see `write-values'"
     (%write-json-atom writer (rtd:ratio-to-double value)))
   (:method ((writer writer) (value real))
     (%write-json-atom writer (coerce value 'double-float)))
-  
+
   ;;; Symbols
   (:method ((writer writer) (value symbol))
     (%write-json-atom writer (string value)))
-  
+
   ;;; Pathnames
   (:method  ((writer writer) (value pathname))
     (%write-json-atom writer (uiop:native-namestring value)))
@@ -1271,7 +1272,7 @@ see `write-values'"
     (with-array writer
       (let ((replacer (slot-value writer '%replacer)))
         (map nil
-             (if replacer 
+             (if replacer
                ;; Apply the replacer to each element in the sequence, with the index as its key
                (let ((i 0))
                  (lambda (x)
@@ -1468,7 +1469,7 @@ see `write-object'"
   "As `write-object', but using the currently bound `*writer*'."
   (apply #'write-object *writer* kvp))
 
-(defun stringify (element &key stream replacer pretty (coerce-key #'coerce-key))
+(defun stringify (element &key stream pretty replacer (coerce-key #'coerce-key))
   "Serialize `element' into JSON.
  Returns a fresh string if `stream' is nil, nil otherwise.
   `:stream' like the `destination' in `format', or a `pathname'
