@@ -854,26 +854,8 @@
 (test stringify-coerce-key-calls-fn
   (is (string= "{\"something-else\":42}" (jzon:stringify (ph "something" 42) :coerce-key (constantly "something-else")))))
 
-(test stringify-detects-alist-when-characters
-  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '((#\a . 5) (#\b . 42))))))
-
-(test stringify-detects-alist-when-strings
-  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '(("a" . 5) ("b" . 42))))))
-
-(test stringify-detects-alist-when-symbols
-  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '((#:a . 5) (#:b . 42))))))
-
 (test stringify-no-alist-when-integers
   (is (string= "[[1,5],[2,42]]" (jzon:stringify '((1 5) (2 42))))))
-
-(test stringify-detects-plist-when-characters
-  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '(#\a 5 #\b 42)))))
-
-(test stringify-detects-plist-when-strings
-  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '("a" 5 "b" 42)))))
-
-(test stringify-detects-plist-when-symbols
-  (is (string= "{\"a\":5,\"b\":42}" (jzon:stringify '(#:a 5 #:b 42)))))
 
 (test stringify-no-plist-when-integers
   (is (string= "[1,5,2,42]" (jzon:stringify '(1 5 2 42)))))
@@ -881,8 +863,9 @@
 (test stringify-coerces-pathname-to-namestring
   (is (string= "\"hello.lisp\""(jzon:stringify #p"hello.lisp"))))
 
-(test stringify-writes-cons-as-2-tuple
-  (is (string= "[1,2]" (jzon:stringify (cons 1 2)))))
+(test stringify-signals-type-error-on-improper-sequence
+  (signals (type-error)
+    (jzon:stringify (cons 1 2))))
 
 (test stringify-replacer-keeps-keys-on-t
   (is (string= "{\"x\":0}"
@@ -998,28 +981,6 @@
                                                   (push v called-on))
                                                 t))
                 (nreverse called-on)))))
-
-(test stringify-replacer-is-called-on-plists-as-objects
-  (is (string= "{\"a\":\"b\",\"b\":\"a\"}"
-               ;; As a p-list
-               (jzon:stringify '("a" 19 "b" "c")
-                          :replacer (lambda (k v)
-                                      (declare (ignore v))
-                                      (cond
-                                        ((equal k "a") (values t "b"))
-                                        ((equal k "b") (values t "a"))
-                                        (t t)))))))
-
-(test stringify-replacer-is-called-on-alists-as-objects
-  (is (string= "{\"a\":\"b\",\"b\":\"a\"}"
-               ;; as an a-list
-               (jzon:stringify '(("a" . 19) ("b" . "c"))
-                          :replacer (lambda (k v)
-                                      (declare (ignore v))
-                                      (cond
-                                        ((equal k "a") (values t "b"))
-                                        ((equal k "b") (values t "a"))
-                                        (t t)))))))
 
 (def-suite jzon.json-checker :in jzon)
 

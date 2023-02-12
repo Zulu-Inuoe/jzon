@@ -1287,66 +1287,7 @@ see `write-values'"
                    (incf i)))
                (lambda (x)
                  (write-value writer x)))
-              value))))
-
-  ;;; alist/plist detection
-  (:method ((writer writer) (value cons))
-    ;; Try and guess alist/plist
-    ;; TODO - this might be too hacky/brittle to have on by default
-    (let* ((coerce-key (slot-value writer '%coerce-key))
-           (replacer (slot-value writer '%replacer))
-           (alist-keys (and (every #'consp value)
-                            (loop :for (k) :in value
-                                  :for key := (and (or (characterp k) (symbolp k) (stringp k))
-                                                   (funcall coerce-key k))
-                                  :unless key
-                                    :return nil
-                                  :collect key)))
-           (plist-keys (and (null alist-keys)
-                            (loop :for cell :on value :by #'cddr
-                                  :for (k . rest) := cell
-                                  :for key := (and (or (characterp k) (stringp k) (symbolp k))
-                                                   (funcall coerce-key k))
-                                  :unless (and (consp rest) key)
-                                    :return nil
-                                  :collect key))))
-      (cond
-        (alist-keys
-         (with-object writer
-           (loop :for (k . x) :in value
-                 :for key :in alist-keys
-                 :do
-                    (if replacer
-                      (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
-                                             (when write-p
-                                               (write-key writer key)
-                                               (write-value writer (if value-changed-p new-value x))))
-                        (funcall replacer key x))
-                        (progn
-                          (write-key writer key)
-                          (write-value writer x))))))
-        (plist-keys
-         (with-object writer
-           (loop :for (k x) :on value :by #'cddr
-                 :for key :in plist-keys
-                 :do
-                    (if replacer
-                          (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
-                                                 (when write-p
-                                                   (write-key writer key)
-                                                   (write-value writer (if value-changed-p new-value x))))
-                            (funcall replacer key x))
-                        (progn
-                          (write-key writer key)
-                          (write-value writer x))))))
-        ((listp (cdr value))
-         ;; If it looks like a proper list, then consider it a sequence
-         (call-next-method))
-        (t
-         ;; Otherwise consider it a 2-element tuple
-         (with-array writer
-           (write-value writer (car value))
-           (write-value writer (cdr value))))))))
+              value)))))
 
 ;;; Additional convenience functions/macros
 (defun write-values (writer &rest values)

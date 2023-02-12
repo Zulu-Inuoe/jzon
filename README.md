@@ -255,25 +255,21 @@ However, due to the lack of `undefined` in CL, we make use of multiple return va
 
 When writing, the following type mappings are also available:
 
-| CL                | JSON                                                                |
-|-------------------|---------------------------------------------------------------------|
-| symbol            | string (`symbol-name`, but see [Symbol key case](#symbol-key-case)) |
-| character         | string (`string`)                                                   |
-| pathname          | string (`uiop:native-namestring`)                                   |
-| real              | number                                                              |
-| alist\*           | object                                                              |
-| plist\*           | object                                                              |
-| cons†             | array                                                               |
-| list              | array                                                               |
-| sequence          | array                                                               |
-| standard-object   | object                                                              |
-| structure-object‡ | object                                                              |
+| CL                  | JSON                                                                |
+|---------------------|---------------------------------------------------------------------|
+| symbol              | string (`symbol-name`, but see [Symbol key case](#symbol-key-case)) |
+| character           | string (`string`)                                                   |
+| pathname            | string (`uiop:native-namestring`)                                   |
+| real                | number                                                              |
+| sequence            | array                                                               |
+| standard-object     | object                                                              |
+| structure-object\*  | object                                                              |
 
-\*: Heuristic depending on the key values - Detects alists/plists by testing each key to be a character, string, or symbol.
+\*: On supported implementations where structure slots are available via the MOP.
 
-†: Heuristic based on a `cons` with a non-list `cdr` - `(jzon:stringify (cons 1 2))` => `[1,2]`.
+If you have an alist/plist you wish to write, we recommend the use of either `alexandria:alist-hash-table` or `alexandria:plist-hash-table`, or use one of the methods in [Custom Serialization](#custom-serialization).
 
-‡: On supported implementations where structure slots are available via the MOP.
+Previously, jzon attempted to detect alists/plists, but this was error-prone and came with many edge-cases.
 
 ##### Symbol key case
 
