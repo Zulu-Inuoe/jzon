@@ -183,6 +183,12 @@
   (is (equalp #() (jzon:parse "[]")))
   (is (equalp #(1 2 3) (jzon:parse "[1, 2, 3]"))))
 
+(test empty-array-inside-array
+  (is (equalp #(#()) (jzon:parse "[[]]"))))
+
+(test empty-object-inside-array
+  (is (equalp (vector (ph)) (jzon:parse "[{}]"))))
+
 (test parses-arrays-signals-eof
   (signals (jzon:json-eof-error)
     (jzon:parse "[1, 2, 3")))
