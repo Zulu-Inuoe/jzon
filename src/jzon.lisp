@@ -1263,6 +1263,10 @@ see `write-values'"
   (:method ((writer writer) (value symbol))
     (%write-json-atom writer (string value)))
 
+  ;; Characters
+  (:method ((writer writer) (value character))
+    (%write-json-atom writer (string value)))
+
   ;;; Pathnames
   (:method  ((writer writer) (value pathname))
     (%write-json-atom writer (uiop:native-namestring value)))

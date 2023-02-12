@@ -258,6 +258,7 @@ When writing, the following type mappings are also available:
 | CL                | JSON                                                                |
 |-------------------|---------------------------------------------------------------------|
 | symbol            | string (`symbol-name`, but see [Symbol key case](#symbol-key-case)) |
+| character         | string (`string`)                                                   |
 | pathname          | string (`uiop:native-namestring`)                                   |
 | real              | number                                                              |
 | alist\*           | object                                                              |
