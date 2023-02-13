@@ -155,46 +155,46 @@ see `json-atom'"
   (and (member char '(#\Space #\Linefeed #\Return #\Tab))
        t))
 
+(defun %skip-cpp-comment (step pos)
+  (declare (type function step pos))
+  ;; Skip the second slash, or open a block comment
+  ;; NOTE - We intentionally follow C/C++ behaviour when it comes
+  ;;        to disallowing nesting of /**/ style comments.
+  (let ((c (%step step)))
+    (case c
+      ((nil) (%raise 'json-eof-error pos "End of input reading comment exepecting second slash or asterisk."))
+      ;; Skip until LF or EOF
+      (#\/ (loop :until (member (%step step) '(nil #\Linefeed))))
+      (#\*
+        ;; Skip until */ or error on EOF
+        (prog ((c (%step step)))
+          expect-*
+          (case c
+            ((nil) (%raise 'json-eof-error pos "End of input reading block comment. Expecting '*/'."))
+            (#\*   (go expect-/))
+            (t     (setf c (%step step))
+                   (go expect-*)))
+          expect-/
+          (setf c (%step step))
+          (case c
+            ((nil) (%raise 'json-eof-error pos "End of input reading block comment. Expecting '/'."))
+            (#\/ nil) ; done
+            (t   (go expect-*)))))
+      (t (%raise 'json-parse-error pos "Unexpected input '/~A'. Expecting // or /* to begin comment." c)))))
+
+(declaim (inline %skip-whitespace))
 (defun %skip-whitespace (step pos c allow-comments)
   "Skip whitespace, and optionally comments, depending on `%*allow-comments*'
  Returns the next character."
   (declare (type function step pos)
            (type (or null character) c)
            (type boolean allow-comments))
-  (flet ((skip-cpp-comment ()
-           ;; Skip the second slash, or open a block comment
-           ;; NOTE - We intentionally follow C/C++ behaviour when it comes
-           ;;        to disallowing nesting of /**/ style comments.
-           (let ((c (%step step)))
-             (case c
-               ((nil) (%raise 'json-eof-error pos "End of input reading comment exepecting second slash or asterisk."))
-               (#\/
-                ;; Skip until LF or EOF
-                (loop :until (member (%step step) '(nil #\Linefeed))))
-               (#\*
-                 ;; Skip until */ or error on EOF
-                 (prog ((c (%step step)))
-                   :expect-*
-                   (case c
-                     ((nil) (%raise 'json-eof-error pos "End of input reading block comment. Expecting '*/'."))
-                     (#\*   (go :expect-/))
-                     (t     (setf c (%step step))
-                            (go :expect-*)))
-                   :expect-/
-                   (setf c (%step step))
-                   (case c
-                     ((nil) (%raise 'json-eof-error pos "End of input reading block comment. Expecting '/'."))
-                     (#\/ nil) ; done
-                     (t   (go :expect-*)))))
-               (t (%raise 'json-parse-error pos "Unexpected input '/~A'. Expecting // or /* to begin comment." c))))))
-    (loop :for char := c :then (%step step)
-          :do (cond
-                ((null char)
-                 (return nil))
-                ((and (char= #\/ char) allow-comments)
-                 (skip-cpp-comment))
-                ((not (%whitespace-p char))
-                 (return char))))))
+  (loop :for char := c :then (%step step)
+        :do (cond
+              ((null char) (return nil))
+              ((and (char= #\/ char) allow-comments) (%skip-cpp-comment step pos))
+              ((not (%whitespace-p char))
+               (return char)))))
 
 (declaim (inline %control-char-p))
 (defun %control-char-p (c)
