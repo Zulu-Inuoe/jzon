@@ -590,6 +590,7 @@ see `close-parser'"
     (unwind-protect (locally ,@body)
       (close-parser ,name))))
 
+(declaim (inline %parse-next))
 (defun %parse-next (%parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
   (declare (type %parser-state %parser-state)
            (type function %step %read-string %pos %key-fn)
@@ -778,6 +779,45 @@ see `close-parser'"
           (or (gethash key pool)
               (setf (gethash key pool) key)))))))
 
+(defun %parse (%step %read-string %pos %key-fn %max-depth %allow-comments %allow-trailing-comma)
+  (declare (type function %step %read-string %pos %key-fn))
+  (declare (type (integer 1 #xFFFF) %max-depth))
+  (declare (type boolean %allow-comments %allow-trailing-comma))
+  (let ((%parser-state (%make-parser-state))
+        top stack key len)
+    (declare (dynamic-extent %key-fn %parser-state stack key))
+    (macrolet ((finish-value (value)
+                 `(let ((value ,value))
+                    (typecase stack
+                      (null
+                        (setf top value))
+                      ((cons list)
+                        (push value (the list (car stack)))
+                        (incf (car len)))
+                      ((cons hash-table)
+                        (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+      (loop
+        (multiple-value-bind (evt value) (%parse-next %parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
+          (declare (dynamic-extent evt))
+          (ecase evt
+            ((nil)          (return top))
+            (:value         (finish-value value))
+            (:begin-array   (push (list) stack)
+                            (push 0 len))
+            (:end-array     (let ((elements (pop stack))
+                                  (length (pop len)))
+                              (finish-value
+                                (if (zerop length)
+                                  #()
+                                  (loop :with array := (make-array length)
+                                        :for i :from (1- length) :downto 0
+                                        :for elt :in elements
+                                        :do (setf (aref array i) elt)
+                                        :finally (return array))))))
+            (:begin-object  (push (make-hash-table :test 'equal) stack))
+            (:object-key    (push value key))
+            (:end-object    (finish-value (pop stack)))))))))
+
 (defun parse (in &key
                    (max-depth 128)
                    (allow-comments nil)
@@ -812,44 +852,7 @@ see `close-parser'"
               (string (%make-fns-string in max-string-length))
               (stream (%make-fns-stream in max-string-length)))
           (declare (dynamic-extent %step %read-string %pos))
-          (let ((%parser-state (%make-parser-state))
-                (%key-fn key-fn)
-                (%max-depth max-depth)
-                (%allow-trailing-comma (and allow-trailing-comma t))
-                (%allow-comments (and allow-comments t))
-                top stack key len)
-            (declare (dynamic-extent %key-fn %parser-state stack key))
-            (macrolet ((finish-value (value)
-                         `(let ((value ,value))
-                            (typecase stack
-                              (null
-                                (setf top value))
-                              ((cons list)
-                                (push value (the list (car stack)))
-                                (incf (car len)))
-                              ((cons hash-table)
-                                (setf (gethash (pop key) (the hash-table (car stack))) value))))))
-              (loop
-                (multiple-value-bind (evt value) (%parse-next %parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
-                  (declare (dynamic-extent evt))
-                  (ecase evt
-                    ((nil)          (return top))
-                    (:value         (finish-value value))
-                    (:begin-array   (push (list) stack)
-                                    (push 0 len))
-                    (:end-array     (let ((elements (pop stack))
-                                          (length (pop len)))
-                                      (finish-value
-                                        (if (zerop length)
-                                          #()
-                                          (loop :with array := (make-array length)
-                                                :for i :from (1- length) :downto 0
-                                                :for elt :in elements
-                                                :do (setf (aref array i) elt)
-                                                :finally (return array))))))
-                    (:begin-object  (push (make-hash-table :test 'equal) stack))
-                    (:object-key    (push value key))
-                    (:end-object    (finish-value (pop stack)))))))))))))
+          (%parse %step %read-string %pos key-fn max-depth (and allow-comments t) (and allow-trailing-comma t)))))))
 
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
