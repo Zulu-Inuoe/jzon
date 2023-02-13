@@ -788,14 +788,13 @@ see `close-parser'"
     (declare (dynamic-extent %key-fn %parser-state stack key))
     (macrolet ((finish-value (value)
                  `(let ((value ,value))
-                    (typecase stack
-                      (null
-                        (setf top value))
-                      ((cons list)
-                        (push value (the list (car stack)))
-                        (incf (car len)))
-                      ((cons hash-table)
-                        (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+                    (if (null stack)
+                      (setf top value)
+                      (let ((container (car stack)))
+                        (if (listp container)
+                          (progn (push value (the list (car stack)))
+                                 (incf (car len)))
+                          (setf (gethash (pop key) (the hash-table (car stack))) value)))))))
       (loop
         (multiple-value-bind (evt value) (%parse-next %parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
           (declare (dynamic-extent evt))
@@ -804,8 +803,8 @@ see `close-parser'"
             (:value         (finish-value value))
             (:begin-array   (push (list) stack)
                             (push 0 len))
-            (:end-array     (let ((elements (pop stack))
-                                  (length (pop len)))
+            (:end-array     (let ((elements (the list (pop stack)))
+                                  (length (the (integer 0) (pop len))))
                               (finish-value
                                 (if (zerop length)
                                   #()
