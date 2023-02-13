@@ -600,6 +600,7 @@ see `close-parser'"
   (labels ((read-element (lc)
             (declare (type character lc))
             (macrolet ((expect (string value)
+                         (declare (type simple-string string))
                          `(progn
                             ,@(loop :for i :from 1 :below (length string)
                                     :for expect-c := (char string i)
@@ -785,7 +786,7 @@ see `close-parser'"
   (declare (type boolean %allow-comments %allow-trailing-comma))
   (let ((%parser-state (%make-parser-state))
         top stack key len)
-    (declare (dynamic-extent %key-fn %parser-state stack key))
+    (declare (dynamic-extent %parser-state stack key))
     (macrolet ((finish-value (value)
                  `(let ((value ,value))
                     (if (null stack)
@@ -793,7 +794,7 @@ see `close-parser'"
                       (let ((container (car stack)))
                         (if (listp container)
                           (progn (push value (the list (car stack)))
-                                 (incf (car len)))
+                                 (incf (the (integer 0) (car len))))
                           (setf (gethash (pop key) (the hash-table (car stack))) value)))))))
       (loop
         (multiple-value-bind (evt value) (%parse-next %parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
