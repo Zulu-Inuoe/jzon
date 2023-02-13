@@ -304,79 +304,79 @@ see `json-atom'"
          (let ((c c))
            (when (char= c #\-)
              (setf sign -1)
-             (setf c (takec :fail)))
+             (setf c (takec fail)))
 
            (when (char= c #\0)
-             (case (takec :done-0)
-               (#\.       (go :parse-frac))
-               ((#\e #\E) (go :parse-exp))
-               (t         (go :fail))))
+             (case (takec done-0)
+               (#\.       (go parse-frac))
+               ((#\e #\E) (go parse-exp))
+               (t         (go fail))))
 
            (let ((digit (digit19-p c)))
-             (unless digit (go :fail))
+             (unless digit (go fail))
              (setf mantissa digit)
-             (go :parse-int)))
+             (go parse-int)))
 
-       :done-0
+       done-0
          (return (values (if (plusp sign) 0 -0.0d0) lc))
 
-       :parse-int
-         (let ((c (takec :done-int)))
+       parse-int
+         (let ((c (takec done-int)))
            (case c
-             (#\.       (go :parse-frac))
-             ((#\e #\E) (go :parse-exp)))
+             (#\.       (go parse-frac))
+             ((#\e #\E) (go parse-exp)))
            (let ((digit (digit09-p c)))
-             (unless digit (go :fail))
+             (unless digit (go fail))
              (setf mantissa (+ (* mantissa 10) digit))))
-         (go :parse-int)
+         (go parse-int)
 
-       :done-int
+       done-int
          (return (values (* mantissa sign) lc))
 
-       :parse-frac
-         (let* ((c (takec :fail))
+       parse-frac
+         (let* ((c (takec fail))
                 (digit (digit09-p c)))
-           (unless digit (go :fail))
+           (unless digit (go fail))
            (setf mantissa (+ (* mantissa 10) digit))
            (decf exp10))
 
-       :parse-frac-loop
-         (let ((c (takec :done)))
+       parse-frac-loop
+         (let ((c (takec done)))
            (when (or (char= c #\e) (char= c #\E))
-             (go :parse-exp))
+             (go parse-exp))
            (let ((digit (digit09-p c)))
-             (unless digit (go :fail))
+             (unless digit (go fail))
              (setf mantissa (+ (* mantissa 10) digit))
              (decf exp10)))
-         (go :parse-frac-loop)
+         (go parse-frac-loop)
 
-       :parse-exp
-         (let ((c (takec :fail)))
+       parse-exp
+         (let ((c (takec fail)))
            (case c
              (#\-
               (setf exp-sign -1)
-              (setf c (takec :fail)))
+              (setf c (takec fail)))
              (#\+
-              (setf c (takec :fail))))
+              (setf c (takec fail))))
            (let ((digit (digit09-p c)))
-             (unless digit (go :fail))
+             (unless digit (go fail))
              (setf exp-val digit)))
 
-       :parse-exp-loop
-        (let* ((c (takec :done))
+       parse-exp-loop
+        (let* ((c (takec done))
                (digit (digit09-p c)))
-           (unless digit (go :fail))
+           (unless digit (go fail))
            (setf exp-val (+ (* exp-val 10) digit)))
-         (go :parse-exp-loop)
+         (go parse-exp-loop)
 
-       :done
+       done
          (setf exp10 (+ exp10 (* exp-sign exp-val)))
          (return
              (values
                 (or (el:make-double mantissa exp10 (minusp sign))
                     (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
                 lc))
-       :fail
+       fail
          (return (values nil lc))))))
 
 (macrolet ((def-make-string-fns (name type)
