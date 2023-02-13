@@ -740,6 +740,7 @@ see `close-parser'"
     :begin-object, nil  ; Object open {
     :object-key, key    ; Object key
     :end-object, nil    ; Object finished }
+    nil. nil            ; Parsing complete
 
 see `with-parser'
 see `make-parser'
