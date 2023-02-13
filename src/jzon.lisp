@@ -483,8 +483,7 @@ see `json-atom'"
              (:predicate nil))
   (%parser-state-state 'toplevel :type symbol)
   (%parser-state-lookahead nil :type (or null character))
-  (%parser-state-context nil :type list)
-  (%parser-state-depth 0 :type (integer 0 #xFFFF)))
+  (%parser-state-context nil :type list))
 
 (defclass parser ()
   ((%step
@@ -493,9 +492,6 @@ see `json-atom'"
     :type function)
    (%pos
     :type function)
-   (%max-depth
-    :initform 128
-    :type (integer 1 #xFFFF))
    (%allow-comments
     :initform nil
     :type boolean)
@@ -519,13 +515,11 @@ see `next'
 see `close-parser'"))
 
 (defun make-parser (in &key
-                      (max-depth 128)
                       (allow-comments nil)
                       (allow-trailing-comma nil)
                       (max-string-length (min #x100000 array-dimension-limit))
                       key-fn)
   "Construct a `parser' Read a JSON value from `in', which may be a vector, a stream, or a pathname.
- `:max-depth' controls the maximum depth allowed when nesting arrays or objects.
  `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
  `:allow-trailing-comma' controls if we allow a single comma `,' after all elements of an array or object.
  `:max-string-length' controls the maximum length allowed when reading a string key or value.
@@ -533,7 +527,6 @@ see `close-parser'"))
 
 see `next'
 see `close-parser'"
-  (check-type max-depth (or null (integer 1 #xFFFF)))
   (check-type max-string-length (integer 1 (#.array-dimension-limit)))
   (check-type key-fn (or null symbol function))
 
@@ -550,7 +543,7 @@ see `close-parser'"
                               (close bstream)))))
         (t (values in (lambda ()))))
     (let ((parser (make-instance 'parser)))
-      (with-slots (%step %read-string %pos %max-depth %allow-comments %allow-trailing-comma %max-string-length %key-fn %close-action) parser
+      (with-slots (%step %read-string %pos %allow-comments %allow-trailing-comma %max-string-length %key-fn %close-action) parser
         (setf %close-action close-action)
         (setf (values %step %read-string %pos)
               (etypecase input
@@ -558,7 +551,6 @@ see `close-parser'"
                 (string (%make-fns-string input max-string-length))
                 (stream (%make-fns-stream input max-string-length))))
 
-        (setf %max-depth (or max-depth #xFFFF))
         (setf %allow-comments (and allow-comments t))
         (setf %allow-trailing-comma (and allow-trailing-comma t))
         (setf %key-fn (etypecase key-fn
@@ -591,10 +583,9 @@ see `close-parser'"
       (close-parser ,name))))
 
 (declaim (inline %parse-next))
-(defun %parse-next (%parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
+(defun %parse-next (%parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)
   (declare (type %parser-state %parser-state)
            (type function %step %read-string %pos %key-fn)
-           (type (integer 1 #xFFFF) %max-depth)
            (type boolean %allow-trailing-comma)
            (type boolean %allow-comments))
   (labels ((read-element (lc)
@@ -636,13 +627,9 @@ see `close-parser'"
                                     (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
                                     (values :value number))))))
             (push-state (kind)
-              (when (= (%parser-state-depth %parser-state) %max-depth)
-                (%raise 'json-parse-error %pos "Maximum depth exceeded"))
-              (incf (%parser-state-depth %parser-state))
               (setf (%parser-state-state %parser-state) kind)
               (values kind nil))
             (pop-state (kind)
-              (decf (%parser-state-depth %parser-state))
               (pop (%parser-state-context %parser-state))
               (setf (%parser-state-lookahead %parser-state) (%step %step))
               (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
@@ -658,8 +645,7 @@ see `close-parser'"
         (let ((lc (%skip-whitespace %step %pos (%step %step) %allow-comments)))
           (case lc
             ((nil)  (%raise 'json-eof-error %pos "End of input when reading array, expecting element or array close"))
-            (#\]    (decf (%parser-state-depth %parser-state))
-                    (setf (%parser-state-lookahead %parser-state) (%step %step))
+            (#\]    (setf (%parser-state-lookahead %parser-state) (%step %step))
                     (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
                     (values :end-array nil))
             (t      (push 'after-read-array-element (%parser-state-context %parser-state))
@@ -683,8 +669,7 @@ see `close-parser'"
         (let ((lc (%skip-whitespace %step %pos (%step %step) %allow-comments)))
           (case lc
             ((nil)            (%raise 'json-eof-error %pos "End of input when reading object, expecting key or object close"))
-            (#\}              (decf (%parser-state-depth %parser-state))
-                              (setf (%parser-state-lookahead %parser-state) (%step %step))
+            (#\}              (setf (%parser-state-lookahead %parser-state) (%step %step))
                               (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
                               (values :end-object nil))
             (#.(char "\"" 0)  (setf (%parser-state-state %parser-state) 'after-read-key)
@@ -750,8 +735,8 @@ see `close-parser'"
   (check-type parser parser)
   (when (null (slot-value parser '%close-action))
     (error 'json-error :format-control "The parser has been closed."))
-  (with-slots (%step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments %parser-state) parser
-    (%parse-next %parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)))
+  (with-slots (%step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %parser-state) parser
+    (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)))
 
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
@@ -785,7 +770,9 @@ see `close-parser'"
   (declare (type (integer 1 #xFFFF) %max-depth))
   (declare (type boolean %allow-comments %allow-trailing-comma))
   (let ((%parser-state (%make-parser-state))
+        (depth 0)
         top stack key len)
+    (declare (type (integer 0 #xFFFF) depth))
     (declare (dynamic-extent %parser-state stack key))
     (macrolet ((finish-value (value)
                  `(let ((value ,value))
@@ -795,16 +782,23 @@ see `close-parser'"
                         (if (listp container)
                           (progn (push value (the list (car stack)))
                                  (incf (the (integer 0) (car len))))
-                          (setf (gethash (pop key) (the hash-table (car stack))) value)))))))
+                          (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+                (inc-depth ()
+                  `(progn
+                    (when (= depth %max-depth)
+                      (%raise 'json-parse-error %pos "Maximum depth exceeded"))
+                    (incf depth))))
       (loop
-        (multiple-value-bind (evt value) (%parse-next %parser-state %step %read-string %pos %key-fn %max-depth %allow-trailing-comma %allow-comments)
+        (multiple-value-bind (evt value) (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)
           (declare (dynamic-extent evt))
           (ecase evt
             ((nil)          (return top))
             (:value         (finish-value value))
-            (:begin-array   (push (list) stack)
+            (:begin-array   (inc-depth)
+                            (push (list) stack)
                             (push 0 len))
-            (:end-array     (let ((elements (the list (pop stack)))
+            (:end-array     (decf depth)
+                            (let ((elements (the list (pop stack)))
                                   (length (the (integer 0) (pop len))))
                               (finish-value
                                 (if (zerop length)
@@ -814,9 +808,11 @@ see `close-parser'"
                                         :for elt :in elements
                                         :do (setf (aref array i) elt)
                                         :finally (return array))))))
-            (:begin-object  (push (make-hash-table :test 'equal) stack))
+            (:begin-object  (inc-depth)
+                            (push (make-hash-table :test 'equal) stack))
             (:object-key    (push value key))
-            (:end-object    (finish-value (pop stack)))))))))
+            (:end-object    (decf depth)
+                            (finish-value (pop stack)))))))))
 
 (defun parse (in &key
                    (max-depth 128)

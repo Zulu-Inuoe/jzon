@@ -795,12 +795,11 @@ An example:
 
 ### jzon:make-parser
 
-*Function* **jzon:make-parser** *in &key max-depth allow-comments allow-trailing-comma max-string-length key-fn*
+*Function* **jzon:make-parser** *in &key allow-comments allow-trailing-comma max-string-length key-fn*
 
 *=> writer*
 
 * *in* - a string, vector (unsigned-byte 8), stream, or pathname
-* *max-depth* - a positive `integer`, or `nil`
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
 * *max-string-length* - a positive `integer`
