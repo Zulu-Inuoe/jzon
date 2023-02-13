@@ -280,7 +280,7 @@ see `json-atom'"
          (digit19-p (c &aux (val (- (char-code c) #.(char-code #\0))))
            (and (<= 1 val 9) val))
          (ends-number-p (c)
-           (or (%whitespace-p c) (find c "]},/"))))
+           (or (%whitespace-p c) (find c "]},/\""))))
     (declare (inline digit09-p digit19-p ends-number-p))
     (macrolet ((takec (on-eof)
                  "Take the next character, `go'ing to `label' on EOF or end of token"
