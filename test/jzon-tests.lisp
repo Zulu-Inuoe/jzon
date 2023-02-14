@@ -1839,3 +1839,7 @@ break\"]")))
 
 (test convert-array-to-complex
   (is (= #C(1 2) (jzon:convert "[1,2]" 'complex))))
+
+(test convert-to-or-chooses-first
+  (is (= 42 (jzon:convert "42" '(or null integer string))))
+  (is (string= "42" (jzon:convert "42" '(or null string integer)))))
