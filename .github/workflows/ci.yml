@@ -16,13 +16,13 @@ jobs:
       - uses: actions/checkout@v2
       - name: Cache SBCL
         id: cache-sbcl
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~\sbcl\
           key: ${{ runner.os }}-sbcl
       - name: Cache Quicklisp
         id: cache-ql
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~\quicklisp\
           key: ${{ runner.os }}-sbcl
