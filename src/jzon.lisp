@@ -191,10 +191,9 @@ see `json-atom'"
            (type boolean allow-comments))
   (loop :for char := c :then (%step step)
         :do (cond
-              ((null char) (return nil))
-              ((and (char= #\/ char) allow-comments) (%skip-cpp-comment step pos))
-              ((not (%whitespace-p char))
-               (return char)))))
+              ((null char)                            (return nil))
+              ((and (char= #\/ char) allow-comments)  (%skip-cpp-comment step pos))
+              ((not (%whitespace-p char))             (return char)))))
 
 (declaim (inline %control-char-p))
 (defun %control-char-p (c)
@@ -771,9 +770,13 @@ see `close-parser'"
   (declare (type boolean %allow-comments %allow-trailing-comma))
   (let ((%parser-state (%make-parser-state))
         (depth 0)
-        top stack key len)
-    (declare (type (integer 0 #xFFFF) depth))
+        top
+        stack
+        key
+        len)
     (declare (dynamic-extent %parser-state stack key))
+    (declare (type (integer 0 #xFFFF) depth))
+    (declare (type list stack key len))
     (macrolet ((finish-value (value)
                  `(let ((value ,value))
                     (if (null stack)
@@ -789,9 +792,9 @@ see `close-parser'"
                       (%raise 'json-parse-error %pos "Maximum depth exceeded"))
                     (incf depth))))
       (loop
-        (multiple-value-bind (evt value) (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)
-          (declare (dynamic-extent evt))
-          (ecase evt
+        (multiple-value-bind (event value) (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)
+          (declare (dynamic-extent event))
+          (case event
             ((nil)          (return top))
             (:value         (finish-value value))
             (:begin-array   (inc-depth)
