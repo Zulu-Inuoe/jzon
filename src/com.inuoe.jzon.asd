@@ -6,6 +6,7 @@
   :depends-on (#:closer-mop
                #:flexi-streams
                #:float-features
+               #:introspect-environment
                #:trivial-gray-streams
                #:uiop)
   :components ((:file "eisel-lemire")

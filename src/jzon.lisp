@@ -75,6 +75,7 @@
    #:write-object*)
   (:local-nicknames
     (#:el #:com.inuoe.jzon/eisel-lemire)
+    (#:ie #:introspect-environment)
     (#:rtd #:com.inuoe.jzon/ratio-to-double)
     (#:sf #:com.inuoe.jzon/schubfach)
     (#:tgs #:trivial-gray-streams))
@@ -1771,3 +1772,407 @@ see `write-object'"
         (t
           (stringify-to stream)
           nil)))))
+            
+
+#| standard CL types
+arithmetic-error
+array
+atom
+base-char
+base-string
+bignum
+bit
+bit-vector
+boolean
+broadcast-stream
+built-in-class
+cell-error
+character
+class
+compiled-function
+complex
+concatenated-stream
+condition
+cons
+control-error
+division-by-zero
+double-float
+echo-stream
+end-of-file
+error
+extended-char
+file-error
+file-stream
+fixnum
+float
+floating-point-inexact
+floating-point-invalid-operation
+floating-point-overflow
+floating-point-underflow
+function
+generic-function
+hash-table
+integer
+keyword
+list
+logical-pathname
+long-float
+method
+method-combination
+nil
+null
+number
+package
+package-error
+parse-error
+pathname
+print-not-readable
+program-error
+random-state
+ratio
+rational
+reader-error
+readtable
+real
+restart
+sequence
+serious-condition
+short-float
+signed-byte
+simple-array
+simple-base-string
+simple-bit-vector
+simple-condition
+simple-error
+simple-string
+simple-type-error
+simple-vector
+simple-warning
+single-float
+standard-char
+standard-class
+standard-generic-function
+standard-method
+standard-object
+storage-condition
+stream
+stream-error
+string
+string-stream
+structure-class
+structure-object
+style-warning
+symbol
+synonym-stream
+t
+two-way-stream
+type-error
+unbound-slot
+unbound-variable
+undefined-function
+unsigned-byte
+vector
+warning
+|#
+
+#| Uncovered
+arithmetic-error
+broadcast-stream
+built-in-class
+cell-error
+class
+compiled-function
+concatenated-stream
+condition
+control-error
+division-by-zero
+echo-stream
+end-of-file
+error
+file-error
+file-stream
+floating-point-inexact
+floating-point-invalid-operation
+floating-point-overflow
+floating-point-underflow
+function
+generic-function
+method
+method-combination
+package-error
+parse-error
+print-not-readable
+program-error
+random-state
+reader-error
+readtable
+restart
+serious-condition
+simple-condition
+simple-error
+simple-type-error
+simple-warning
+standard-char
+standard-class
+standard-generic-function
+standard-method
+standard-object
+storage-condition
+stream
+stream-error
+string-stream
+structure-class
+structure-object
+style-warning
+synonym-stream
+two-way-stream
+type-error
+unbound-slot
+unbound-variable
+undefined-function
+warning
+|#
+
+
+(defun %type-part-or (spec n default)
+  (if (atom spec)
+      default
+      (let ((part (nthcdr n spec)))
+        (if part
+            (let ((part-value (car part)))
+              (if (eq part-value '*)
+                  default
+                  part-value))
+            default))))
+
+(defun %convert (value type)
+  (let* ((exp-type (ie:typexpand type))
+         (designator (if (atom exp-type) exp-type (car exp-type))))
+    (case designator
+      ((t)                        value)
+      ((null)
+        (cond
+          ((eq value 'null)       nil)
+          (t                      (error "Cannot coerce '~A' to ~A" value type))))
+      ((boolean)
+        (cond
+          ((eq value nil)         nil)
+          ((eq value nil)         t)
+          ((typep value 'number)  (not (zerop value)))
+          (t                      (error "Cannot coerce '~A' to type ~A." value type))))
+      ((bignum
+        bit 
+        complex 
+        double-float 
+        float
+        fixnum
+        integer 
+        long-float 
+        mod 
+        number 
+        ratio 
+        rational 
+        real 
+        short-float 
+        signed-byte 
+        single-float 
+        unsigned-byte)
+        (typecase value
+          (string (multiple-value-bind (parsed-value errorp) (parse value)
+                    (when (or errorp (not (numberp parsed-value))) (error "Cannot coerce '~A' to type ~A." value type))
+                    
+                    (coerce parsed-value type)))
+          (number (coerce value type))
+          (vector
+            (unless (and (eq designator 'complex)
+                         (= (length value) 2))
+              (error "Cannot coerce '~A' into type ~A." value type))
+            (let ((realpart (%convert (aref value 0) 'real))
+                  (imagpart (%convert (aref value 1) 'real)))
+              (complex realpart imagpart)))
+          (t  (error "Cannot coerce '~A' into type ~A." value type))))
+      ((base-string
+        simple-base-string
+        simple-string
+        string)
+        (let ((value (typecase value
+                       (string    value)
+                       (json-atom (stringify value))
+                       (t (error "Cannot coerce '~A' to type ~A." value type)))))
+          (coerce value type)))
+      ((simple-vector)
+        (unless (typep value 'simple-vector)
+          (error "Cannot coerce '~A' into type ~A" value type))
+        ;; need to make sure len matches
+        (coerce value type))
+      ((hash-table)
+        (unless (hash-table-p value)
+          (error "Cannot coerce '~A' into type ~A" value type))
+        value)
+      ((nil)
+        (error "Cannot coerce anything to empty type ~A" type))
+      ((atom) value)
+      ((cons)
+        (unless (and (vectorp value) (not (stringp value)))
+          (error "Cannot coerce '~A' to '~A'" value type))
+        (labels ((recurse (i type acc)
+                   (cond
+                     ((eq type 'null)
+                      (unless (= (length value) i)
+                        (error "bad len"))
+                      (nreverse acc))
+                     ((not (or (eq type 'cons)
+                               (and (listp type)
+                                    (eq (first type) 'cons))))
+                      (unless (= (length value) (1+ i))
+                        (error "bad len"))
+                      (let ((ret (nreverse acc)))
+                        (setf (cdr (last ret)) (%convert (aref value i) type))
+                        ret))
+                     (t
+                      (let ((car (ie:typexpand (%type-part-or type 1 t)))
+                            (cdr (ie:typexpand (%type-part-or type 2 t))))
+                        (recurse (1+ i) cdr (cons (%convert (aref value i) car) acc)))))))
+          (recurse 0 exp-type nil)))
+      ;; Note, we handle strings separately because
+      ;; for strings we generally are able to take advantage
+      ;; of raw string values or stringify for atoms
+      ;; for non-string arrays however, we don't have any such rules
+      ((array
+        simple-array
+        bit-vector
+        simple-bit-vector
+        vector)
+        (multiple-value-bind (elt-type dimensions)
+          (multiple-value-bind (elt-type dimensions)
+              (let ((normalized (if (atom exp-type) (list exp-type) exp-type)))
+                (ecase designator
+                  ((array simple-array)
+                   ;; Note - handle nil typed array (eg array that can hold nothing)
+                   (values (%type-part-or normalized 1 't)
+                           (let ((dimension-spec (%type-part-or normalized 2 '*)))
+                             (if (integerp dimension-spec)
+                                 (make-list dimension-spec :initial-element '*)
+                                 dimension-spec))))
+                  ((bit-vector simple-bit-vector)
+                   (values 'bit (list (or (second normalized) '*))))
+                  ((vector)
+                   (values (%type-part-or normalized 1 't) (list (%type-part-or normalized 2 '*))))
+                  ((simple-vector)
+                   (values 't (list (or (second normalized) '*))))))
+            (values elt-type (if (listp dimensions) dimensions (list dimensions))))
+
+          (let* ((initial-contents
+                  (labels ((recurse (dimensions x)
+                            (cond
+                              ((null dimensions) (%convert x elt-type))
+                              (t
+                                (unless (typep x 'sequence) (error "Cannot coerce '~A' into type ~A" value type))
+                                (let* ((dimension (car dimensions))
+                                       (dimension (if (eq dimension '*) (length x) dimension)))
+                                  (unless (or (integerp dimension) (eq '* dimension))
+                                    (error "bad dimension in array type: ~A" dimension))
+                                  (map (list 'simple-vector dimension) (lambda (x) (recurse (cdr dimensions) x)) x))))))
+                      (recurse dimensions value)))
+                 (size
+                   (labels ((recurse (dimensions x)
+                             (cond
+                               ((null dimensions) nil)
+                               (t
+                                 (cons (length x) (recurse (cdr dimensions) (aref x 0)))))))
+                     (recurse dimensions initial-contents))))
+           
+           (make-array size :element-type elt-type :initial-contents initial-contents))))
+      ((base-char
+        character
+        extended-char
+        standard-char)
+        (coerce
+          (typecase value
+            (string    value)
+            (json-atom (stringify value))
+            (t         (error "Cannot coerce '~A' into type ~A" value type)))
+          type))
+      ((list)
+        (unless (vectorp value)
+          (error "Cannot coerce '~A' into type ~A" value type))
+        (coerce value type))
+      ((package)
+        (let ((name (etypecase value
+                     (string    value)
+                     ;; TODO - is it ok to stringify here?
+                     (json-atom (stringify value)))))
+         (or (find-package name)
+             (error "Cannot coerce '~A' into type ~A (package does not exist)." value type))))
+      ((pathname)
+       (values (parse-namestring (typecase value
+                                   (string    value)
+                                   ;; TODO is it ok to stringify ??
+                                   (json-atom (stringify value))
+                                   (t         (error "Cannot coerce '~A' into type ~A" value type))))))
+      ((keyword)
+       (let ((name (etypecase value
+                     (string    value)
+                     ;; TODO - is it ok to stringify here?
+                     (json-atom (stringify value)))))
+         (intern name '#:keyword)))
+      ((symbol)
+       (let ((name (etypecase value
+                     (string    value)
+                     ;; TODO - is it ok to stringify here?
+                     (json-atom (stringify value)))))
+         (intern name)))
+      ((sequence)
+        (unless (vectorp value)
+          (error "Cannot coerce '~A' into type ~A" value type))
+        (coerce value type))
+      ((or)
+       (let ((types (rest exp-type)))
+         (dolist (type types (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value types))
+           (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
+             (unless errorp
+               (return value))))))
+      ((and)
+       ;; TODO handle subtypes (inherited class/struct) by ordering to most specialized:
+       ;; eg to handle this case:
+       ;; (defclass x ()
+       ;;   (a))
+
+       ;; (defclass y (x)
+       ;;   (b))
+
+       ;; (defclass z (y)
+       ;;   (c))
+
+       ;; (jzon:parse "{a : 0; b : 1; c : 2}" :type '(and x y z))
+       (let* ((types (rest exp-type))
+              (main-type (first types))
+              (coerced (%convert value main-type))
+              (no-fits (remove coerced (rest types) :test #'typep)))
+         (when no-fits
+           (error "Coercing 'and' - Value '~A' coerced to '~A' via '~A' fails constraint for ~A" value coerced main-type no-fits))
+         (values coerced no-fits)))
+      (t
+       (let ((class (find-class type)))
+         (unless (hash-table-p value) (error "Cannot coerce '~A' to '~A'." value type))
+         (let (;; plist of :initarg form slot/values for `make-instance'
+               (initarg-slots-plist ())
+               ;; alist of (slotd . value) for `(setf cmop:slot-value-using-class)'
+               (set-value-slots-alist ()))
+           (declare (dynamic-extent initarg-slots-plist set-value-slots-alist))
+           (c2mop:ensure-finalized class)
+           (dolist (slot (c2mop:class-slots class))
+             (multiple-value-bind (value value-p) (gethash (coerce-key (c2mop:slot-definition-name slot)) value)
+               (when value-p
+                 (let ((coerce-value (%convert value (c2cl:slot-definition-type slot)))
+                       (slot-initargs (c2mop:slot-definition-initargs slot)))
+                   (cond
+                     (slot-initargs
+                      (push coerce-value initarg-slots-plist)
+                      (push (first slot-initargs) initarg-slots-plist))
+                     (t
+                      (push (cons slot coerce-value) set-value-slots-alist)))))))
+           (let ((instance (apply #'make-instance class initarg-slots-plist)))
+             (loop :for (slot . value) :in set-value-slots-alist
+                   :do (setf (c2mop:slot-value-using-class class instance slot) value))
+             instance)))))))
