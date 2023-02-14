@@ -31,6 +31,8 @@
    ;;; Streaming Writer
    #:writer
    #:make-writer
+   #:close-writer
+   #:with-writer
 
    ;; Extensible serialization
    #:write-value
@@ -68,7 +70,8 @@
   (:local-nicknames
     (#:el #:com.inuoe.jzon/eisel-lemire)
     (#:rtd #:com.inuoe.jzon/ratio-to-double)
-    (#:sf #:com.inuoe.jzon/schubfach))
+    (#:sf #:com.inuoe.jzon/schubfach)
+    (#:tgs #:trivial-gray-streams))
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
   (:import-from #:float-features)
@@ -583,14 +586,15 @@ see `close-parser'"
       (slot-makunbound parser '%key-fn)))
   parser)
 
-(defmacro with-parser ((name &rest args) &body body)
+(defmacro with-parser ((var &rest args) &body body)
   "Create a `parser', ensuring `close-parser' is called on it on exit.
 
 see `make-parser'
 see `close-parser'"
-  `(let ((,name (make-parser ,@args)))
-    (unwind-protect (locally ,@body)
-      (close-parser ,name))))
+  (let ((parser-sym (gensym (string '#:parser))))
+    `(let ((,parser-sym (make-parser ,@args)))
+      (unwind-protect (let ((,var ,parser-sym)) ,@body)
+        (close-parser ,parser-sym)))))
 
 (declaim (inline %parse-next))
 (defun %parse-next (%parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)
@@ -932,6 +936,23 @@ Example return value:
   (:documentation "Error signalled when a recursive write is detected.
   A recursive write is when `write-value' is called from within `write-value' with a value it has 'seen' before."))
 
+(defclass %string-output-stream (tgs:fundamental-character-output-stream)
+  ((%string :initarg :string)))
+
+(defmethod tgs:stream-write-char ((stream %string-output-stream) character)
+  (vector-push-extend character (slot-value stream '%string)))
+
+(defmethod tgs:stream-write-string ((stream %string-output-stream) string &optional start end)
+  (let* ((%string (slot-value stream '%string))
+         (len (- (or end (length string)) (or start 0)))
+         (prev-len (fill-pointer %string))
+         (available-space (- (array-dimension %string 0) prev-len))
+         (new-len (+ prev-len len)))
+    (when (< available-space len)
+      (adjust-array %string new-len))
+    (setf (fill-pointer %string) new-len)
+    (replace %string string :start1 prev-len :start2 (or start 0) :end2 end)))
+
 ;;; Stack is
 ;;; (<state> . <prev-states>)
 ;;; where <state> is one of
@@ -961,7 +982,8 @@ Example return value:
    (%ref-stack :initform nil)
    (%replacer :initarg :replacer)
    (%depth :type integer :initform 0)
-   (%max-depth :initarg :max-depth))
+   (%max-depth :initarg :max-depth)
+   (%close-action :initarg :close-action))
   (:documentation "A JSON writer on which to call `write-value', `begin-object', etc.")
   (:default-initargs
    :stream (make-broadcast-stream)
@@ -971,27 +993,75 @@ Example return value:
    :max-depth 128))
 
 (defun make-writer (&key
-                      (stream (make-broadcast-stream))
-                      coerce-key
+                      (stream t)
                       (pretty nil)
                       (replacer nil)
+                      coerce-key
                       (max-depth 128))
   "Create a writer for subsequent `write-value', `begin-object', et al calls.
-  `:stream' must be a character or binary `stream'.
-  `:replacer' a function of two arguments, the key and the value of a KV pair.
-  `:coerce-key' is a designator for a function of one argument, and is used to coerce object keys into non-nil string designators.
+  `:stream' like the `destination' in `format', or a `pathname'
+  `:pretty' if true, pretty-format the output
+  `:replacer' a function which takes a key and value as an argument, and returns t or nil, indicating whether the KV pair should be written.
+    - Optionally returns a second value, indicating the value to be stringified in place of the given value.
+  `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
+  `:max-depth' is an integer denoting the maximum depth to allow nesting during writing, or nil
 
  see `coerce-key'"
-  (check-type stream stream)
   (check-type max-depth (or null (integer 1 #xFFFF)))
-  (let ((stream (cond
-                  ((subtypep (stream-element-type stream) 'character) stream)
-                  (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
+  (multiple-value-bind (stream close-action)
+      (cond
+        ((null stream) (values (make-broadcast-stream) (lambda ())))
+        ((stringp stream)
+          (unless (and (adjustable-array-p stream) (array-has-fill-pointer-p stream))
+            (error 'type-error :datum stream :expected-type '(and string (adjustable-array-p stream) (satisfies array-has-fill-pointer-p))))
+
+          (values (make-instance '%string-output-stream :string stream)
+                 (lambda ())))
+        ((pathnamep stream)
+          (let ((stream (open stream :direction :output
+                                     :if-does-not-exist :create
+                                     :if-exists :supersede
+                                     :external-format :utf-8)))
+            (values stream (lambda () (close stream)))))
+        ((streamp stream)
+          (unless (output-stream-p stream)
+            (error 'type-error :datum stream :expected-type '(and stream (satisfies output-stream-p))))
+          (if (subtypep (stream-element-type stream) 'character)
+            (values stream (lambda ()))
+            (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
+              (values stream (lambda () (close stream))))))
+        ((eq stream t)
+          (values *standard-output* (lambda ())))
+        (t
+          (error 'type-error :datum stream :expected-type '(or null
+                                                               (and string (adjustable-array-p stream) (satisfies array-has-fill-pointer-p))
+                                                               pathname
+                                                               (and stream (satisfies output-stream-p))
+                                                               (eql t)))))
     (make-instance 'writer :stream stream
                            :coerce-key (or coerce-key #'coerce-key)
                            :pretty (and pretty t)
                            :replacer replacer
-                           :max-depth (or max-depth #xFFFF))))
+                           :max-depth (or max-depth #xFFFF)
+                           :close-action close-action)))
+
+(defun close-writer (writer)
+  "Close the `writer'."
+  (check-type writer writer)
+  (let ((action (shiftf (slot-value writer '%close-action) nil)))
+    (when action
+      (funcall (the function action))))
+  writer)
+
+(defmacro with-writer ((var &rest args) &body body)
+  "Create a `writer', ensuring `close-writer' is called on it on exit.
+
+see `make-writer'
+see `close-writer'"
+  (let ((writer-sym (gensym (string '#:writer))))
+    `(let ((,writer-sym (make-writer ,@args)))
+      (unwind-protect (let ((,var ,writer-sym)) ,@body)
+        (close-writer ,writer-sym)))))
 
 (defun %write-indentation (writer)
   "Indent `writer' depending on its depth, if it is set to pretty print."
@@ -1043,6 +1113,8 @@ see `write-property'
 see `write-properties'
 see `end-object'"
   (check-type writer writer)
+  (when (null (slot-value writer '%close-action))
+    (error 'json-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array)                     (progn (%write-indentation writer)
@@ -1066,6 +1138,8 @@ see `end-object'"
 see `begin-object'
 see `with-object'"
   (check-type writer writer)
+  (when (null (slot-value writer '%close-action))
+    (error 'json-error :format-control "The writer has been closed."))
   (with-slots (%stream %coerce-key %stack %pretty) writer
     (let ((context (car %stack)))
       (case context
@@ -1087,6 +1161,8 @@ see `with-object'"
 (defun end-object (writer)
   "Finish writing an object to `writer'. Must match an opening `begin-object'."
   (check-type writer writer)
+  (when (null (slot-value writer '%close-action))
+    (error 'json-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %pretty %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
@@ -1121,6 +1197,8 @@ see `write-properties'"
 see `write-values'
 see `end-array'"
   (check-type writer writer)
+  (when (null (slot-value writer '%close-action))
+    (error 'json-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array-value)          (progn
@@ -1139,6 +1217,8 @@ see `end-array'"
 (defun end-array (writer)
   "Finish writing an array to `writer'. Must match an opening `begin-array'."
   (check-type writer writer)
+  (when (null (slot-value writer '%close-action))
+    (error 'json-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
@@ -1187,6 +1267,8 @@ see `write-values'"
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
   (:method :around ((writer writer) value)
+    (when (null (slot-value writer '%close-action))
+      (error 'json-error :format-control "The writer has been closed."))
     (with-slots (%stack %ref-stack %pretty %replacer) writer
       (let ((context (car %stack)))
         (case context
@@ -1381,11 +1463,8 @@ see `write-object'"
   "Create a new `writer' using `args' and bind it to `*writer*'
 
   `args' are a the same as `make-writer'"
-  (let ((writer-sym (gensym "WRITER")))
-    `(let* ((,writer-sym (make-writer ,@args))
-            (*writer* ,writer-sym))
-       ,@body
-       ,writer-sym)))
+  `(with-writer (*writer* ,@args)
+     ,@body))
 
 (defun write-value* (value)
   "As `write-value', but using the currently bound `*writer*'."
@@ -1447,6 +1526,7 @@ see `write-object'"
   `:replacer' a function which takes a key and value as an argument, and returns t or nil, indicating whether the KV pair should be written.
     - Optionally returns a second value, indicating the value to be stringified in place of the given value.
   `:coerce-key' is a function of one argument, and is used to coerce object keys into non-nil string designators
+  `:max-depth' is an integer denoting the maximum depth to allow nesting during writing, or nil
 
  see `coerce-key'
 "
@@ -1456,34 +1536,15 @@ see `write-object'"
   (check-type coerce-key (or symbol function))
   (let ((coerce-key (%ensure-function coerce-key)))
     (flet ((stringify-to (stream)
-             (let ((writer (make-writer :stream stream
-                                        :coerce-key coerce-key
-                                        :pretty (and pretty t)
-                                        :replacer replacer)))
+             (with-writer (writer :stream stream
+                                  :pretty (and pretty t)
+                                  :replacer replacer
+                                  :coerce-key coerce-key)
                (write-value writer element))))
       (cond
         ((null stream)
          (with-output-to-string (stream)
            (stringify-to stream)))
-        ((stringp stream)
-         (unless (array-has-fill-pointer-p stream)
-           (error 'type-error :datum stream :expected-type '(and string (satisfies array-has-fill-pointer-p))))
-         (with-output-to-string (stream stream)
-           (stringify-to stream))
-         nil)
-        ((pathnamep stream)
-         (with-open-file (stream stream :direction :output
-                                        :if-does-not-exist :create
-                                        :if-exists :supersede
-                                        :external-format :utf-8)
-           (stringify-to stream))
-         nil)
         (t
-         (let* ((stream (etypecase stream
-                          ((eql t) *standard-output*)
-                          (stream stream)))
-                (stream (cond
-                          ((subtypep (stream-element-type stream) 'character) stream)
-                          (t (flexi-streams:make-flexi-stream stream :external-format :utf-8)))))
-           (stringify-to stream))
-         nil)))))
+          (stringify-to stream)
+          nil)))))

@@ -17,8 +17,7 @@ Please see the section [Motivation and Features](#motivation-and-features) for a
   * [`jzon:stringify`](#jzonstringify)
     * [Additional Types for Writing](#additionally-supported-types-for-writing)
   * [`jzon:writer`](#jzonwriter)
-    * [`jzon:make-writer`](#jzonmakewriter)
-    * [`jzon:with-writer*`](#jzonwith-writer)
+    * [`jzon:with-writer`](#jzonwith-writer)
     * [`jzon:write-value`](#jzonwrite-value)
     * [Other Streaming Writer Functions](#other-streaming-writer-functions)
     * [Streaming Writer Example](#streaming-writer-example)
@@ -196,8 +195,9 @@ This *may* help speed up parsing on highly heterogeneous JSON.
 * *value* - a `jzon:json-element`, or other value (see below)
 * *stream* - a destination like in `format`, or a `pathname`
 * *pretty* - a boolean
-* *coerce-key* - a function of one argument, or nil (see below)
 * *replacer* - a function of two arguments (see below)
+* *coerce-key* - a function of one argument, or nil (see below)
+* *max-depth* - a positive integer, or nil
 
 *result* - nil, or a string
 
@@ -205,7 +205,9 @@ This *may* help speed up parsing on highly heterogeneous JSON.
 
 Serializes *value* to JSON and writes it to *stream*.
 
-If *pretty* is true, the output is formatted with spaces and newlines. 
+If *pretty* is true, the output is formatted with spaces and newlines.
+
+*max-depth* limits the depth of nesting arrays/objects.
 
 In addition to serializing `json:jzon-element` values per [Type Mappings](#type-mappings), `jzon:stringify` allows other values. 
 See [Additionally Supported Types For Writing](#additionally-supported-types-for-writing) and [Custom Serialization](#custom-serialization).
@@ -340,7 +342,7 @@ An example to start:
 }
 ```
 
-`jzon:make-writer` and `jzon:with-writer*` accept the same arguments as `jzon:stringify`, *except* `:stream` must be an open `cl:stream`.
+[`jzon:make-writer`](#jzonmake-writer) and [`jzon:with-writer*`](#jzonwith-writer) accept the same arguments as [`jzon:stringify`](#jzonstringify).
 
 **Note** All writer-related functions are duplicated in ones suffixed with `*` which use the `jzon:*writer*` special variable, and ones lacking the suffix, where the writer is the first argument.
 
@@ -356,22 +358,33 @@ For example, these two are equivalent:
 
 ### jzon:make-writer
 
-*Function* **jzon:make-writer** *&key stream pretty coerce-key replacer => writer*
+*Function* **jzon:make-writer** *&key stream pretty coerce-key replacer max-depth => writer*
 
 * *stream* - an open character or binary output `stream`
 * *pretty* - a boolean
 * *coerce-key* - a function of one argument, or nil (see below)
 * *replacer* - a function of two arguments (see below)
+* *max-depth* - a positive integer, or nil
 
 *writer* - a `jzon:writer`
 
 #### Description
 
-Construct a writer for writing JSON in a streaming fashion.
-
-Generally akin to [`jzon:stringify`](#jzonstringify), with the exception that *stream* must be an already open `stream`.
+Construct a [`jzon:writer`](#jzonwriter) for writing JSON via subsequent calls to [`jzon:write-value`](#jzonwrite-value).
 
 If *pretty* is true, all output is indented with spaces and newlines.
+
+*max-depth* limits the depth of nesting arrays/objects.
+
+##### stream
+
+*stream* is a destination as in `format`, or a `pathname`:
+
+* `t` - Writes to `*standard-output*`
+* `nil` - Writes to the void
+* an open `stream` - Writes to that stream
+* a `string` with a fill-pointer - writes to that string as `with-output-to-string`
+* a `pathname` - Must designate a file. Creates or supersedes a new file and writes to it
 
 ##### coerce-key
 
@@ -381,24 +394,38 @@ A function for coercing keys to strings. See [Custom Serialization](#custom-seri
 
 Please see the section in [`jzon:stringify`](#jzonstringify).
 
-### jzon:with-writer*
+:warning: Because [`jzon:make-writer`](#jzonmake-writer) can open a file, it is recommended you use [`jzon:with-writer`](#jzonwith-writer) instead, unless you need indefinite extent.
 
-*Macro* **jzon:with-writer** *(&rest args) declaration\* form\**
+### jzon:close-writer
 
+*Function* **jzon:close-writer** *writer*
+
+*=> writer*
+
+* *writer* - a [`jzon:writer`](#jzonwriter)
+
+#### Description
+
+Closes the writer and releases any held resources.
+
+### jzon:with-writer
+
+*Macro* **jzon:with-writer** *(var &rest args) declaration\* form\**
+
+*Macro* **jzon:with-writer\*** *(&rest args) declaration\* form\**
+
+* *var* - a symbol
 * *args* - initialization arguments to `jzon:make-writer`
 * *declaration* - a declare expression, not evaluated
 * *forms* - an implicig progn
 
 #### Description
 
-Create a new writer and bind it locally to `jzon:*writer*`
+As [`jzon:make-writer`](#jzonmake-writer) + `unwind-protect` + [`jzon:close-writer`](#jzonclose-writer).
 
-Essentially equivalent to
+Use this like you would `with-open-file`.
 
-```lisp
-(let ((jzon:*writer* (jzon:make-writer args)))
-  form)
-```
+`jzon:with-writer*` binds the variable [`jzon:*writer*`](#jzonwriter)
 
 ### jzon:write-value
 

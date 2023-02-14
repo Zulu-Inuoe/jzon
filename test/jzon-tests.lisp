@@ -533,7 +533,7 @@
 (defmacro with-writer-to-string ((writer &key pretty max-depth coerce-key) &body body)
   (let ((str-sym (gensym "STR")))
     `(with-output-to-string (,str-sym)
-       (let ((,writer (jzon:make-writer :stream ,str-sym :pretty ,pretty :max-depth ,max-depth :coerce-key ,coerce-key)))
+       (jzon:with-writer (,writer :stream ,str-sym :pretty ,pretty :max-depth ,max-depth :coerce-key ,coerce-key)
          ,@body))))
 
 (test writer-write-values-works
@@ -590,7 +590,7 @@
       (jzon:with-object writer))))
 
 (test write-properties-returns-writer
-  (let ((writer (jzon:make-writer)))
+  (jzon:with-writer (writer)
     (jzon:with-object writer
       (is (eq writer (jzon:write-properties writer 0 0))))))
 
@@ -598,6 +598,20 @@
   (is (string= "[1,2,3]"
        (with-writer-to-string (writer)
          (jzon:write-array writer 1 2 3)))))
+
+(test writer-errors-after-closed
+  (signals (jzon:json-error)
+    (let ((writer (jzon:make-writer)))
+      (jzon:close-writer writer)
+      (jzon:write-value writer 42)))
+  (signals (jzon:json-error)
+    (let ((writer (jzon:make-writer)))
+      (jzon:close-writer writer)
+      (jzon:begin-array writer)))
+  (signals (jzon:json-error)
+    (let ((writer (jzon:make-writer)))
+      (jzon:close-writer writer)
+      (jzon:begin-object writer))))
 
 (test write-*-functions-use-bound-writer
   (is (string= "42" (with-writer-to-string (jzon:*writer*) (jzon:write-value* 42))))
