@@ -1650,3 +1650,113 @@ break\"]")))
     }
 }
 "))))
+
+
+(def-suite convert :in jzon
+  :description "Suite of tests for the `jzon:convert' functionality.")
+
+(in-suite convert)
+
+(test convert-null-boolean-signals
+  (signals (error)
+    (jzon:convert 'null 'boolean)))
+    
+(test convert-nil-boolean
+  (is (eq nil (jzon:convert nil 'boolean))))
+  
+(test convert-t-boolean
+  (is (eq t (jzon:convert t 'boolean))))
+
+(test convert-0-boolean
+  (is (eq nil (jzon:convert 0 'boolean))))
+
+(test convert-1-boolean
+  (is (eq t (jzon:convert 1 'boolean))))
+
+(test convert-1.5-boolean
+  (is (eq t (jzon:convert 1.5 'boolean))))
+
+(test convert-signal-non-bool-string-boolean
+  (signals (error) (jzon:convert "\"hello\""))
+  (signals (error) (jzon:convert "[]"))
+  (signals (error) (jzon:convert "{}"))
+  (signals (error) (jzon:convert "\"null\"")))
+
+(test convert-false-string-boolean
+  (is (eq nil (jzon:convert "false" 'boolean))))
+
+(test convert-true-string-boolean
+  (is (eq t (jzon:convert "true" 'boolean))))
+
+(test convert-embedded-false-string-signals
+  (signals (error) (jzon:convert "\"false\"") 'boolean))
+
+(test convert-embedded-true-string-signals
+  (signals (error) (jzon:convert "\"true\"") 'boolean))
+
+(test convert-null-integer-signals
+  (signals (error) (jzon:convert 'null 'integer)))
+
+(test convert-nil-integer-signals
+  (signals (error) (jzon:convert 'nil 'integer)))
+
+(test convert-t-integer-signals
+  (signals (error) (jzon:convert 't 'integer)))
+
+(test convert-0-integer
+  (is (= 0 (jzon:convert 0 'integer))))
+
+(test convert-1-integer
+  (is (= 1 (jzon:convert 1 'integer))))
+
+(test convert-1.5-integer-signals
+  (signals (error) (jzon:convert 1.5d0 'integer)))
+
+(test convert-0-string-integer
+  (is (= 0 (jzon:convert "0" 'integer))))
+
+(test convert-1-string-integer
+  (is (= 1 (jzon:convert "1" 'integer))))
+
+(test convert-1.5-string-integer-signals
+  (signals (error) (jzon:convert "1.5" 'integer)))
+
+(test convert-embedded-0-string-integer
+  (signals (error) (jzon:convert "\"0\"" 'integer)))
+
+(test convert-embedded-1-string-integer
+  (signals (error) (jzon:convert "\"1\"" 'integer)))
+
+(test convert-null-double-float-signals
+  (signals (error) (jzon:convert 'null 'double-float)))
+
+(test convert-nil-double-float-signals
+  (signals (error) (jzon:convert 'nil 'double-float)))
+
+(test convert-t-double-float-signals
+  (signals (error) (jzon:convert 't 'double-float)))
+
+(test convert-0-double-float
+  (is (= 0d0 (jzon:convert 0 'double-float))))
+
+(test convert-1-double-float
+  (is (= 1d0 (jzon:convert 1 'double-float))))
+
+(test convert-1.5-double-float
+  (is (= 1.5d0 (jzon:convert 1.5d0 'double-float))))
+
+(test convert-0-string-double-float
+  (is (= 0d0 (jzon:convert "0" 'double-float))))
+
+(test convert-1-string-double-float
+  (is (= 1d0 (jzon:convert "1" 'double-float))))
+
+(test convert-1.5-string-double-float
+  (is (= 1.5d0 (jzon:convert "1.5" 'double-float))))
+
+(test convert-embedded-0-string-double-float
+  (signals (error) (jzon:convert "\"0\"" 'double-float)))
+
+(test convert-embedded-1-string-double-float
+  (signals (error) (jzon:convert "\"1\"" 'double-float)))
+

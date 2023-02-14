@@ -72,7 +72,10 @@
    #:write-properties*
    #:end-object*
    #:with-object*
-   #:write-object*)
+   #:write-object*
+   
+   ;; Conversion functionality
+   #:convert)
   (:local-nicknames
     (#:el #:com.inuoe.jzon/eisel-lemire)
     (#:ie #:introspect-environment)
@@ -1944,39 +1947,48 @@ warning
                   default
                   part-value))
             default))))
+            
+(defun %type= (a b)
+  (multiple-value-bind (x1 y1) (subtypep a b)
+    (and x1 y1 (multiple-value-bind (x2 y2) (subtypep b a)
+                 (and x2 y2)))))
 
 (defun %convert (value type)
   (let* ((exp-type (ie:typexpand type))
          (designator (if (atom exp-type) exp-type (car exp-type))))
-    (case designator
-      ((t)                        value)
-      ((null)
+    (cond
+      ((eq t designator)          value)
+      ((eq designator nil)        (error "Cannot coerce anything to empty type ~A" type))
+      ((eq 'null designator)
         (cond
           ((eq value 'null)       nil)
           (t                      (error "Cannot coerce '~A' to ~A" value type))))
-      ((boolean)
+      ((%type= type 'boolean)
         (cond
-          ((eq value nil)         nil)
-          ((eq value nil)         t)
-          ((typep value 'number)  (not (zerop value)))
+          ((eq value nil)   nil)
+          ((eq value t)     t)
+          ((numberp value)  (not (zerop value)))
+          ((stringp value)  (multiple-value-bind (parsed-value errorp) (parse value)
+                              (when (or errorp (not (typep parsed-value 'boolean))) (error "Cannot coerce '~A' to type ~A." value type))
+                              parsed-value))
           (t                      (error "Cannot coerce '~A' to type ~A." value type))))
-      ((bignum
-        bit 
-        complex 
-        double-float 
-        float
-        fixnum
-        integer 
-        long-float 
-        mod 
-        number 
-        ratio 
-        rational 
-        real 
-        short-float 
-        signed-byte 
-        single-float 
-        unsigned-byte)
+      ((member designator '(bignum
+                            bit 
+                            complex 
+                            double-float 
+                            float
+                            fixnum
+                            integer 
+                            long-float 
+                            mod 
+                            number 
+                            ratio 
+                            rational 
+                            real 
+                            short-float 
+                            signed-byte 
+                            single-float 
+                            unsigned-byte))
         (typecase value
           (string (multiple-value-bind (parsed-value errorp) (parse value)
                     (when (or errorp (not (numberp parsed-value))) (error "Cannot coerce '~A' to type ~A." value type))
@@ -1991,28 +2003,29 @@ warning
                   (imagpart (%convert (aref value 1) 'real)))
               (complex realpart imagpart)))
           (t  (error "Cannot coerce '~A' into type ~A." value type))))
-      ((base-string
-        simple-base-string
-        simple-string
-        string)
+      ((member designator '(base-string
+                            simple-base-string
+                            simple-string
+                            string))
         (let ((value (typecase value
                        (string    value)
                        (json-atom (stringify value))
                        (t (error "Cannot coerce '~A' to type ~A." value type)))))
           (coerce value type)))
-      ((simple-vector)
+      ((eq designator 'simple-vector)
         (unless (typep value 'simple-vector)
           (error "Cannot coerce '~A' into type ~A" value type))
         ;; need to make sure len matches
         (coerce value type))
-      ((hash-table)
+      ((eq designator 'hash-table)
         (unless (hash-table-p value)
           (error "Cannot coerce '~A' into type ~A" value type))
         value)
-      ((nil)
-        (error "Cannot coerce anything to empty type ~A" type))
-      ((atom) value)
-      ((cons)
+      ((eq designator 'atom)
+        (unless (consp value)
+          (error "Cannot coerce '~A' into type ~A" value type))
+        value)
+      ((eq designator 'cons)
         (unless (and (vectorp value) (not (stringp value)))
           (error "Cannot coerce '~A' to '~A'" value type))
         (labels ((recurse (i type acc)
@@ -2038,11 +2051,11 @@ warning
       ;; for strings we generally are able to take advantage
       ;; of raw string values or stringify for atoms
       ;; for non-string arrays however, we don't have any such rules
-      ((array
-        simple-array
-        bit-vector
-        simple-bit-vector
-        vector)
+      ((member designator '(array
+                            simple-array
+                            bit-vector
+                            simple-bit-vector
+                            vector))
         (multiple-value-bind (elt-type dimensions)
           (multiple-value-bind (elt-type dimensions)
               (let ((normalized (if (atom exp-type) (list exp-type) exp-type)))
@@ -2083,56 +2096,56 @@ warning
                      (recurse dimensions initial-contents))))
            
            (make-array size :element-type elt-type :initial-contents initial-contents))))
-      ((base-char
-        character
-        extended-char
-        standard-char)
+      ((member designator '(base-char
+                            character
+                            extended-char
+                            standard-char))
         (coerce
           (typecase value
             (string    value)
             (json-atom (stringify value))
             (t         (error "Cannot coerce '~A' into type ~A" value type)))
           type))
-      ((list)
+      ((eq designator 'list)
         (unless (vectorp value)
           (error "Cannot coerce '~A' into type ~A" value type))
         (coerce value type))
-      ((package)
+      ((eq designator 'package)
         (let ((name (etypecase value
                      (string    value)
                      ;; TODO - is it ok to stringify here?
                      (json-atom (stringify value)))))
          (or (find-package name)
              (error "Cannot coerce '~A' into type ~A (package does not exist)." value type))))
-      ((pathname)
+      ((eq designator 'pathname)
        (values (parse-namestring (typecase value
                                    (string    value)
                                    ;; TODO is it ok to stringify ??
                                    (json-atom (stringify value))
                                    (t         (error "Cannot coerce '~A' into type ~A" value type))))))
-      ((keyword)
+      ((eq designator 'keyword)
        (let ((name (etypecase value
                      (string    value)
                      ;; TODO - is it ok to stringify here?
                      (json-atom (stringify value)))))
          (intern name '#:keyword)))
-      ((symbol)
+      ((eq designator 'symbol)
        (let ((name (etypecase value
                      (string    value)
                      ;; TODO - is it ok to stringify here?
                      (json-atom (stringify value)))))
          (intern name)))
-      ((sequence)
+      ((eq designator 'sequence)
         (unless (vectorp value)
           (error "Cannot coerce '~A' into type ~A" value type))
         (coerce value type))
-      ((or)
+      ((eq designator 'or)
        (let ((types (rest exp-type)))
          (dolist (type types (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value types))
            (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
              (unless errorp
                (return value))))))
-      ((and)
+      ((eq designator 'and)
        ;; TODO handle subtypes (inherited class/struct) by ordering to most specialized:
        ;; eg to handle this case:
        ;; (defclass x ()
@@ -2176,3 +2189,6 @@ warning
              (loop :for (slot . value) :in set-value-slots-alist
                    :do (setf (c2mop:slot-value-using-class class instance slot) value))
              instance)))))))
+
+(defun convert (value type)
+  (%convert value type))
