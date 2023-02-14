@@ -25,7 +25,7 @@ Please see the section [Motivation and Features](#motivation-and-features) for a
     * [standard-object](#standard-object)
     * [Specializing `jzon:coerced-fields`](#specializing-coerced-fields)
     * [Specializing `jzon:write-value`](#specializing-jzonwrite-value)
-  * [`jzon:parser`](#jzon:parser)
+  * [`jzon:parser`](#jzonparser)
     * [`jzon:with-parser`](#jzonwith-parser)
     * [`jzon:parse-next`](#jzonparse-next)
     * [Streaming Parser Example](#streaming-parser-example)
