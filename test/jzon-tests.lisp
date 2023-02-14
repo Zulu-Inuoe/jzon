@@ -749,6 +749,21 @@
   (is (string= "[]" (jzon:stringify #())))
   (is (string= "[42,\"hello\",[]]" (jzon:stringify #(42 "hello" #())))))
 
+(test stringify-nested-array
+  (is (string= "[[1,2],[3,4]]" (jzon:stringify #(#(1 2) #(3 4))))))
+
+(test stringify-nested-array-pretty
+  (is (string= "[
+  [
+    1,
+    2
+  ],
+  [
+    3,
+    4
+  ]
+]" (jzon:stringify #(#(1 2) #(3 4)) :pretty t))))
+
 (defun recode (value)
   "Shorthand for (jzon:parse (jzon:stringify value))"
   (jzon:parse (jzon:stringify value)))

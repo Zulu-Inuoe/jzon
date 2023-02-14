@@ -1208,9 +1208,10 @@ see `end-array'"
     (error 'json-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
-      ((:array-value)          (progn
-                                 (write-char #\, %stream)
-                                 (%write-indentation writer)))
+      ((:array)                (progn (%write-indentation writer)
+                                      (setf (car %stack) :array-value)))
+      ((:array-value)          (progn (write-char #\, %stream)
+                                      (%write-indentation writer)))
       ((:object-key)           (setf (car %stack) :object-value))
       ((:object :object-value) (error "Expecting object key"))
       ((:complete)             (error "Attempting to write array when value already written to writer")))
@@ -1230,7 +1231,7 @@ see `end-array'"
     (let ((context (car %stack)))
       (case context
         ((:array :array-value))
-        (t (error "Attempting to close array while in ~A" context)))
+        (t                     (error "Attempting to close array while in ~A" context)))
       (pop %stack)
       (decf %depth)
       (when (eq context :array-value)
