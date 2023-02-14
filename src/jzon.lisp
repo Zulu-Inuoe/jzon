@@ -2192,5 +2192,9 @@ warning
                    :do (setf (c2mop:slot-value-using-class class instance slot) value))
              instance)))))))
 
-(defun convert (value type)
-  (%convert value type))
+(defun convert (json type)
+  "Convert the JSON `json' to `type'.
+  
+  `json' may be any valid input to `parse`."
+  (check-type json string)
+  (%convert (parse json) type))
