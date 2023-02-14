@@ -1358,8 +1358,22 @@ see `write-values'"
     (%write-json-atom writer value))
 
   ;;; array
-  (:method ((writer writer) (value simple-vector))
-    (call-next-method))
+  (:method ((writer writer) (value vector))
+    (with-array writer
+      (let ((replacer (slot-value writer '%replacer)))
+        (map nil
+             (if replacer
+               ;; Apply the replacer to each element in the sequence, with the index as its key
+               (let ((i 0))
+                 (lambda (x)
+                   (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                          (when write-p
+                                            (write-value writer (if value-changed-p new-value x))))
+                     (funcall replacer i x))
+                   (incf i)))
+               (lambda (x)
+                 (write-value writer x)))
+              value))))
 
   ;; object
   (:method ((writer writer) (value hash-table))
