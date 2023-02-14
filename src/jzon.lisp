@@ -254,7 +254,7 @@ see `json-atom'"
                              (- utf-16-low-surrogate-pair #xDC00))))
                       code-point))))))
     (setf (fill-pointer string-accum) 0)
-    (loop :with element-type := 'base-char
+    (loop :with base-string-p := t
           :for next :of-type character := (or (%step step) (%raise 'json-eof-error pos "Encountered end of input inside string constant"))
           :until (char= #.(char "\"" 0) next)
           :do
@@ -262,11 +262,11 @@ see `json-atom'"
                (%raise 'json-parse-error pos "Maximum string length exceeded"))
              (let ((interpreted (interpret next)))
                (vector-push-extend interpreted string-accum)
-               (unless (typep interpreted 'base-char)
-                 (setf element-type 'character)))
+               (when (and base-string-p (not (typep interpreted 'base-char)))
+                 (setf base-string-p nil)))
           :finally (return (if (zerop (fill-pointer string-accum))
                              ""
-                             (if (eq element-type 'base-char)
+                             (if base-string-p
                                (make-array (fill-pointer string-accum) :element-type 'base-char :initial-contents string-accum)
                                (make-array (fill-pointer string-accum) :element-type 'character :initial-contents string-accum)))))))
 
@@ -404,7 +404,7 @@ see `json-atom'"
                                           ;; Error if we encounter a literal control char
                                           ;; Track suitable element-type
                                           (loop
-                                            :with element-type := 'base-char
+                                            :with base-string-p := t
                                             :for j :from i
                                             :do
                                               (when (<= (length in) j)
@@ -419,7 +419,7 @@ see `json-atom'"
                                                       (return
                                                         (prog1 (cond
                                                                  ((zerop len) "")
-                                                                 ((eq element-type 'base-char)
+                                                                 (base-string-p
                                                                    (loop :with ret := (make-array len :element-type 'base-char)
                                                                          :for k :from 0 :below len
                                                                          :do (setf (char ret k) (char in (+ i k)))
@@ -436,8 +436,8 @@ see `json-atom'"
                                                     (when (%control-char-p c)
                                                       (%raise 'json-parse-error pos "Unexpected control character in string '~A' (~A)" c (char-name c)))
 
-                                                    (unless (typep c 'base-char)
-                                                      (setf element-type 'character))))))))))
+                                                    (when (and base-string-p (not (typep c 'base-char)))
+                                                      (setf base-string-p nil))))))))))
                     (values step
                             read-string
                             pos))))))
