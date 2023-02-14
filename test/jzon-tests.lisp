@@ -1803,3 +1803,39 @@ break\"]")))
 (test convert-value-0-dimensional-array
   (is (equalp #0A42 (jzon:convert 42 '(array t ()))))
   (is (equalp #0A"great" (jzon:convert "great" '(array t ())))))
+
+(test convert-multi-dimensional-array
+  (is (equalp #2A((1 2) (3 4)) (jzon:convert #(#(1 2) (3 4)) '(array t (* *)))))
+  (is (equalp #2A((1 2) (3 4)) (jzon:convert #(#(1 2) (3 4)) '(array t (* 2)))))
+  (is (equalp #2A((1 2) (3 4)) (jzon:convert #(#(1 2) (3 4)) '(array t (2 *)))))
+  (is (equalp #2A((1 2) (3 4)) (jzon:convert #(#(1 2) (3 4)) '(array t (2 2)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (* *)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (* 3)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (2 *)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (2 3)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (2 3))))))
+
+(test convert-multi-dimensional-array
+  (is (equalp #2A((1 2) (3 4)) (jzon:convert #(#(1 2) (3 4)) '(array t (* *)))))
+  (is (equalp #2A((1 2) (3 4)) (jzon:convert #(#(1 2) (3 4)) '(array t (* 2)))))
+  (is (equalp #2A((1 2) (3 4)) (jzon:convert #(#(1 2) (3 4)) '(array t (2 *)))))
+  (is (equalp #2A((1 2) (3 4)) (jzon:convert #(#(1 2) (3 4)) '(array t (2 2)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (* *)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (* 3)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (2 *)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (2 3)))))
+  (is (equalp #2A((1 2 3) (4 5 6)) (jzon:convert #(#(1 2 3) (4 5 6)) '(array t (2 3))))))
+
+(test convert-multi-dimensional-array-follows-element-type
+  (is (equalp #2A(("1" "2") ("3" "4")) (jzon:convert #(#(1 2) (3 4)) '(array string (* *)))))
+  (is (equalp #2A(("1" "2") ("3" "4")) (jzon:convert #(#(1 2) (3 4)) '(array string (* 2)))))
+  (is (equalp #2A(("1" "2") ("3" "4")) (jzon:convert #(#(1 2) (3 4)) '(array string (2 *)))))
+  (is (equalp #2A(("1" "2") ("3" "4")) (jzon:convert #(#(1 2) (3 4)) '(array string (2 2)))))
+  (is (equalp #2A(("1" "2" "3") ("4" "5" "6")) (jzon:convert #(#(1 2 3) (4 5 6)) '(array string (* *)))))
+  (is (equalp #2A(("1" "2" "3") ("4" "5" "6")) (jzon:convert #(#(1 2 3) (4 5 6)) '(array string (* 3)))))
+  (is (equalp #2A(("1" "2" "3") ("4" "5" "6")) (jzon:convert #(#(1 2 3) (4 5 6)) '(array string (2 *)))))
+  (is (equalp #2A(("1" "2" "3") ("4" "5" "6")) (jzon:convert #(#(1 2 3) (4 5 6)) '(array string (2 3)))))
+  (is (equalp #2A(("1" "2" "3") ("4" "5" "6")) (jzon:convert #(#(1 2 3) (4 5 6)) '(array string (2 3))))))
+
+(test convert-array-to-complex
+  (is (= #C(1 2) (jzon:convert #(1 2) 'complex))))
