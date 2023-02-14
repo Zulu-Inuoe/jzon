@@ -642,6 +642,11 @@
 (test stringify-to-nil-returns-string
   (is (string= "42" (jzon:stringify 42))))
 
+(test stringify-to-string-writes-to-string
+  (is (string= "42" (let ((str (make-array 0 :element-type 'character :fill-pointer t :adjustable t)))
+                      (jzon:stringify 42 :stream str)
+                      str))))
+
 (test stringify-to-t-writes-to-stdout
   (is (string= "42" (with-output-to-string (*standard-output*)
                       (jzon:stringify 42 :stream t)))))
