@@ -201,7 +201,7 @@ see `json-atom'"
   (declare (type character c))
   (<= #x00 (char-code c) #x1F))
 
-(defun %read-json-string (step pos string-accum max-string-length)
+(defun %read-json-string (step pos string-accum max-string-length base-string-p)
   "Reads a JSON string step-wise using `step' until an unescaped double-quote.
  Returns a `simple-string' representing the string."
   (declare (type (and string (not simple-string)) string-accum))
@@ -253,9 +253,7 @@ see `json-atom'"
                              (ash (- utf-16-high-surrogate-pair #xD800) 10)
                              (- utf-16-low-surrogate-pair #xDC00))))
                       code-point))))))
-    (setf (fill-pointer string-accum) 0)
-    (loop :with base-string-p := t
-          :for next :of-type character := (or (%step step) (%raise 'json-eof-error pos "Encountered end of input inside string constant"))
+    (loop :for next :of-type character := (or (%step step) (%raise 'json-eof-error pos "Encountered end of input inside string constant"))
           :until (char= #.(char "\"" 0) next)
           :do
              (when (= (fill-pointer string-accum) max-string-length)
@@ -431,7 +429,18 @@ see `json-atom'"
                                                                          :finally (return ret))))
                                                           (setf i (1+ j))))))
                                                   (#\\ ;; we need to worry about escape sequences, unicode, etc.
-                                                    (return (%read-json-string step pos string-accum max-string-length)))
+                                                    (let ((len (- j i)))
+                                                      (when (< max-string-length len)
+                                                        (setf i (+ i (1+ max-string-length)))
+                                                        (%raise 'json-parse-error pos "Maximum string length exceeded"))
+                                                      
+                                                      ;; Copy over what we have so far
+                                                      (when (< (array-dimension string-accum 0) len)
+                                                        (adjust-array string-accum (* len 2)))
+                                                      (setf (fill-pointer string-accum) len)
+                                                      (replace string-accum in :start2 i :end2 j)
+                                                      (setf i j)
+                                                      (return (%read-json-string step pos string-accum max-string-length base-string-p))))
                                                   (t
                                                     (when (%control-char-p c)
                                                       (%raise 'json-parse-error pos "Unexpected control character in string '~A' (~A)" c (char-name c)))
@@ -470,7 +479,9 @@ see `json-atom'"
                              (file-position in pos)
                              (return (values line col)))))))
          (read-string (let ((string-accum (make-array (min 256 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
-                        (lambda () (%read-json-string step pos string-accum max-string-length)))))
+                        (lambda () 
+                          (setf (fill-pointer string-accum) 0)
+                          (%read-json-string step pos string-accum max-string-length t)))))
     (values step
             read-string
             pos)))
