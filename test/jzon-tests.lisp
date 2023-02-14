@@ -554,8 +554,8 @@
 (test writer-disallows-more-than-one-toplevel-value
   (signals (error)
     (with-writer-to-string (writer)
-      (jzon:write-value 42)
-      (jzon:write-value 24)))
+      (jzon:write-value writer 42)
+      (jzon:write-value writer 24)))
   (signals (error)
     (with-writer-to-string (writer)
       (jzon:with-object writer)
