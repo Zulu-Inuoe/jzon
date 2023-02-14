@@ -263,11 +263,14 @@ When writing, the following type mappings are also available:
 | character           | string (`string`)                                                   |
 | pathname            | string (`uiop:native-namestring`)                                   |
 | real                | number                                                              |
+| array               | array\* - multidimensional arrays are arrays-of-arrays              |
 | sequence            | array                                                               |
 | standard-object     | object                                                              |
-| structure-object\*  | object                                                              |
+| structure-object†   | object                                                              |
 
-\*: On supported implementations where structure slots are available via the MOP.
+\*: `#2A((1 2) (3 4))` becomes `[[1,2],[3,4]]`
+
+†: On supported implementations where structure slots are available via the MOP.
 
 If you have an alist/plist you wish to write, we recommend the use of either `alexandria:alist-hash-table` or `alexandria:plist-hash-table`, or use one of the methods in [Custom Serialization](#custom-serialization).
 

@@ -1408,6 +1408,21 @@ see `write-values'"
   (:method  ((writer writer) (value pathname))
     (%write-json-atom writer (uiop:native-namestring value)))
 
+  ;; Multi-dimensional arrays
+  (:method ((writer writer) (value array))
+    (let ((dimensions (array-dimensions value)))
+      (if (null dimensions)
+          (write-value writer (aref value))
+          (labels ((recurse (dimensions acc)
+                     (destructuring-bind (d . rest) dimensions
+                       (with-array writer
+                         (if (null rest)
+                           (loop :for i :below d
+                                 :do (write-value writer (row-major-aref value (+ acc i))))
+                           (loop :for i :below d
+                                 :do (recurse rest (+ acc (* i d)))))))))
+            (recurse dimensions 0)))))
+
   ;;; Sequence support
   (:method ((writer writer) (value sequence))
     (with-array writer

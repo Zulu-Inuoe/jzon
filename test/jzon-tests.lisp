@@ -764,6 +764,12 @@
   ]
 ]" (jzon:stringify #(#(1 2) #(3 4)) :pretty t))))
 
+(test stringify-multidimensional-array
+  (is (string= "[[1,2],[3,4]]" (jzon:stringify #2A((1 2) (3 4))))))
+
+(test 0-dimension-array
+  (is (string= "42" (jzon:stringify #0A42))))
+
 (defun recode (value)
   "Shorthand for (jzon:parse (jzon:stringify value))"
   (jzon:parse (jzon:stringify value)))
@@ -854,9 +860,6 @@
     \"x\": 0
   }
 ]" (jzon:stringify (vector (ph "x" 0)) :pretty t))))
-
-(test stringify-no-slots-on-unknown-object ()
-  (is (string= "{}" (jzon:stringify (make-array '(2 2))))))
 
 (test stringify-pretty-prints-keys
   (is (string= "{\"#(1 2)\":0}" (jzon:stringify (ph #(1 2) 0)))))
