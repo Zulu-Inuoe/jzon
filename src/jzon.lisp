@@ -139,13 +139,11 @@ see `json-atom'"
 
 (declaim (inline %step))
 (defun %step (step)
-  (declare (function step))
-  (the (values (or null character) &optional) (funcall step)))
+  (funcall (the (function () (values (or null character) &optional)) step)))
 
 (declaim (inline %read-string))
 (defun %read-string (read-string)
-  (declare (function read-string))
-  (the (values simple-string &optional) (funcall read-string)))
+  (funcall (the (function () (values simple-string &optional)) read-string)))
 
 (declaim (inline %key-fn))
 (defun %key-fn (key-fn str)
