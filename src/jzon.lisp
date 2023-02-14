@@ -433,7 +433,7 @@ see `json-atom'"
                                                       (when (< max-string-length len)
                                                         (setf i (+ i (1+ max-string-length)))
                                                         (%raise 'json-parse-error pos "Maximum string length exceeded"))
-                                                      
+
                                                       ;; Copy over what we have so far
                                                       (when (< (array-dimension string-accum 0) len)
                                                         (adjust-array string-accum (* len 2)))
@@ -479,7 +479,7 @@ see `json-atom'"
                              (file-position in pos)
                              (return (values line col)))))))
          (read-string (let ((string-accum (make-array (min 256 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
-                        (lambda () 
+                        (lambda ()
                           (setf (fill-pointer string-accum) 0)
                           (%read-json-string step pos string-accum max-string-length t)))))
     (values step
@@ -1244,8 +1244,19 @@ see `write-values'"
     (%write-json-atom writer value))
   (:method ((writer writer) (value integer))
     (%write-json-atom writer value))
-  (:method ((writer writer) (value double-float))
-    (%write-json-atom writer value))
+  (:method ((writer writer) (value float))
+    (with-slots (%stream %stack) writer
+      (case (car %stack)
+        ((:array :object)
+         (%write-indentation writer))
+        ((:array-value)
+         (write-char #\, %stream)
+         (%write-indentation writer)))
+      (etypecase value
+        (double-float (sf:write-double value %stream))
+        (single-float (sf:write-float value %stream))
+        (long-float   (sf:write-double (coerce value 'double-float) %stream))
+        (short-float  (sf:write-float  (coerce value 'single-float) %stream)))))
   (:method ((writer writer) (value string))
     (%write-json-atom writer value))
 
@@ -1269,20 +1280,9 @@ see `write-values'"
                      (write-value writer x))))
              value)))
 
-  ;;; reals handling
-  (:method ((writer writer) (value single-float))
-    (with-slots (%stream %stack) writer
-      (case (car %stack)
-        ((:array :object)
-         (%write-indentation writer))
-        ((:array-value)
-         (write-char #\, %stream)
-         (%write-indentation writer)))
-      (sf:write-float value %stream)))
+  ;; Reals
   (:method ((writer writer) (value ratio))
     (%write-json-atom writer (rtd:ratio-to-double value)))
-  (:method ((writer writer) (value real))
-    (%write-json-atom writer (coerce value 'double-float)))
 
   ;;; Symbols
   (:method ((writer writer) (value symbol))
