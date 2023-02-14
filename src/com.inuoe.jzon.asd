@@ -1,11 +1,12 @@
 (defsystem #:com.inuoe.jzon
   :version "1.0.0"
-  :description "JSON read/write"
+  :description "A correct and safe(er) JSON RFC 8259 parser with sane defaults."
   :author "Wilfredo Velázquez-Rodríguez <zulu.inuoe@gmail.com>"
   :license "MIT"
   :depends-on (#:closer-mop
                #:flexi-streams
                #:float-features
+               #:trivial-gray-streams
                #:uiop)
   :components ((:file "eisel-lemire")
                (:file "ratio-to-double")
