@@ -2092,7 +2092,9 @@ warning
                              (cond
                                ((null dimensions) nil)
                                (t
-                                 (cons (length x) (recurse (cdr dimensions) (aref x 0)))))))
+                                 (let ((rest (cdr dimensions)))
+                                   (cons (length x)
+                                         (and rest (recurse rest (aref x 0)))))))))
                      (recurse dimensions initial-contents))))
            
            (make-array size :element-type elt-type :initial-contents initial-contents))))

@@ -1760,3 +1760,46 @@ break\"]")))
 (test convert-embedded-1-string-double-float
   (signals (error) (jzon:convert "\"1\"" 'double-float)))
 
+(test convert-nil-string
+  (is (string= "false" (jzon:convert nil 'string))))
+
+(test convert-t-string
+  (is (string= "true" (jzon:convert t 'string))))
+
+(test convert-false-string-string
+  (is (string= "false" (jzon:convert "false" 'string))))
+
+(test convert-true-string-string
+  (is (string= "true" (jzon:convert "true" 'string))))
+
+(test convert-0-string
+  (is (string= "0" (jzon:convert 0 'string))))
+
+(test convert-1-string
+  (is (string= "1" (jzon:convert 1 'string))))
+
+(test convert-1.5-string
+  (is (string= "1.5" (jzon:convert 1.5d0 'string))))
+
+(test convert-0-string-string
+  (is (string= "0" (jzon:convert "0" 'string))))
+
+(test convert-1-string-string
+  (is (string= "1" (jzon:convert "1" 'string))))
+
+(test convert-1.5-string-string
+  (is (string= "1.5" (jzon:convert "1.5" 'string))))
+
+(test convert-array-string-signals
+  (signals (error) (jzon:convert #() 'string)))
+
+(test convert-hash-table-string-signals
+  (signals (error) (jzon:convert (make-hash-table) 'string)))
+
+(test convert-array-array
+  (is (equalp #() (jzon:convert #() 'array)))
+  (is (equalp #(1 2) (jzon:convert #(1 2) 'array))))
+
+(test convert-value-0-dimensional-array
+  (is (equalp #0A42 (jzon:convert 42 '(array t ()))))
+  (is (equalp #0A"great" (jzon:convert "great" '(array t ())))))
