@@ -1915,3 +1915,40 @@ break\"]")))
 
 (test convert-symbol-interns-symbol
   (is (eq (intern "FOO") (jzon:convert "\"FOO\"" 'symbol))))
+
+(defclass coordinate ()
+  ((reference
+    :initarg :reference)
+   (x
+    :initform 0
+    :initarg :x
+    :accessor x)
+   (y
+    :initform 0
+    :initarg :y
+    :accessor y)))
+
+(defclass object ()
+  ((alive
+    :initform nil
+    :initarg :alive
+    :type boolean)
+   (coordinate
+    :initform nil
+    :initarg :coordinate
+    :type (or null coordinate))
+   (children
+    :initform nil
+    :initarg :children
+    :type list)))
+
+(test convert-roundtrips-clos-class
+  (let* ((coordinate (make-instance 'coordinate))
+         (object (make-instance 'object :coordinate coordinate))
+         (parsed-object (jzon:convert (jzon:stringify object) 'object)))
+    (is (typep parsed-object 'object))
+    (is (eql nil (slot-value parsed-object 'alive)))
+    (is (eql nil (slot-value parsed-object 'children)))
+    (is (typep (slot-value parsed-object 'coordinate) 'coordinate))
+    (is (eql 0 (slot-value (slot-value parsed-object 'coordinate) 'x)))
+    (is (eql 0 (slot-value (slot-value parsed-object 'coordinate) 'y)))))
