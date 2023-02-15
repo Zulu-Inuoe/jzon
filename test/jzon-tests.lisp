@@ -1260,15 +1260,6 @@
 (test stringify-class-downcases-symbols-except-mixed-case
   (is (equalp (ph "all-upper" 0 "mixedCase" 0) (recode (make-instance 'test-class-case)))))
 
-(defclass test-class/stringify-coerced-fields ()
-  ())
-
-(defmethod jzon:coerced-fields ((a test-class/stringify-coerced-fields))
-  (declare (ignore a))
-  (list (list "foo" 42)
-        (list "bar" 101.1d0)
-        (list "baz" #(192 168 1 1))))
-
 (test stringify-pretty-argorder-bugfix
   (is (string= "[
   {
