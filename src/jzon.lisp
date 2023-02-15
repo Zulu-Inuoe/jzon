@@ -1955,14 +1955,43 @@ warning
 
 (defun %convert (value type)
   (let* ((exp-type (ie:typexpand type))
-         (designator (if (atom exp-type) exp-type (car exp-type))))
+         (type-name (if (atom exp-type) exp-type (car exp-type)))) 
     (cond
-      ((eq t designator)          value)
-      ((eq designator nil)        (error "Cannot coerce anything to empty type ~A" type))
-      ((eq 'null designator)
-        (cond
-          ((eq value 'null)       nil)
-          (t                      (error "Cannot coerce '~A' to ~A" value type))))
+      ;;; The 'special' type specifiers
+      ((eq type-name 'values) (error "Cannot '~A' to ~A." value type))
+      ;; For these, either the value is already of that type,
+      ;; or we can't do anything about it
+      ;; TODO - for eql and member types, we sould be able
+      ;;        to pull the literal values out and try to coerce
+      ;;        to them rather than just check if we already have them
+      ;;        this allows us to `(convert "0" '(eql nil))`
+      ;;        Question is - do we even want to?
+      ((or (eq type-name 'eql)
+           (and (eq type-name 'member) (not (%type= type 'boolean)))
+           (eq type-name 'not)
+           (eq type-name 'satisfies))
+        (unless (typep value type) (error "~A can't be converted to type ~A" value type))
+        value)
+      ((eq type-name 'and)
+        (let* ((types (stable-sort (copy-list (rest exp-type)) #'subtypep))
+              (main-type (first types))
+              (coerced (%convert value main-type))
+              (no-fits (remove coerced (rest types) :test #'typep)))
+          (when no-fits
+            (error "Coercing 'and' - Value '~A' coerced to '~A' via '~A' fails constraint for ~A" value coerced main-type no-fits))
+          (values coerced no-fits)))
+      ((eq type-name 'or)
+        ;; TODO - Should we try and be nice and order the types for them?
+        ;; there's no absolute ordering of types, but at least within some group
+        ;; we can try and be helpful (eg if we are given (or number float ladder)
+        ;; we can try for float before number, and UB with the order of ladder
+        ;; or maybe it's best to leave it in the order it comes in as the user can control it
+        (let ((types (rest exp-type)))
+          (dolist (type types (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value types))
+            (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
+              (unless errorp
+                (return value))))))
+
       ((%type= type 'boolean)
         (cond
           ((eq value nil)   nil)
@@ -1972,7 +2001,15 @@ warning
                               (when (or errorp (not (typep parsed-value 'boolean))) (error "Cannot coerce '~A' to type ~A." value type))
                               parsed-value))
           (t                      (error "Cannot coerce '~A' to type ~A." value type))))
-      ((member designator '(bignum
+
+      ;; From here on we should be dealing with 'regular' types
+      ((eq t      type-name)        value)
+      ((eq nil    type-name)        (error "Cannot coerce anything to empty type ~A" type))
+      ((eq 'null  type-name)        (cond
+                                      ((eq value 'null)       nil)
+                                      (t                      (error "Cannot coerce '~A' to ~A" value type))))
+      ((subtypep type 'number)
+        #++(member type-name '(bignum
                             bit 
                             complex 
                             double-float 
@@ -1996,36 +2033,37 @@ warning
                     (coerce parsed-value type)))
           (number (coerce value type))
           (vector
-            (unless (and (eq designator 'complex)
+            (unless (and (eq type-name 'complex)
                          (= (length value) 2))
               (error "Cannot coerce '~A' into type ~A." value type))
             (let ((realpart (%convert (aref value 0) 'real))
                   (imagpart (%convert (aref value 1) 'real)))
               (complex realpart imagpart)))
           (t  (error "Cannot coerce '~A' into type ~A." value type))))
-      ((member designator '(base-string
-                            simple-base-string
-                            simple-string
-                            string))
+      ((subtypep type-name 'string)
+        #++(member type-name  '(base-string
+                                simple-base-string
+                                simple-string
+                                string))
         (let ((value (typecase value
                        (string    value)
                        (json-atom (stringify value))
                        (t (error "Cannot coerce '~A' to type ~A." value type)))))
           (coerce value type)))
-      ((eq designator 'simple-vector)
+      ((eq type-name 'simple-vector)
         (unless (typep value 'simple-vector)
           (error "Cannot coerce '~A' into type ~A" value type))
         ;; need to make sure len matches
         (coerce value type))
-      ((eq designator 'hash-table)
+      ((eq type-name 'hash-table)
         (unless (hash-table-p value)
           (error "Cannot coerce '~A' into type ~A" value type))
         value)
-      ((eq designator 'atom)
+      ((eq type-name 'atom)
         (unless (consp value)
           (error "Cannot coerce '~A' into type ~A" value type))
         value)
-      ((eq designator 'cons)
+      ((eq type-name 'cons)
         (unless (and (vectorp value) (not (stringp value)))
           (error "Cannot coerce '~A' to '~A'" value type))
         (labels ((recurse (i type acc)
@@ -2051,7 +2089,7 @@ warning
       ;; for strings we generally are able to take advantage
       ;; of raw string values or stringify for atoms
       ;; for non-string arrays however, we don't have any such rules
-      ((member designator '(array
+      ((member type-name '(array
                             simple-array
                             bit-vector
                             simple-bit-vector
@@ -2059,7 +2097,7 @@ warning
         (multiple-value-bind (elt-type dimensions)
           (multiple-value-bind (elt-type dimensions)
               (let ((normalized (if (atom exp-type) (list exp-type) exp-type)))
-                (ecase designator
+                (ecase type-name
                   ((array simple-array)
                    ;; Note - handle nil typed array (eg array that can hold nothing)
                    (values (%type-part-or normalized 1 't)
@@ -2098,7 +2136,7 @@ warning
                      (recurse dimensions initial-contents))))
            
            (make-array size :element-type elt-type :initial-contents initial-contents))))
-      ((member designator '(base-char
+      ((member type-name '(base-char
                             character
                             extended-char
                             standard-char))
@@ -2108,55 +2146,42 @@ warning
             (json-atom (stringify value))
             (t         (error "Cannot coerce '~A' into type ~A" value type)))
           type))
-      ((eq designator 'list)
+      ((eq type-name 'list)
         (unless (vectorp value)
           (error "Cannot coerce '~A' into type ~A" value type))
         (coerce value type))
-      ((eq designator 'package)
+      ((eq type-name 'package)
         (let ((name (etypecase value
                      (string    value)
                      ;; TODO - is it ok to stringify here?
                      (json-atom (stringify value)))))
          (or (find-package name)
              (error "Cannot coerce '~A' into type ~A (package does not exist)." value type))))
-      ((eq designator 'pathname)
+      ((eq type-name 'pathname)
        (values (parse-namestring (typecase value
                                    (string    value)
                                    ;; TODO is it ok to stringify ??
                                    (json-atom (stringify value))
                                    (t         (error "Cannot coerce '~A' into type ~A" value type))))))
-      ((eq designator 'keyword)
+      ((eq type-name 'keyword)
        (let ((name (etypecase value
                      (string    value)
                      ;; TODO - is it ok to stringify here?
                      (json-atom (stringify value)))))
          (intern name '#:keyword)))
-      ((eq designator 'symbol)
+      ((eq type-name 'symbol)
        (let ((name (etypecase value
                      (string    value)
                      ;; TODO - is it ok to stringify here?
                      (json-atom (stringify value)))))
          (intern name)))
-      ((eq designator 'sequence)
+      ((eq type-name 'sequence)
         (unless (vectorp value)
           (error "Cannot coerce '~A' into type ~A" value type))
         (coerce value type))
-      ((eq designator 'or)
-       (let ((types (rest exp-type)))
-         (dolist (type types (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value types))
-           (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
-             (unless errorp
-               (return value))))))
-      ((eq designator 'and)
-       (let* ((types (stable-sort (copy-list (rest exp-type)) #'subtypep))
-              (main-type (first types))
-              (coerced (%convert value main-type))
-              (no-fits (remove coerced (rest types) :test #'typep)))
-         (when no-fits
-           (error "Coercing 'and' - Value '~A' coerced to '~A' via '~A' fails constraint for ~A" value coerced main-type no-fits))
-         (values coerced no-fits)))
       (t
-       (let ((class (find-class type)))
+       (let ((class (find-class type nil)))
+         (unless class (error "Cannot coerce '~A' to '~A'." value type))
          (unless (hash-table-p value) (error "Cannot coerce '~A' to '~A'." value type))
          (let (;; plist of :initarg form slot/values for `make-instance'
                (initarg-slots-plist ())

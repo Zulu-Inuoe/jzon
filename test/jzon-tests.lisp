@@ -1842,7 +1842,8 @@ break\"]")))
 
 (test convert-to-or-chooses-first
   (is (= 42 (jzon:convert "42" '(or null integer string))))
-  (is (string= "42" (jzon:convert "42" '(or null string integer)))))
+  (is (string= "42" (jzon:convert "42" '(or null string integer))))
+  (is (= 42 (jzon:convert "42" '(mod 1024)))))
 
 (defclass x () (a))
 (defclass y (x) (b))
