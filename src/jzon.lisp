@@ -1461,20 +1461,16 @@ see `write-values'"
 (declaim (inline %write-value-using-coerced-fields))
 (defun %write-value-using-coerced-fields (writer value)
   (declare (type writer writer))
-  (let ((coerce-key (slot-value writer '%coerce-key))
-        (fields (coerced-fields value)))
-    (with-object writer
-      (loop :for (name value . type-cell) :in fields
-            :for type := (if type-cell (car type-cell) t)
-            :for key := (funcall coerce-key name)
-            :when key ; TODO - Should we error instead of omitting the key?
-              :do
-                 (let ((coerced-value (or value
-                                          (cond ((%type= type 'boolean)  nil)
-                                                ((%type= type 'list)     #())
-                                                (t                       'null)))))
-                   (write-key writer key)
-                   (write-value writer coerced-value))))))
+  (with-object writer
+    (loop :for (name value . type-cell) :in (coerced-fields value)
+          :for type := (if type-cell (car type-cell) t)
+          :for coerced-value := (or value
+                                    (cond ((%type= type 'boolean)  nil)
+                                          ((%type= type 'list)     #())
+                                          (t                       'null)))
+          :do
+            (write-key writer name)
+            (write-value writer coerced-value))))
 
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
