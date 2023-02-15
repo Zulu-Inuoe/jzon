@@ -2148,19 +2148,7 @@ warning
              (unless errorp
                (return value))))))
       ((eq designator 'and)
-       ;; TODO handle subtypes (inherited class/struct) by ordering to most specialized:
-       ;; eg to handle this case:
-       ;; (defclass x ()
-       ;;   (a))
-
-       ;; (defclass y (x)
-       ;;   (b))
-
-       ;; (defclass z (y)
-       ;;   (c))
-
-       ;; (jzon:parse "{a : 0; b : 1; c : 2}" :type '(and x y z))
-       (let* ((types (rest exp-type))
+       (let* ((types (stable-sort (copy-list (rest exp-type)) #'subtypep))
               (main-type (first types))
               (coerced (%convert value main-type))
               (no-fits (remove coerced (rest types) :test #'typep)))

@@ -1843,3 +1843,14 @@ break\"]")))
 (test convert-to-or-chooses-first
   (is (= 42 (jzon:convert "42" '(or null integer string))))
   (is (string= "42" (jzon:convert "42" '(or null string integer)))))
+
+(defclass x () (a))
+(defclass y (x) (b))
+(defclass z (y) (c))
+
+(test convert-orders-and-types
+  (let ((res (jzon:convert "{\"a\":0,\"b\":1,\"c\":2}" '(and x y z))))
+    (is (eq (load-time-value (find-class 'z)) (class-of res)))
+    (is (= 0 (slot-value res 'a)))
+    (is (= 1 (slot-value res 'b)))
+    (is (= 2 (slot-value res 'c)))))
