@@ -1213,6 +1213,12 @@
   (let ((*print-base* 2))
     (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 3/2 3/2))))))
 
+(test stringify-symbol-preserves-case
+  (is (string= "\"JZON\"" (jzon:stringify 'jzon))))
+
+(test stringify-character-writes-string
+  (is (string= "\"Z\"" (jzon:stringify #\Z))))
+
 (test stringify-writes-complex-like-arrays
   (is (string= "[1,2]" (jzon:stringify #C(1 2)))))
 
