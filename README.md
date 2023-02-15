@@ -329,7 +329,9 @@ When writing, the following type mappings are also available:
 | symbol              | string (`symbol-name`, but see [Symbol key case](#symbol-key-case)) |
 | character           | string (`string`)                                                   |
 | pathname            | string (`uiop:native-namestring`)                                   |
-| real                | number                                                              |
+| float               | number                                                              |
+| ratio               | number                                                              |
+| complex             | 2-element array                                                     |
 | array               | array\* - multidimensional arrays are arrays-of-arrays              |
 | sequence            | array                                                               |
 | standard-object     | object                                                              |

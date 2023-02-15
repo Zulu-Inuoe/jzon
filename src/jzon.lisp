@@ -1458,6 +1458,24 @@ see `write-values'"
       (double-float (sf:write-double value %stream))
       (string       (%write-json-string value %stream)))))
 
+(declaim (inline %write-value-using-coerced-fields))
+(defun %write-value-using-coerced-fields (writer value)
+  (declare (type writer writer))
+  (let ((coerce-key (slot-value writer '%coerce-key))
+        (fields (coerced-fields value)))
+    (with-object writer
+      (loop :for (name value . type-cell) :in fields
+            :for type := (if type-cell (car type-cell) t)
+            :for key := (funcall coerce-key name)
+            :when key ; TODO - Should we error instead of omitting the key?
+              :do
+                 (let ((coerced-value (or value
+                                          (cond ((%type= type 'boolean)  nil)
+                                                ((%type= type 'list)     #())
+                                                (t                       'null)))))
+                   (write-key writer key)
+                   (write-value writer coerced-value))))))
+
 (defgeneric write-value (writer value)
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
   (:method :around ((writer writer) value)
@@ -1494,23 +1512,7 @@ see `write-values'"
                               ((nil)       (push :complete %stack))))
             (setf %ref-stack prev-stack)))))
     writer)
-  (:method ((writer writer) value)
-    (let ((coerce-key (slot-value writer '%coerce-key))
-          (fields (coerced-fields value)))
-      (with-object writer
-        (loop :for (name value . type-cell) :in fields
-              :for type := (if type-cell (car type-cell) t)
-              :for key := (funcall coerce-key name)
-              :when key ; TODO - Should we error instead of omitting the key?
-                :do
-                   (let ((coerced-value (or value (cond
-                                                    ((and (subtypep 'boolean type) (subtypep type 'boolean))
-                                                     nil)
-                                                    ((and (subtypep 'list type) (subtypep type 'list))
-                                                     #())
-                                                    (t 'null)))))
-                     (write-key writer key)
-                     (write-value writer coerced-value))))))
+
   ;;; `json-atom' specializations
   (:method ((writer writer) (value (eql 't)))
     (%write-json-atom writer value))
@@ -1574,10 +1576,6 @@ see `write-values'"
                      (write-value writer x))))
              value)))
 
-  ;; Reals
-  (:method ((writer writer) (value ratio))
-    (%write-json-atom writer (rtd:ratio-to-double value)))
-
   ;;; Symbols
   (:method ((writer writer) (value symbol))
     (%write-json-atom writer (string value)))
@@ -1589,6 +1587,14 @@ see `write-values'"
   ;;; Pathnames
   (:method  ((writer writer) (value pathname))
     (%write-json-atom writer (uiop:native-namestring value)))
+
+  ;; Ratio
+  (:method ((writer writer) (value ratio))
+    (%write-json-atom writer (rtd:ratio-to-double value)))
+
+  ;; Complex
+  (:method ((writer writer) (value complex))
+    (write-array writer (realpart value) (imagpart value)))
 
   ;; Multi-dimensional arrays
   (:method ((writer writer) (value array))
@@ -1621,7 +1627,15 @@ see `write-values'"
                    (incf i)))
                (lambda (x)
                  (write-value writer x)))
-              value)))))
+              value))))
+  ;; standard-object
+  (:method ((writer writer) (value standard-object))
+    (%write-value-using-coerced-fields writer value))
+
+  ;; structure-object
+  #+ (or ccl clisp sbcl)
+  (:method ((writer writer) (value structure-object))
+    (%write-value-using-coerced-fields writer value)))
 
 ;;; Additional convenience functions/macros
 (defun write-values (writer &rest values)
@@ -1947,18 +1961,13 @@ warning
                   default
                   part-value))
             default))))
-            
-(defun %type= (a b)
-  (multiple-value-bind (x1 y1) (subtypep a b)
-    (and x1 y1 (multiple-value-bind (x2 y2) (subtypep b a)
-                 (and x2 y2)))))
 
 (defun %convert (value type)
   (let* ((exp-type (ie:typexpand type))
          (type-name (if (atom exp-type) exp-type (car exp-type)))) 
     (cond
       ((eq t      type-name)        value)
-      ((eq nil    type-name)        (error "Cannot convert '~A' to empty type. ~A" type))
+      ((eq nil    type-name)        (error "Cannot convert '~A' to empty type. ~A" value type))
       ((eq type-name 'values)       (error "Cannot convert '~A' to type ~A." value type))
             
       ;; Boolean has special logic regarding things
