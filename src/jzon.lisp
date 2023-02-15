@@ -1957,18 +1957,44 @@ warning
   (let* ((exp-type (ie:typexpand type))
          (type-name (if (atom exp-type) exp-type (car exp-type)))) 
     (cond
-      ;;; The 'special' type specifiers
-      ((eq type-name 'values) (error "Cannot '~A' to ~A." value type))
+      ((eq t      type-name)        value)
+      ((eq nil    type-name)        (error "Cannot convert '~A' to empty type. ~A" type))
+      ((eq type-name 'values)       (error "Cannot convert '~A' to type ~A." value type))
+            
+      ;; Boolean has special logic regarding things
+      ;; like strings and numbers, so needs to go first
+      ((%type= type 'boolean)
+        (cond
+          ((eq value nil)   nil)
+          ((eq value t)     t)
+          ((numberp value)  (not (zerop value)))
+          ((stringp value)  (multiple-value-bind (parsed-value errorp) (parse value)
+                              (when (or errorp (not (typep parsed-value 'boolean))) (error "Cannot coerce '~A' to type ~A." value type))
+                              parsed-value))
+          (t                      (error "Cannot coerce '~A' to type ~A." value type))))
+
+      ((or (eq type-name 'eql)
+           (eq type-name 'member))
+        (dolist (eql-value (cdr exp-type) (error "~A can't be converted to type ~A" value type))
+          (let ((coerced-value (typecase eql-value
+                                 ;; w/ ignore-errors, we know it will be nil
+                                 ;; in all cases where it is NOT a symbol
+                                 ;; so we won't accidentlaly match the symbol nil
+                                 (integer    (ignore-errors (%convert value 'integer)))
+                                 (float      (ignore-errors (float (%convert value 'float) eql-value)))
+                                 (character  (ignore-errors (%convert value 'character)))
+                                 (symbol
+                                   (if (typecase value
+                                         (string    (string= eql-value value))
+                                         (json-atom (string= eql-value (stringify value))))
+                                     eql-value
+                                     ;; we know it's a symbol so it won't be eql to 0
+                                     0)))))
+            (when (eql eql-value coerced-value)
+              (return coerced-value)))))
       ;; For these, either the value is already of that type,
       ;; or we can't do anything about it
-      ;; TODO - for eql and member types, we sould be able
-      ;;        to pull the literal values out and try to coerce
-      ;;        to them rather than just check if we already have them
-      ;;        this allows us to `(convert "0" '(eql nil))`
-      ;;        Question is - do we even want to?
-      ((or (eq type-name 'eql)
-           (and (eq type-name 'member) (not (%type= type 'boolean)))
-           (eq type-name 'not)
+      ((or (eq type-name 'not)
            (eq type-name 'satisfies))
         (unless (typep value type) (error "~A can't be converted to type ~A" value type))
         value)
@@ -1992,19 +2018,9 @@ warning
               (unless errorp
                 (return value))))))
 
-      ((%type= type 'boolean)
-        (cond
-          ((eq value nil)   nil)
-          ((eq value t)     t)
-          ((numberp value)  (not (zerop value)))
-          ((stringp value)  (multiple-value-bind (parsed-value errorp) (parse value)
-                              (when (or errorp (not (typep parsed-value 'boolean))) (error "Cannot coerce '~A' to type ~A." value type))
-                              parsed-value))
-          (t                      (error "Cannot coerce '~A' to type ~A." value type))))
+
 
       ;; From here on we should be dealing with 'regular' types
-      ((eq t      type-name)        value)
-      ((eq nil    type-name)        (error "Cannot coerce anything to empty type ~A" type))
       ((eq 'null  type-name)        (cond
                                       ((eq value 'null)       nil)
                                       (t                      (error "Cannot coerce '~A' to ~A" value type))))

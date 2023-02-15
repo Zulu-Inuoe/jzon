@@ -1855,3 +1855,15 @@ break\"]")))
     (is (= 0 (slot-value res 'a)))
     (is (= 1 (slot-value res 'b)))
     (is (= 2 (slot-value res 'c)))))
+
+(test convert-coerces-during-eql
+  (is (eql 42 (jzon:convert "42" '(eql 42))))
+  (is (eql 42d0 (jzon:convert "42" '(eql 42d0))))
+  (is (eql :42 (jzon:convert "42" '(eql :42))))
+  (is (eql #\f (jzon:convert "\"f\"" '(eql #\f)))))
+
+(test convert-coerces-during-member
+  (is (eql 42 (jzon:convert "42" '(member 24 42))))
+  (is (eql 42d0 (jzon:convert "42" '(member 24d0 42d0))))
+  (is (eql :42 (jzon:convert "42" '(member :0 :42))))
+  (is (eql #\f (jzon:convert "\"f\"" '(member #\a #\f)))))
