@@ -1994,7 +1994,8 @@ warning
               (return coerced-value)))))
       ;; For these, either the value is already of that type,
       ;; or we can't do anything about it
-      ((or (eq type-name 'not)
+      ((or (eq type-name 'atom)
+           (eq type-name 'not)
            (eq type-name 'satisfies))
         (unless (typep value type) (error "~A can't be converted to type ~A" value type))
         value)
@@ -2020,28 +2021,11 @@ warning
 
 
 
-      ;; From here on we should be dealing with 'regular' types
+      ;; 'Native' JSON types (except for boolean above)
       ((eq 'null  type-name)        (cond
                                       ((eq value 'null)       nil)
                                       (t                      (error "Cannot coerce '~A' to ~A" value type))))
       ((subtypep type 'number)
-        #++(member type-name '(bignum
-                            bit 
-                            complex 
-                            double-float 
-                            float
-                            fixnum
-                            integer 
-                            long-float 
-                            mod 
-                            number 
-                            ratio 
-                            rational 
-                            real 
-                            short-float 
-                            signed-byte 
-                            single-float 
-                            unsigned-byte))
         (typecase value
           (string (multiple-value-bind (parsed-value errorp) (parse value)
                     (when (or errorp (not (numberp parsed-value))) (error "Cannot coerce '~A' to type ~A." value type))
@@ -2056,11 +2040,7 @@ warning
                   (imagpart (%convert (aref value 1) 'real)))
               (complex realpart imagpart)))
           (t  (error "Cannot coerce '~A' into type ~A." value type))))
-      ((subtypep type-name 'string)
-        #++(member type-name  '(base-string
-                                simple-base-string
-                                simple-string
-                                string))
+      ((subtypep type 'string)
         (let ((value (typecase value
                        (string    value)
                        (json-atom (stringify value))
@@ -2075,11 +2055,16 @@ warning
         (unless (hash-table-p value)
           (error "Cannot coerce '~A' into type ~A" value type))
         value)
-      ((eq type-name 'atom)
-        (unless (consp value)
-          (error "Cannot coerce '~A' into type ~A" value type))
-        value)
+      
       ((eq type-name 'cons)
+        ;; TODO - this is not properly defaulting
+        ;;        types when not given the full list
+        ;;        or maybe it is working as intended?
+        ;;          (convert "[1, 2, 3]" 'cons)
+        ;;        should work, or nah?
+        ;;        `coerce' sees `cons` and thinks `list`,
+        ;;        so it doesn't do any checking past that
+        ;;        but `typep' will actually inspect the conses
         (unless (and (vectorp value) (not (stringp value)))
           (error "Cannot coerce '~A' to '~A'" value type))
         (labels ((recurse (i type acc)
@@ -2101,6 +2086,7 @@ warning
                             (cdr (ie:typexpand (%type-part-or type 2 t))))
                         (recurse (1+ i) cdr (cons (%convert (aref value i) car) acc)))))))
           (recurse 0 exp-type nil)))
+
       ;; Note, we handle strings separately because
       ;; for strings we generally are able to take advantage
       ;; of raw string values or stringify for atoms
@@ -2152,49 +2138,41 @@ warning
                      (recurse dimensions initial-contents))))
            
            (make-array size :element-type elt-type :initial-contents initial-contents))))
-      ((member type-name '(base-char
-                            character
-                            extended-char
-                            standard-char))
+      ((subtypep type 'character)
         (coerce
           (typecase value
             (string    value)
             (json-atom (stringify value))
             (t         (error "Cannot coerce '~A' into type ~A" value type)))
           type))
-      ((eq type-name 'list)
+      ((subtypep type 'sequence)
         (unless (vectorp value)
           (error "Cannot coerce '~A' into type ~A" value type))
         (coerce value type))
       ((eq type-name 'package)
-        (let ((name (etypecase value
+        (let ((name (typecase value
                      (string    value)
-                     ;; TODO - is it ok to stringify here?
-                     (json-atom (stringify value)))))
+                     (json-atom (stringify value))
+                     (t         (error "Cannot coerce '~A' into type ~A" value type)))))
          (or (find-package name)
              (error "Cannot coerce '~A' into type ~A (package does not exist)." value type))))
       ((eq type-name 'pathname)
        (values (parse-namestring (typecase value
                                    (string    value)
-                                   ;; TODO is it ok to stringify ??
                                    (json-atom (stringify value))
                                    (t         (error "Cannot coerce '~A' into type ~A" value type))))))
       ((eq type-name 'keyword)
-       (let ((name (etypecase value
+       (let ((name (typecase value
                      (string    value)
-                     ;; TODO - is it ok to stringify here?
-                     (json-atom (stringify value)))))
+                     (json-atom (stringify value))
+                     (t         (error "Cannot coerce '~A' into type ~A" value type)))))
          (intern name '#:keyword)))
       ((eq type-name 'symbol)
-       (let ((name (etypecase value
+       (let ((name (typecase value
                      (string    value)
-                     ;; TODO - is it ok to stringify here?
-                     (json-atom (stringify value)))))
+                     (json-atom (stringify value))
+                     (t         (error "Cannot coerce '~A' into type ~A" value type)))))
          (intern name)))
-      ((eq type-name 'sequence)
-        (unless (vectorp value)
-          (error "Cannot coerce '~A' into type ~A" value type))
-        (coerce value type))
       (t
        (let ((class (find-class type nil)))
          (unless class (error "Cannot coerce '~A' to '~A'." value type))
