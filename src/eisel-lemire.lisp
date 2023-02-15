@@ -1,15 +1,3 @@
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (flet ((#1=#:|| (package)
-          (unless (find-package package)
-            (cond
-              ((and (find-package '#:ql) (find-symbol (string '#:quickload) '#:ql))
-                (funcall (find-symbol (string '#:quickload) '#:ql) package))
-              ((and (find-package '#:asdf) (find-symbol (string '#:load-system) '#:asdf))
-                (funcall (find-symbol (string '#:load-system) '#:asdf) package))
-              (t
-                (require package))))))
-    (#1# '#:float-features)))
-
 (defpackage #:com.inuoe.jzon/eisel-lemire
   (:use #:cl)
   (:local-nicknames
