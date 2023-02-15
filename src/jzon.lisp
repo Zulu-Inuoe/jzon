@@ -2052,7 +2052,7 @@ warning
                        (t (error "Cannot coerce '~A' to type ~A." value type)))))
           (coerce value type)))
       ((eq type-name 'simple-vector)
-        (unless (typep value 'simple-vector)
+        (unless (vectorp value)
           (error "Cannot coerce '~A' into type ~A" value type))
         ;; need to make sure len matches
         (coerce value type))
@@ -2060,37 +2060,6 @@ warning
         (unless (hash-table-p value)
           (error "Cannot coerce '~A' into type ~A" value type))
         value)
-      
-      ((eq type-name 'cons)
-        ;; TODO - this is not properly defaulting
-        ;;        types when not given the full list
-        ;;        or maybe it is working as intended?
-        ;;          (convert "[1, 2, 3]" 'cons)
-        ;;        should work, or nah?
-        ;;        `coerce' sees `cons` and thinks `list`,
-        ;;        so it doesn't do any checking past that
-        ;;        but `typep' will actually inspect the conses
-        (unless (and (vectorp value) (not (stringp value)))
-          (error "Cannot coerce '~A' to '~A'" value type))
-        (labels ((recurse (i type acc)
-                   (cond
-                     ((eq type 'null)
-                      (unless (= (length value) i)
-                        (error "bad len"))
-                      (nreverse acc))
-                     ((not (or (eq type 'cons)
-                               (and (listp type)
-                                    (eq (first type) 'cons))))
-                      (unless (= (length value) (1+ i))
-                        (error "bad len"))
-                      (let ((ret (nreverse acc)))
-                        (setf (cdr (last ret)) (%convert (aref value i) type))
-                        ret))
-                     (t
-                      (let ((car (ie:typexpand (%type-part-or type 1 t)))
-                            (cdr (ie:typexpand (%type-part-or type 2 t))))
-                        (recurse (1+ i) cdr (cons (%convert (aref value i) car) acc)))))))
-          (recurse 0 exp-type nil)))
 
       ;; Note, we handle strings separately because
       ;; for strings we generally are able to take advantage
