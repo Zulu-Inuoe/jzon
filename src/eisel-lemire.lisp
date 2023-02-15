@@ -27,8 +27,9 @@
 (defmacro %>>u64 (integer count)
   `(ldb (byte 64 0) (ash ,integer (- (logand ,count 63)))))
 
-(defconstant +%pow10-min+ -348)
-(defconstant +%pow10-max+ +347)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defconstant +%pow10-min+ -348)
+  (defconstant +%pow10-max+ +347))
 
 ;;
 ;; detailedPowersOfTen contains 128-bit mantissa approximations (rounded down)
