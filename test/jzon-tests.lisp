@@ -1213,6 +1213,9 @@
   (let ((*print-base* 2))
     (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 3/2 3/2))))))
 
+(test stringify-writes-complex-like-arrays
+  (is (string= "[1,2]" (jzon:stringify #C(1 2)))))
+
 (defclass test-class ()
   ((a
     :initarg :a
