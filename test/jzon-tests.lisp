@@ -1657,13 +1657,76 @@ break\"]")))
 
 (in-suite convert)
 
+(test convert-fails-on-nil
+  (signals (error) (jzon:convert "null" nil))
+  (signals (error) (jzon:convert "false" nil))
+  (signals (error) (jzon:convert "true" nil))
+  (signals (error) (jzon:convert "\"str\"" nil))
+  (signals (error) (jzon:convert "[1,2]" nil))
+  (signals (error) (jzon:convert "{\"x\":0}" nil)))
+
+(test convert-noop-on-t
+  (is (eql 'null          (jzon:convert "null" t)))
+  (is (eql nil            (jzon:convert "false" t)))
+  (is (eql t              (jzon:convert "true" t)))
+  (is (equalp "str"       (jzon:convert "\"str\"" t)))
+  (is (equalp #(1 2)      (jzon:convert "[1,2]" t)))
+  (is (equalp (ph "x" 0)  (jzon:convert "{\"x\":0}" t))))
+
+(test convert-to-null-only-accepts-null
+  (is       (eql nil  (jzon:convert "null" 'null)))
+  (signals  (error)   (jzon:convert "false" 'null))
+  (signals  (error)   (jzon:convert "true" 'null))
+  (signals  (error)   (jzon:convert "\"str\"" 'null))
+  (signals  (error)   (jzon:convert "[1,2]" 'null))
+  (signals  (error)   (jzon:convert "{\"x\":0}" 'null)))
+
+(test convert-coerces-during-eql
+  (is (eql 42 (jzon:convert "42" '(eql 42))))
+  (is (eql 42d0 (jzon:convert "42" '(eql 42d0))))
+  (is (eql :42 (jzon:convert "42" '(eql :42))))
+  (is (eql #\f (jzon:convert "\"f\"" '(eql #\f)))))
+
+(test convert-coerces-during-member
+  (is (eql 42 (jzon:convert "42" '(member 24 42))))
+  (is (eql 42d0 (jzon:convert "42" '(member 24d0 42d0))))
+  (is (eql :42 (jzon:convert "42" '(member :0 :42))))
+  (is (eql #\f (jzon:convert "\"f\"" '(member #\a #\f)))))
+
+(test convert-on-disjoint-types-fails
+  (signals  (error) (jzon:convert "null" '(and integer string)))
+  (signals  (error) (jzon:convert "false" '(and integer string)))
+  (signals  (error) (jzon:convert "true" '(and integer string)))
+  (signals  (error) (jzon:convert "\"str\"" '(and integer string)))
+  (signals  (error) (jzon:convert "[1,2]" '(and integer string)))
+  (signals  (error) (jzon:convert "{\"x\":0}" '(and integer string))))
+
+(test convert-on-overlapping-types-succeeds
+  (is (eql 42 (jzon:convert "42" '(and integer (satisfies evenp))))))
+
+(test convert-to-or-chooses-first
+  (is (=        42    (jzon:convert "42" '(or null integer string))))
+  (is (string=  "42"  (jzon:convert "42" '(or null string integer))))
+  (is (=        42    (jzon:convert "42" '(or (mod 1024) string)))))
+
+(defclass x () (a))
+(defclass y (x) (b))
+(defclass z (y) (c))
+
+(test convert-orders-and-types
+  (let ((res (jzon:convert "{\"a\":0,\"b\":1,\"c\":2}" '(and x y z))))
+    (is (eq (load-time-value (find-class 'z)) (class-of res)))
+    (is (= 0 (slot-value res 'a)))
+    (is (= 1 (slot-value res 'b)))
+    (is (= 2 (slot-value res 'c)))))
+
 (test convert-null-boolean-signals
   (signals (error)
     (jzon:convert "null" 'boolean)))
-    
+
 (test convert-nil-boolean
   (is (eq nil (jzon:convert "false" 'boolean))))
-  
+
 (test convert-t-boolean
   (is (eq t (jzon:convert "true" 'boolean))))
 
@@ -1766,12 +1829,6 @@ break\"]")))
 (test convert-t-string
   (is (string= "true" (jzon:convert "true" 'string))))
 
-(test convert-false-string-string
-  (is (string= "false" (jzon:convert "false" 'string))))
-
-(test convert-true-string-string
-  (is (string= "true" (jzon:convert "true" 'string))))
-
 (test convert-0-string
   (is (string= "0" (jzon:convert "0" 'string))))
 
@@ -1780,6 +1837,12 @@ break\"]")))
 
 (test convert-1.5-string
   (is (string= "1.5" (jzon:convert "1.5" 'string))))
+
+(test convert-false-string-string
+  (is (string= "false" (jzon:convert "\"false\"" 'string))))
+
+(test convert-true-string-string
+  (is (string= "true" (jzon:convert "\"true\"" 'string))))
 
 (test convert-0-string-string
   (is (string= "0" (jzon:convert "\"0\"" 'string))))
@@ -1840,30 +1903,15 @@ break\"]")))
 (test convert-array-to-complex
   (is (= #C(1 2) (jzon:convert "[1,2]" 'complex))))
 
-(test convert-to-or-chooses-first
-  (is (= 42 (jzon:convert "42" '(or null integer string))))
-  (is (string= "42" (jzon:convert "42" '(or null string integer))))
-  (is (= 42 (jzon:convert "42" '(mod 1024)))))
+(test convert-package-finds-package
+  (is (eq (find-package '#:com.inuoe.jzon)
+          (jzon:convert "\"COM.INUOE.JZON\"" 'package))))
 
-(defclass x () (a))
-(defclass y (x) (b))
-(defclass z (y) (c))
+(test convert-pathname-parses-pathname
+  (is (equalp (parse-namestring "foo") (jzon:convert "\"foo\"" 'pathname))))
 
-(test convert-orders-and-types
-  (let ((res (jzon:convert "{\"a\":0,\"b\":1,\"c\":2}" '(and x y z))))
-    (is (eq (load-time-value (find-class 'z)) (class-of res)))
-    (is (= 0 (slot-value res 'a)))
-    (is (= 1 (slot-value res 'b)))
-    (is (= 2 (slot-value res 'c)))))
+(test convert-keyword-interns-keyword
+  (is (eq :foo (jzon:convert "\"FOO\"" 'keyword))))
 
-(test convert-coerces-during-eql
-  (is (eql 42 (jzon:convert "42" '(eql 42))))
-  (is (eql 42d0 (jzon:convert "42" '(eql 42d0))))
-  (is (eql :42 (jzon:convert "42" '(eql :42))))
-  (is (eql #\f (jzon:convert "\"f\"" '(eql #\f)))))
-
-(test convert-coerces-during-member
-  (is (eql 42 (jzon:convert "42" '(member 24 42))))
-  (is (eql 42d0 (jzon:convert "42" '(member 24d0 42d0))))
-  (is (eql :42 (jzon:convert "42" '(member :0 :42))))
-  (is (eql #\f (jzon:convert "\"f\"" '(member #\a #\f)))))
+(test convert-symbol-interns-symbol
+  (is (eq (intern "FOO") (jzon:convert "\"FOO\"" 'symbol))))

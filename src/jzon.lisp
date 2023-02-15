@@ -73,7 +73,7 @@
    #:end-object*
    #:with-object*
    #:write-object*
-   
+
    ;; Conversion functionality
    #:convert)
   (:local-nicknames
@@ -1785,7 +1785,7 @@ see `write-object'"
         (t
           (stringify-to stream)
           nil)))))
-            
+
 
 #| standard CL types
 arithmetic-error
@@ -1960,12 +1960,12 @@ warning
 
 (defun %convert (value type)
   (let* ((exp-type (ie:typexpand type))
-         (type-name (if (atom exp-type) exp-type (car exp-type)))) 
+         (type-name (if (atom exp-type) exp-type (car exp-type))))
     (cond
       ((eq t      type-name)        value)
       ((eq nil    type-name)        (error "Cannot convert '~A' to empty type. ~A" value type))
       ((eq type-name 'values)       (error "Cannot convert '~A' to type ~A." value type))
-            
+
       ;; Boolean has special logic regarding things
       ;; like strings and numbers, so needs to go first
       ((%type= type 'boolean)
@@ -2024,8 +2024,6 @@ warning
               (unless errorp
                 (return value))))))
 
-
-
       ;; 'Native' JSON types (except for boolean above)
       ((eq 'null  type-name)        (cond
                                       ((eq value 'null)       nil)
@@ -2034,7 +2032,7 @@ warning
         (typecase value
           (string (multiple-value-bind (parsed-value errorp) (parse value)
                     (when (or errorp (not (numberp parsed-value))) (error "Cannot coerce '~A' to type ~A." value type))
-                    
+
                     (coerce parsed-value type)))
           (number (coerce value type))
           (vector
@@ -2110,7 +2108,7 @@ warning
                                    (cons (length x)
                                          (and rest (recurse rest (aref x 0)))))))))
                      (recurse dimensions initial-contents))))
-           
+
            (make-array size :element-type elt-type :initial-contents initial-contents))))
       ((subtypep type 'character)
         (coerce
@@ -2175,7 +2173,7 @@ warning
 
 (defun convert (json type)
   "Convert the JSON `json' to `type'.
-  
+
   `json' may be any valid input to `parse`."
   (check-type json string)
   (%convert (parse json) type))
