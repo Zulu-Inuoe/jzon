@@ -26,9 +26,6 @@
 
 (in-package #:com.inuoe.jzon-tests)
 
-(def-suite jzon
-  :description "Tests for the jzon library.")
-
 (defun run ()
   (fiveam:run! 'jzon))
 
@@ -37,10 +34,11 @@
   (let ((result (run)))
     (if result 0 -1)))
 
+(def-suite jzon
+  :description "Tests for the jzon library.")
 (in-suite jzon)
 
 (def-suite parsing :in jzon)
-
 (in-suite parsing)
 
 (defun ph (&rest plist)
@@ -1055,8 +1053,7 @@
         (loop :repeat 130 :do (jzon:begin-array*))
         (loop :repeat 130 :do (jzon:end-array*))))))
 
-(def-suite stringify :in jzon)
-
+(def-suite stringify :in writing)
 (in-suite stringify)
 
 (test stringify-to-nil-returns-string
@@ -1425,9 +1422,8 @@
                                                 t))
                 (nreverse called-on)))))
 
-(def-suite jzon.json-checker :in jzon)
-
-(in-suite jzon.json-checker)
+(def-suite json-checker :in parsing)
+(in-suite json-checker)
 
 ;; fail1 in json-checker goes against RFC
 ;; (test fail1
