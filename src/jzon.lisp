@@ -1162,7 +1162,7 @@ see `write-properties'
 see `end-object'"
   (check-type writer writer)
   (when (null (slot-value writer '%close-action))
-    (error 'json-error :format-control "The writer has been closed."))
+    (error 'json-write-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array)                     (progn (%write-indentation writer)
@@ -1170,8 +1170,8 @@ see `end-object'"
       ((:array-value)               (progn (write-char #\, %stream)
                                            (%write-indentation writer)))
       ((:object-key)                (setf (car %stack) :object-value))
-      ((:object :object-value)      (error "Expecting object key"))
-      ((:complete)                  (error "Attempting to write object when value already written to writer")))
+      ((:object :object-value)      (error 'json-write-error :format-control "Expecting object key"))
+      ((:complete)                  (error 'json-write-error :format-control "Attempting to write object when value already written to writer")))
 
     (when (= %depth %max-depth)
       (error 'json-write-limit-error :format-control "Exceeded maximum depth in writing object." :limit %max-depth))
@@ -1187,7 +1187,7 @@ see `begin-object'
 see `with-object'"
   (check-type writer writer)
   (when (null (slot-value writer '%close-action))
-    (error 'json-error :format-control "The writer has been closed."))
+    (error 'json-write-error :format-control "The writer has been closed."))
   (with-slots (%stream %coerce-key %stack %pretty) writer
     (let ((context (car %stack)))
       (case context
@@ -1196,7 +1196,7 @@ see `with-object'"
         (:object-value (progn (write-char #\, %stream)
                               (%write-indentation writer)
                               (setf (car %stack) :object-key)))
-        (t             (error "Attempting to write object key while in ~A" context))))
+        (t             (error 'json-write-error :format-control "Attempting to write object key while in ~A" :format-arguments context))))
     (let ((key-str (funcall %coerce-key key)))
       (unless (typep key-str '(or string character (and (not null) symbol)))
         (error "Invalid key after coercion: '~A' -> '~A'" key key-str))
@@ -1210,13 +1210,13 @@ see `with-object'"
   "Finish writing an object to `writer'. Must match an opening `begin-object'."
   (check-type writer writer)
   (when (null (slot-value writer '%close-action))
-    (error 'json-error :format-control "The writer has been closed."))
+    (error 'json-write-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %pretty %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
         ((:object :object-value))
-        (:object-key (error "Attempting to close object before writing key value"))
-        (t           (error "Attempting to close object while in ~A" context)))
+        (:object-key (error 'json-write-error :format-control "Attempting to close object before writing key value"))
+        (t           (error 'json-write-error :format-control "Attempting to close object while in ~A" :format-arguments context)))
       (pop %stack)
       (decf %depth)
       (when (eq context :object-value)
@@ -1246,7 +1246,7 @@ see `write-values'
 see `end-array'"
   (check-type writer writer)
   (when (null (slot-value writer '%close-action))
-    (error 'json-error :format-control "The writer has been closed."))
+    (error 'json-write-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %depth %max-depth) writer
     (case (car %stack)
       ((:array)                (progn (%write-indentation writer)
@@ -1254,8 +1254,8 @@ see `end-array'"
       ((:array-value)          (progn (write-char #\, %stream)
                                       (%write-indentation writer)))
       ((:object-key)           (setf (car %stack) :object-value))
-      ((:object :object-value) (error "Expecting object key"))
-      ((:complete)             (error "Attempting to write array when value already written to writer")))
+      ((:object :object-value) (error 'json-write-error :format-control "Expecting object key."))
+      ((:complete)             (error 'json-write-error :format-control "Attempting to write array when value already written to writer.")))
     (push :array %stack)
     (when (= %depth %max-depth)
       (error 'json-write-limit-error :format-control "Exceeded maximum depth in writing array." :limit %max-depth))
@@ -1267,12 +1267,12 @@ see `end-array'"
   "Finish writing an array to `writer'. Must match an opening `begin-array'."
   (check-type writer writer)
   (when (null (slot-value writer '%close-action))
-    (error 'json-error :format-control "The writer has been closed."))
+    (error 'json-write-error :format-control "The writer has been closed."))
   (with-slots (%stream %stack %depth %max-depth) writer
     (let ((context (car %stack)))
       (case context
         ((:array :array-value))
-        (t                     (error "Attempting to close array while in ~A" context)))
+        (t                     (error 'json-write-error :format-control "Attempting to close array while in ~A" context)))
       (pop %stack)
       (decf %depth)
       (when (eq context :array-value)
@@ -1316,12 +1316,12 @@ see `write-values'"
   (:documentation "Write a JSON value to `writer'. Specialize this function for customized JSON writing.")
   (:method :around ((writer writer) value)
     (when (null (slot-value writer '%close-action))
-      (error 'json-error :format-control "The writer has been closed."))
+      (error 'json-write-error :format-control "The writer has been closed."))
     (with-slots (%stack %ref-stack %pretty %replacer) writer
       (let ((context (car %stack)))
         (case context
-          ((:object :object-value) (error "Expecting object key"))
-          ((:complete)             (error "Attempting to write value when value already written to writer")))
+          ((:object :object-value) (error 'json-write-error :format-control "Expecting object key"))
+          ((:complete)             (error 'json-write-error :format-control "Attempting to write value when value already written to writer")))
 
         (let ((prev-stack %ref-stack))
           (let ((path (member value prev-stack :test #'eq)))
@@ -1483,7 +1483,7 @@ see `write-values'"
   (declare (dynamic-extent values))
   (check-type writer writer)
   (unless (or values (member (slot-value writer '%stack) '(:array :array-value)))
-    (error "Attempting to write multiple values outside of an array."))
+    (error 'json-write-error :format-control "Attempting to write multiple values outside of an array."))
   (map nil (lambda (x) (write-value writer x)) values)
   writer)
 
