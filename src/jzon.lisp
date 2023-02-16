@@ -1862,6 +1862,10 @@ see `write-object'"
     (with-output-to-string (stream)
       (%write-json-atom-to-stream json-atom stream))))
 
+(defun %read-json-number-from-string (value)
+  (with-input-from-string (s value)
+    (%read-json-number (lambda () (read-char s nil)) (read-char s nil))))
+
 (defun %convert (value type)
   (let* ((exp-type (ie:typexpand type))
          (type-name (if (atom exp-type) exp-type (car exp-type)))
@@ -1943,10 +1947,9 @@ see `write-object'"
 
       ((subtypep type 'number)
         (typecase value
-          (string (multiple-value-bind (parsed-value errorp) (parse value)
-                    (when (or errorp (not (numberp parsed-value))) (error "Cannot coerce '~A' to type ~A." value type))
-
-                    (coerce parsed-value type)))
+          (string (coerce (or (%read-json-number-from-string value)
+                              (error "Cannot coerce '~A' to type ~A." value type))
+                           type))
           (number (coerce value type))
           (vector
             (unless (and (eq type-name 'complex)
