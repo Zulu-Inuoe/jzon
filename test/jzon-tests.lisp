@@ -1768,6 +1768,22 @@ break\"]")))
   (is (eql :42 (jzon:convert "42"     '(member :0 :42))))
   (is (eql #\f (jzon:convert "\"f\""  '(member #\a #\f)))))
 
+(test convert-error-on-empty-eql
+  (signals (error)  (jzon:convert "null"      '(eql)))
+  (signals (error)  (jzon:convert "false"     '(eql)))
+  (signals (error)  (jzon:convert "true"      '(eql)))
+  (signals (error)  (jzon:convert "\"str\""   '(eql)))
+  (signals (error)  (jzon:convert "[1,2]"     '(eql)))
+  (signals (error)  (jzon:convert "{\"x\":0}" '(eql))))
+
+(test convert-error-on-empty-member
+  (signals (error)  (jzon:convert "null"      '(member)))
+  (signals (error)  (jzon:convert "false"     '(member)))
+  (signals (error)  (jzon:convert "true"      '(member)))
+  (signals (error)  (jzon:convert "\"str\""   '(member)))
+  (signals (error)  (jzon:convert "[1,2]"     '(member)))
+  (signals (error)  (jzon:convert "{\"x\":0}" '(member))))
+
 (test convert-on-disjoint-types-fails
   (signals  (error) (jzon:convert "null" '(and integer string)))
   (signals  (error) (jzon:convert "false" '(and integer string)))

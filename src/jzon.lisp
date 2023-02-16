@@ -1880,6 +1880,11 @@ see `write-object'"
 
       ((or (eq type-name 'eql)
            (eq type-name 'member))
+        (when (null type-args)
+          (if (eq type-name 'eql)
+            (error "Illegal type specifier '~A'" type)
+            (error "Cannot convert '~A' to empty type. ~A" value type)))
+
         (dolist (eql-value type-args (error "~A can't be converted to type ~A" value type))
           (let ((coerced-value (typecase eql-value
                                  ;; w/ ignore-errors, we know it will be nil
