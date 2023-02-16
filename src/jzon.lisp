@@ -2019,7 +2019,7 @@ warning
           ((stringp value)  (multiple-value-bind (parsed-value errorp) (parse value)
                               (when (or errorp (not (typep parsed-value 'boolean))) (error "Cannot coerce '~A' to type ~A." value type))
                               parsed-value))
-          (t                      (error "Cannot coerce '~A' to type ~A." value type))))
+          (t                (error "Cannot coerce '~A' to type ~A." value type))))
 
       ((or (eq type-name 'eql)
            (eq type-name 'member))

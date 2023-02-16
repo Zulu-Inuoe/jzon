@@ -939,7 +939,7 @@
 
 (test coerced-fields-omits-unbound-slots
   (is (equalp '("a") (mapcar #'first (jzon:coerced-fields (make-instance 'coerced-fields-test-class :a 1))))))
-  
+
 (def-suite writer :in writing)
 (in-suite writer)
 
@@ -1137,11 +1137,11 @@
 
 (test string-expands-special-escapes
   (is-every string=
-    (#\Backspace (jzon:parse "\"\\b\""))
-    (#\Page  (jzon:parse "\"\\f\""))
-    (#\Linefeed  (jzon:parse "\"\\n\""))
-    (#\Return    (jzon:parse "\"\\r\""))
-    (#\Tab       (jzon:parse "\"\\t\""))))
+    (#\Backspace  (jzon:parse "\"\\b\""))
+    (#\Page       (jzon:parse "\"\\f\""))
+    (#\Linefeed   (jzon:parse "\"\\n\""))
+    (#\Return     (jzon:parse "\"\\r\""))
+    (#\Tab        (jzon:parse "\"\\t\""))))
 
 (test stringify-atoms
   (is-every string=
