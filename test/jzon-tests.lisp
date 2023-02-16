@@ -1280,6 +1280,21 @@
 (test stringify-class-downcases-symbols-except-mixed-case
   (is (equalp (ph "all-upper" 0 "mixedCase" 0) (recode (make-instance 'test-class-case)))))
 
+(defclass stringify-object-slot-name-test ()
+  ((hello-world :initarg :hello-world)
+   (goodbye     :initarg :goodbye)))
+
+(defmethod jzon:object-slot-name ((object stringify-object-slot-name-test) (slot-name (eql 'hello-world)))
+  "helloWorld")
+
+(defmethod jzon:object-slot-name ((object stringify-object-slot-name-test) (slot-name (eql 'goodbye)))
+  "GOODbye")
+
+(test stringify-uses-object-slot-name ()
+  (is (string= "{\"helloWorld\":24,\"GOODbye\":42}"
+               (jzon:stringify (make-instance 'stringify-object-slot-name-test
+                                              :hello-world 24 :goodbye 42)))))
+
 (test stringify-pretty-argorder-bugfix
   (is (string= "[
   {
@@ -2012,3 +2027,20 @@ break\"]")))
     (is (typep (slot-value parsed-object 'coordinate) 'coordinate))
     (is (eql 0 (slot-value (slot-value parsed-object 'coordinate) 'x)))
     (is (eql 0 (slot-value (slot-value parsed-object 'coordinate) 'y)))))
+
+(defclass convert-object-names-test ()
+  ((x-pos :initarg :x-pos)
+   (y-pos :initarg :y-pos)))
+
+(defmethod jzon:object-slot-name ((object convert-object-names-test) slot-name)
+  (nsubstitute #\_ #\- (string-downcase slot-name)))
+
+(test convert-uses-object-slot-name
+  (let ((obj (jzon:convert "{\"x_pos\":42,\"y_pos\":24}" 'convert-object-names-test)))
+    (is (= 42 (slot-value obj 'x-pos)))
+    (is (= 24 (slot-value obj 'y-pos)))))
+
+(test convert-uses-object-slot-name-in-roundtrip
+  (let ((obj (jzon:convert (jzon:stringify (make-instance 'convert-object-names-test :x-pos 42 :y-pos 24)) 'convert-object-names-test)))
+    (is (= 42 (slot-value obj 'x-pos)))
+    (is (= 24 (slot-value obj 'y-pos)))))

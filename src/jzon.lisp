@@ -30,6 +30,9 @@
    #:json-write-limit-error
    #:json-recursive-write-error
 
+   ;; Simple extensible writing and converting
+   #:object-slot-name
+   
    ;;; Simple extensible writing
    #:coerced-fields
    #:coerce-key
@@ -75,7 +78,8 @@
    #:write-object*
 
    ;; Conversion functionality
-   #:convert)
+   #:convert
+   #:hydrate)
   (:local-nicknames
     (#:el #:com.inuoe.jzon/eisel-lemire)
     (#:ie #:introspect-environment)
