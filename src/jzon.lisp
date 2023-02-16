@@ -1968,6 +1968,8 @@ see `write-object'"
                    (values (%type-part-or normalized 1 't) (list (%type-part-or normalized 2 '*))))
                   ((simple-vector)
                    (values 't (list (or (second normalized) '*))))))
+            ;; NOTE - Here we turn a dimesion spec of * (meaning any # of dimensions of any size) into (*)
+            ;;        they are fine with any number, so it's simplest to give them one dimension
             (values elt-type (if (listp dimensions) dimensions (list dimensions))))
 
           (let* ((initial-contents
