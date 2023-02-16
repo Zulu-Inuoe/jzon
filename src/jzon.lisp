@@ -1946,6 +1946,39 @@ undefined-function
 warning
 |#
 
+(defun %hydrate-using-class (object data)
+  (let ((class (class-of object))
+          ;; plist of :initarg form slot/values for `initialize-instance'
+          (initarg-slots-plist ())
+          ;; alist of (slotd . value) for `(setf cmop:slot-value-using-class)'
+          (set-value-slots-alist ()))
+      (c2mop:ensure-finalized class)
+      (dolist (slot (c2mop:class-slots class))
+        (multiple-value-bind (value value-p)
+            ;; TODO we should not call coerce-key here...
+            ;;      or we need to adjust the lib to prevent
+            ;;      using a custom `coerce-key' in `stringify'
+            ;;      the issue is we have no way to customize this
+            ;;      while reading, even though we can when we are writing
+            ;;      this means we can WRITE objects we cannot READ
+            (gethash (coerce-key (c2mop:slot-definition-name slot)) data)
+          (when value-p
+            (let ((coerce-value (%convert value (c2cl:slot-definition-type slot)))
+                  (slot-initargs (c2mop:slot-definition-initargs slot)))
+              (cond
+                (slot-initargs  (push coerce-value initarg-slots-plist)
+                                (push (first slot-initargs) initarg-slots-plist))
+                (t              (push (cons slot coerce-value) set-value-slots-alist)))))))
+      (apply #'initialize-instance object initarg-slots-plist)
+      (loop :for (slot . value) :in set-value-slots-alist
+            :do (setf (c2mop:slot-value-using-class class object slot) value))))
+
+(defgeneric hydrate (object data)
+  (:method ((object standard-object) data)
+    (%hydrate-using-class object data))
+  #+ (or ecl ccl sbcl)
+  (:method ((object structure-object) data)
+    (%hydrate-using-class object data)))
 
 (defun %type-part-or (spec n default)
   (if (atom spec)
@@ -2147,29 +2180,13 @@ warning
          (intern name)))
       (t
        (let ((class (find-class type nil)))
-         (unless class (error "Cannot coerce '~A' to '~A'." value type))
-         (unless (hash-table-p value) (error "Cannot coerce '~A' to '~A'." value type))
-         (let (;; plist of :initarg form slot/values for `make-instance'
-               (initarg-slots-plist ())
-               ;; alist of (slotd . value) for `(setf cmop:slot-value-using-class)'
-               (set-value-slots-alist ()))
-           (declare (dynamic-extent initarg-slots-plist set-value-slots-alist))
-           (c2mop:ensure-finalized class)
-           (dolist (slot (c2mop:class-slots class))
-             (multiple-value-bind (value value-p) (gethash (coerce-key (c2mop:slot-definition-name slot)) value)
-               (when value-p
-                 (let ((coerce-value (%convert value (c2cl:slot-definition-type slot)))
-                       (slot-initargs (c2mop:slot-definition-initargs slot)))
-                   (cond
-                     (slot-initargs
-                      (push coerce-value initarg-slots-plist)
-                      (push (first slot-initargs) initarg-slots-plist))
-                     (t
-                      (push (cons slot coerce-value) set-value-slots-alist)))))))
-           (let ((instance (apply #'make-instance class initarg-slots-plist)))
-             (loop :for (slot . value) :in set-value-slots-alist
-                   :do (setf (c2mop:slot-value-using-class class instance slot) value))
-             instance)))))))
+         (unless class (error "Cannot coerce '~A' to ~A." value type))
+         (unless (hash-table-p value) (error "Cannot coerce '~A' to ~A" value type))
+         #- (or ecl ccl sbcl)
+         (when (typep class 'structure-class) (error "Cannot coerce '~A' to ~A" value type))
+         (let ((instance (allocate-instance class)))
+           (hydrate instance value)
+           instance))))))
 
 (defun convert (json type)
   "Convert the JSON `json' to `type'.
