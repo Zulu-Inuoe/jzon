@@ -1287,7 +1287,6 @@
   }
 ]" (jzon:stringify (vector (ph "x" 0)) :pretty t))))
 
-
 (test stringify-allows-symbol-keys
   (is (string= "{\"lower\":0}" (jzon:stringify (ph 'lower 0))))
   (is (string= "{\"mIxEd\":0}" (jzon:stringify (ph '|mIxEd| 0))))
@@ -1310,6 +1309,9 @@
 
 (test stringify-allows-ratio-keys
   (is (string= "{\"1.5\":0}" (jzon:stringify (ph 3/2 0)))))
+
+(test stringify-pretty-prints-keys
+  (is (string= "{\"#(1 2)\":0}" (jzon:stringify (ph #(1 2) 0)))))
 
 (test stringify-errors-on-circular-references
   (signals (jzon:json-recursive-write-error)
