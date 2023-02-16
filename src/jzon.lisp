@@ -1824,6 +1824,12 @@ see `write-object'"
             :do (setf (c2mop:slot-value-using-class class object slot) value))))
 
 (defgeneric hydrate (object data)
+  (:documentation "Method invoked when converting a value from JSON.
+  
+  Specialize in order to customize the way a JSON value is converted to CL.
+  
+  `data' can be any `json-element'
+")
   (:method ((object standard-object) (data hash-table))
     (%hydrate-using-class object data))
   #+ (or ecl ccl sbcl)
@@ -1831,6 +1837,12 @@ see `write-object'"
     (%hydrate-using-class object data)))
 
 (defun %type-part-or (spec n default)
+  "Get the `n'th part of the typespec `spec', or `default' if it is absent.
+
+  Example:
+    (%type-part-or 'integer 1 '*)       ; => *
+    (%type-part-or '(integer 0 8) 1 '*) ; => 0
+"
   (if (atom spec)
       default
       (let ((part (nthcdr n spec)))
