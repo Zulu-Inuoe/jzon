@@ -940,6 +940,15 @@
 (test coerced-fields-omits-unbound-slots
   (is (equalp '("a") (mapcar #'first (jzon:coerced-fields (make-instance 'coerced-fields-test-class :a 1))))))
 
+(defclass coerced-fields-test-omit-field ()
+  ((a :initarg :a)))
+
+(defmethod jzon:object-slot-name ((object coerced-fields-test-omit-field) slot-name)
+  nil)
+
+(test coerced-fields-omits-nil-object-slot-name-slots
+  (is (eq () (jzon:coerced-fields (make-instance 'coerced-fields-test-omit-field :a 42)))))
+
 (def-suite writer :in writing)
 (in-suite writer)
 
@@ -2073,3 +2082,14 @@ break\"]")))
   (let ((obj (jzon:convert "{\"name\":true,\"weight\":1.5}" 'convert-object-slot-converted-test)))
     (is (string= "true" (slot-value obj 'name)))
     (is (= 1.5d0 (slot-value obj 'weight)))))
+
+(defclass convert-object-names-excluded-test ()
+  ((x-pos :initarg :x-pos)
+   (y-pos :initarg :y-pos)))
+
+(defmethod jzon:object-slot-name ((object convert-object-names-excluded-test) (slot-name (eql 'y-pos)))
+  nil)
+
+(test convert-respects-object-slot-name-nil
+  (is (string= "{\"x-pos\":42}" (jzon:stringify (make-instance 'convert-object-names-excluded-test
+                                                               :x-pos 42 :y-pos 24)))))

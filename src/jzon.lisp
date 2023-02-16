@@ -32,7 +32,7 @@
 
    ;; Simple extensible writing and converting
    #:object-slot-name
-   
+
    ;;; Simple extensible writing
    #:coerced-fields
    #:coerce-key
@@ -1046,6 +1046,7 @@ see `close-parser'"
 
 (defgeneric object-slot-name (object slot-name)
   (:documentation "The name that a given slot becomes when reading/writing it to JSON.
+  If this function returns `nil', the slot is ignored for both reading and writing.
 
 see `write-value'")
   (:method ((object standard-object) slot-name)
@@ -1063,12 +1064,13 @@ see `write-value'")
 (macrolet ((%coerced-fields-slots (object)
              `(let ((class (class-of ,object)))
                 (c2mop:ensure-finalized class)
-                (mapcar (lambda (slot-definition)
-                          (list (object-slot-name object (c2mop:slot-definition-name slot-definition))
-                                (c2mop:slot-value-using-class class ,object slot-definition)
-                                (c2mop:slot-definition-type slot-definition)))
-                        (remove-if-not (lambda (slot-definition) (c2mop:slot-boundp-using-class class ,object slot-definition))
-                                       (c2mop:class-slots class))))))
+                (loop :for slot-definition :in (c2mop:class-slots class)
+                      :for boundp := (c2mop:slot-boundp-using-class class ,object slot-definition)
+                      :for name := (and boundp (object-slot-name object (c2mop:slot-definition-name slot-definition)))
+                      :when (and boundp name)
+                        :collect (list name
+                                       (c2mop:slot-value-using-class class ,object slot-definition)
+                                       (c2mop:slot-definition-type slot-definition))))))
   (defgeneric coerced-fields (object)
     (:documentation "Return a list of key definitions for `object'.
  A key definition is a three-element list of the form
@@ -1808,23 +1810,25 @@ see `write-object'"
           (stringify-to stream)
           nil)))))
 
-(defun %hydrate-using-class (object data)
-  (let ((class (class-of object))
-          ;; plist of :initarg form slot/values for `initialize-instance'
-          (initarg-slots-plist ())
-          ;; alist of (slotd . value) for `(setf cmop:slot-value-using-class)'
-          (set-value-slots-alist ()))
-      (c2mop:ensure-finalized class)
-      (dolist (slot (c2mop:class-slots class))
-        (multiple-value-bind (value value-p)
-            (gethash (object-slot-name object (c2mop:slot-definition-name slot)) data)
-          (when value-p
-            (let ((coerce-value (%convert value (c2cl:slot-definition-type slot)))
-                  (slot-initargs (c2mop:slot-definition-initargs slot)))
-              (cond
-                (slot-initargs  (push coerce-value initarg-slots-plist)
-                                (push (first slot-initargs) initarg-slots-plist))
-                (t              (push (cons slot coerce-value) set-value-slots-alist)))))))
+(defun %hydrate-using-class (object data &aux (class (class-of object)))
+  (c2mop:ensure-finalized class)
+  (loop
+    ;; plist of :initarg form slot/values for `initialize-instance'
+    :with initarg-slots-plist := ()
+    ;; alist of (slotd . value) for `(setf cmop:slot-value-using-class)'
+    :with set-value-slots-alist := ()
+    :for slot-definition :in (c2mop:class-slots class)
+    :for name := (object-slot-name object (c2mop:slot-definition-name slot-definition))
+    :when name :do
+      (multiple-value-bind (value value-p) (gethash name data)
+        (when value-p
+          (let ((converted-value (%convert value (c2cl:slot-definition-type slot-definition)))
+                (slot-initargs (c2mop:slot-definition-initargs slot-definition)))
+            (cond
+              (slot-initargs  (push converted-value initarg-slots-plist)
+                              (push (first slot-initargs) initarg-slots-plist))
+              (t              (push (cons slot-definition converted-value) set-value-slots-alist))))))
+    :finally
       (apply #'initialize-instance object initarg-slots-plist)
       (loop :for (slot . value) :in set-value-slots-alist
             :do (setf (c2mop:slot-value-using-class class object slot) value))))
