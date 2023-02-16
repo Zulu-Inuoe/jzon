@@ -1984,10 +1984,10 @@ warning
             :do (setf (c2mop:slot-value-using-class class object slot) value))))
 
 (defgeneric hydrate (object data)
-  (:method ((object standard-object) data)
+  (:method ((object standard-object) (data hash-table))
     (%hydrate-using-class object data))
   #+ (or ecl ccl sbcl)
-  (:method ((object structure-object) data)
+  (:method ((object structure-object) (data hash-table))
     (%hydrate-using-class object data)))
 
 (defun %type-part-or (spec n default)
@@ -2191,7 +2191,6 @@ warning
       (t
        (let ((class (find-class type nil)))
          (unless class (error "Cannot coerce '~A' to ~A." value type))
-         (unless (hash-table-p value) (error "Cannot coerce '~A' to ~A" value type))
          #- (or ecl ccl sbcl)
          (when (typep class 'structure-class) (error "Cannot coerce '~A' to ~A" value type))
          (let ((instance (allocate-instance class)))
