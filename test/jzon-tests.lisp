@@ -2060,3 +2060,16 @@ break\"]")))
   (let ((obj (jzon:convert (jzon:stringify (make-instance 'convert-object-names-test :x-pos 42 :y-pos 24)) 'convert-object-names-test)))
     (is (= 42 (slot-value obj 'x-pos)))
     (is (= 24 (slot-value obj 'y-pos)))))
+
+(defclass convert-object-slot-converted-test ()
+  ((name :type string)
+   (weight :type (or null float))))
+
+(test convert-coerces-converted-object-slots
+  (let ((obj (jzon:convert "{\"name\":24,\"weight\":null}" 'convert-object-slot-converted-test)))
+    (is (string= "24" (slot-value obj 'name)))
+    (is (null (slot-value obj 'weight))))
+
+  (let ((obj (jzon:convert "{\"name\":true,\"weight\":1.5}" 'convert-object-slot-converted-test)))
+    (is (string= "true" (slot-value obj 'name)))
+    (is (= 1.5d0 (slot-value obj 'weight)))))
