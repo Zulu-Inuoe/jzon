@@ -1040,11 +1040,27 @@ see `close-parser'"
           (declare (dynamic-extent %step %read-string %pos))
           (%parse %step %read-string %pos key-fn max-depth (and allow-comments t) (and allow-trailing-comma t) (and allow-multiple-content t)))))))
 
+(defgeneric object-slot-name (object slot-name)
+  (:documentation "The name that a given slot becomes when reading/writing it to JSON.
+
+see `write-value'")
+  (:method ((object standard-object) slot-name)
+    (let ((name (symbol-name slot-name)))
+      (if (some #'lower-case-p name)
+          name
+          (string-downcase name))))
+    #+ (or ccl clisp sbcl)
+    (:method ((object structure-object) slot-name)
+      (let ((name (symbol-name slot-name)))
+        (if (some #'lower-case-p name)
+            name
+            (string-downcase name)))))
+
 (macrolet ((%coerced-fields-slots (object)
              `(let ((class (class-of ,object)))
                 (c2mop:ensure-finalized class)
                 (mapcar (lambda (slot-definition)
-                          (list (object-slot-name (c2mop:slot-definition-name slot-definition))
+                          (list (object-slot-name object (c2mop:slot-definition-name slot-definition))
                                 (c2mop:slot-value-using-class class ,object slot-definition)
                                 (c2mop:slot-definition-type slot-definition)))
                         (remove-if-not (lambda (slot-definition) (c2mop:slot-boundp-using-class class ,object slot-definition))
@@ -1955,13 +1971,7 @@ warning
       (c2mop:ensure-finalized class)
       (dolist (slot (c2mop:class-slots class))
         (multiple-value-bind (value value-p)
-            ;; TODO we should not call coerce-key here...
-            ;;      or we need to adjust the lib to prevent
-            ;;      using a custom `coerce-key' in `stringify'
-            ;;      the issue is we have no way to customize this
-            ;;      while reading, even though we can when we are writing
-            ;;      this means we can WRITE objects we cannot READ
-            (gethash (coerce-key (c2mop:slot-definition-name slot)) data)
+            (gethash (object-slot-name object (c2mop:slot-definition-name slot)) data)
           (when value-p
             (let ((coerce-value (%convert value (c2cl:slot-definition-type slot)))
                   (slot-initargs (c2mop:slot-definition-initargs slot)))
