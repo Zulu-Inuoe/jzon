@@ -2175,5 +2175,4 @@ warning
   "Convert the JSON `json' to `type'.
 
   `json' may be any valid input to `parse`."
-  (check-type json string)
   (%convert (parse json) type))
