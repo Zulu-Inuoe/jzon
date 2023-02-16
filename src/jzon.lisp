@@ -1871,26 +1871,8 @@ see `write-object'"
          (type-name (if (atom exp-type) exp-type (car exp-type)))
          (type-args (if (atom exp-type) () (cdr exp-type))))
     (cond
-      ((or (eq t type-name)
-           (and (eq 'and type-name)
-                (null type-args)))  value)
-      ((or (eq nil    type-name)
-           (and (eq 'or type-name)
-                (null type-args)))  (error "Cannot convert '~A' to empty type. ~A" value type))
+      ;;; Handle all of the 'special' compound types
       ((eq type-name  'values)      (error "Cannot convert '~A' to type ~A." value type))
-
-      ;; Boolean has special logic regarding things
-      ;; like strings and numbers, so needs to go first
-      ((%type= type 'boolean)
-        (cond
-          ((eq value nil)   nil)
-          ((eq value t)     t)
-          ((numberp value)  (not (zerop value)))
-          ((stringp value)  (cond
-                              ((string-equal value "true")  t)
-                              ((string-equal value "false") nil)
-                              (t                            (error "Cannot coerce '~A' to type ~A." value type))))
-          (t                (error "Cannot coerce '~A' to type ~A." value type))))
 
       ((or (eq type-name 'eql)
            (eq type-name 'member))
@@ -1902,6 +1884,18 @@ see `write-object'"
                                  (integer    (ignore-errors (%convert value 'integer)))
                                  (float      (ignore-errors (float (%convert value 'float) eql-value)))
                                  (character  (ignore-errors (%convert value 'character)))
+                                 ;; Handle nil/t
+                                 ((eql nil)  (if (or (eql value nil)
+                                                     (and (numberp value) (zerop value))
+                                                     (and (stringp value) (string-equal value "false")))
+                                               nil
+                                               t))
+                                 ((eql t)    (if (or (eql value t)
+                                                     (and (numberp value) (not (zerop value)))
+                                                     (and (stringp value) (string-equal value "true")))
+                                               t
+                                               nil))
+                                 ;; All other symbols are treated by looking at their `symbol-name`
                                  (symbol
                                    (if (and (typep value 'json-atom)
                                             (string= eql-value (%stringify-atom value)))
@@ -1920,30 +1914,51 @@ see `write-object'"
         value)
 
       ((eq type-name 'and)
-        (let* ((types (stable-sort (copy-list type-args) #'subtypep))
-               (main-type (first types))
-               (coerced (%convert value main-type))
-               (no-fits (remove coerced (rest types) :test #'typep)))
-          (when no-fits
-            (error "Coercing 'and' - Value '~A' coerced to '~A' via '~A' fails constraint for ~A" value coerced main-type no-fits))
-          (values coerced no-fits)))
+        ;; (and) is t
+        (if (null type-args)
+          value
+          (let* ((types (stable-sort (copy-list type-args) #'subtypep))
+                 (main-type (first types))
+                 (coerced (%convert value main-type))
+                 (no-fits (remove coerced (rest types) :test #'typep)))
+            (when no-fits
+              (error "Coercing 'and' - Value '~A' coerced to '~A' via '~A' fails constraint for ~A" value coerced main-type no-fits))
+            (values coerced no-fits))))
 
       ((eq type-name 'or)
-        ;; TODO - Should we try and be nice and order the types for them?
-        ;; there's no absolute ordering of types, but at least within some group
-        ;; we can try and be helpful (eg if we are given (or number float ladder)
-        ;; we can try for float before number, and UB with the order of ladder
-        ;; or maybe it's best to leave it in the order it comes in as the user can control it
-        (dolist (type type-args (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value type-args))
-          (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
-            (unless errorp
-              (return value)))))
+        (if (null type-args)  ; (or) is nil
+          (error "Cannot convert '~A' to empty type. ~A" value type)
+          ;; TODO - Should we try and be nice and order the types for them?
+          ;; there's no absolute ordering of types, but at least within some group
+          ;; we can try and be helpful (eg if we are given (or number float ladder)
+          ;; we can try for float before number, and UB with the order of ladder
+          ;; or maybe it's best to leave it in the order it comes in as the user can control it
+          (dolist (type type-args (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value type-args))
+            (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
+              (unless errorp
+                (return value))))))
 
-      ;; 'Native' JSON types (except for boolean above)
+      ((eq t    type-name)  value)
+      ((eq nil  type-name)  (error "Cannot convert '~A' to empty type. ~A" value type))
+
+      ;; 'Native' JSON types
       ((eq 'null  type-name)
         (cond
           ((eq value 'null) nil)
           (t                (error "Cannot coerce '~A' to ~A" value type))))
+
+      ;; Boolean has special logic regarding things
+      ;; like strings and numbers
+      ((eq 'boolean type-name)
+        (cond
+          ((eq value nil)   nil)
+          ((eq value t)     t)
+          ((numberp value)  (not (zerop value)))
+          ((stringp value)  (cond
+                              ((string-equal value "true")  t)
+                              ((string-equal value "false") nil)
+                              (t                            (error "Cannot coerce '~A' to type ~A." value type))))
+          (t                (error "Cannot coerce '~A' to type ~A." value type))))
 
       ((subtypep type 'number)
         (typecase value
