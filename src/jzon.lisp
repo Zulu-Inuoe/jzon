@@ -1456,6 +1456,15 @@ see `write-values'"
        (progn ,@body)
        (end-array ,writer-sym))))
 
+(defun %write-json-atom-to-stream (value stream)
+  (etypecase value
+    ((eql t)      (write-string "true" stream))
+    ((eql nil)    (write-string "false" stream))
+    ((eql null)   (write-string "null" stream))
+    (integer      (format stream "~D" value))
+    (double-float (sf:write-double value stream))
+    (string       (%write-json-string value stream))))
+
 (defun %write-json-atom (writer value)
   "Write a JSON atom per `json-atom'."
   (with-slots (%stream %stack) writer
@@ -1465,14 +1474,7 @@ see `write-values'"
       ((:array-value)
        (write-char #\, %stream)
        (%write-indentation writer)))
-
-    (etypecase value
-      ((eql t)      (write-string "true" %stream))
-      ((eql nil)    (write-string "false" %stream))
-      ((eql null)   (write-string "null" %stream))
-      (integer      (format %stream "~D" value))
-      (double-float (sf:write-double value %stream))
-      (string       (%write-json-string value %stream)))))
+    (%write-json-atom-to-stream value %stream)))
 
 (declaim (inline %write-value-using-coerced-fields))
 (defun %write-value-using-coerced-fields (writer value)
@@ -1853,13 +1855,20 @@ see `write-object'"
                   part-value))
             default))))
 
+(defun %stringify-atom (json-atom)
+  (declare (type json-atom json-atom))
+  (if (stringp json-atom)
+    json-atom
+    (with-output-to-string (stream)
+      (%write-json-atom-to-stream json-atom stream))))
+
 (defun %convert (value type)
   (let* ((exp-type (ie:typexpand type))
          (type-name (if (atom exp-type) exp-type (car exp-type))))
     (cond
-      ((eq t      type-name)        value)
-      ((eq nil    type-name)        (error "Cannot convert '~A' to empty type. ~A" value type))
-      ((eq type-name 'values)       (error "Cannot convert '~A' to type ~A." value type))
+      ((eq t          type-name)        value)
+      ((eq nil        type-name)        (error "Cannot convert '~A' to empty type. ~A" value type))
+      ((eq type-name  'values)          (error "Cannot convert '~A' to type ~A." value type))
 
       ;; Boolean has special logic regarding things
       ;; like strings and numbers, so needs to go first
@@ -1884,14 +1893,14 @@ see `write-object'"
                                  (float      (ignore-errors (float (%convert value 'float) eql-value)))
                                  (character  (ignore-errors (%convert value 'character)))
                                  (symbol
-                                   (if (typecase value
-                                         (string    (string= eql-value value))
-                                         (json-atom (string= eql-value (stringify value))))
+                                   (if (and (typep value 'json-atom)
+                                            (string= eql-value (%stringify-atom value)))
                                      eql-value
                                      ;; we know it's a symbol so it won't be eql to 0
                                      0)))))
             (when (eql eql-value coerced-value)
               (return coerced-value)))))
+
       ;; For these, either the value is already of that type,
       ;; or we can't do anything about it
       ((or (eq type-name 'atom)
@@ -1899,14 +1908,16 @@ see `write-object'"
            (eq type-name 'satisfies))
         (unless (typep value type) (error "~A can't be converted to type ~A" value type))
         value)
+
       ((eq type-name 'and)
         (let* ((types (stable-sort (copy-list (rest exp-type)) #'subtypep))
-              (main-type (first types))
-              (coerced (%convert value main-type))
-              (no-fits (remove coerced (rest types) :test #'typep)))
+               (main-type (first types))
+               (coerced (%convert value main-type))
+               (no-fits (remove coerced (rest types) :test #'typep)))
           (when no-fits
             (error "Coercing 'and' - Value '~A' coerced to '~A' via '~A' fails constraint for ~A" value coerced main-type no-fits))
           (values coerced no-fits)))
+
       ((eq type-name 'or)
         ;; TODO - Should we try and be nice and order the types for them?
         ;; there's no absolute ordering of types, but at least within some group
@@ -1920,9 +1931,11 @@ see `write-object'"
                 (return value))))))
 
       ;; 'Native' JSON types (except for boolean above)
-      ((eq 'null  type-name)        (cond
-                                      ((eq value 'null)       nil)
-                                      (t                      (error "Cannot coerce '~A' to ~A" value type))))
+      ((eq 'null  type-name)
+        (cond
+          ((eq value 'null) nil)
+          (t                (error "Cannot coerce '~A' to ~A" value type))))
+
       ((subtypep type 'number)
         (typecase value
           (string (multiple-value-bind (parsed-value errorp) (parse value)
@@ -1938,10 +1951,10 @@ see `write-object'"
                   (imagpart (%convert (aref value 1) 'real)))
               (complex realpart imagpart)))
           (t  (error "Cannot coerce '~A' into type ~A." value type))))
+
       ((subtypep type 'string)
         (let ((value (typecase value
-                       (string    value)
-                       (json-atom (stringify value))
+                       (json-atom (%stringify-atom value))
                        (t (error "Cannot coerce '~A' to type ~A." value type)))))
           (coerce value type)))
       ((eq type-name 'simple-vector)
@@ -2010,8 +2023,7 @@ see `write-object'"
       ((subtypep type 'character)
         (coerce
           (typecase value
-            (string    value)
-            (json-atom (stringify value))
+            (json-atom (%stringify-atom value))
             (t         (error "Cannot coerce '~A' into type ~A" value type)))
           type))
       ((subtypep type 'sequence)
@@ -2020,26 +2032,22 @@ see `write-object'"
         (coerce value type))
       ((eq type-name 'package)
         (let ((name (typecase value
-                     (string    value)
-                     (json-atom (stringify value))
+                     (json-atom (%stringify-atom value))
                      (t         (error "Cannot coerce '~A' into type ~A" value type)))))
          (or (find-package name)
              (error "Cannot coerce '~A' into type ~A (package does not exist)." value type))))
       ((eq type-name 'pathname)
        (values (parse-namestring (typecase value
-                                   (string    value)
-                                   (json-atom (stringify value))
+                                   (json-atom (%stringify-atom value))
                                    (t         (error "Cannot coerce '~A' into type ~A" value type))))))
       ((eq type-name 'keyword)
        (let ((name (typecase value
-                     (string    value)
-                     (json-atom (stringify value))
+                     (json-atom (%stringify-atom value))
                      (t         (error "Cannot coerce '~A' into type ~A" value type)))))
          (intern name '#:keyword)))
       ((eq type-name 'symbol)
        (let ((name (typecase value
-                     (string    value)
-                     (json-atom (stringify value))
+                     (json-atom (%stringify-atom value))
                      (t         (error "Cannot coerce '~A' into type ~A" value type)))))
          (intern name)))
       (t
@@ -2051,8 +2059,17 @@ see `write-object'"
            (hydrate instance value)
            instance))))))
 
-(defun convert (json type)
+(defun convert (json type
+                  &key
+                   (max-depth 128)
+                   (allow-comments nil)
+                   (allow-trailing-comma nil)
+                   (max-string-length (min #x100000 array-dimension-limit))
+                   key-fn)
   "Convert the JSON `json' to `type'.
 
   `json' may be any valid input to `parse`."
-  (%convert (parse json) type))
+  (%convert (parse json :max-depth max-depth :allow-comments allow-comments
+                        :allow-trailing-comma allow-trailing-comma
+                        :max-string-length max-string-length :key-fn key-fn)
+            type))
