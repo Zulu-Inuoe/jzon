@@ -1702,40 +1702,56 @@ break\"]")))
 (in-suite convert)
 
 (test convert-fails-on-nil
-  (signals (error) (jzon:convert "null" nil))
-  (signals (error) (jzon:convert "false" nil))
-  (signals (error) (jzon:convert "true" nil))
-  (signals (error) (jzon:convert "\"str\"" nil))
-  (signals (error) (jzon:convert "[1,2]" nil))
-  (signals (error) (jzon:convert "{\"x\":0}" nil)))
+  (signals (error) (jzon:convert "null"       nil))
+  (signals (error) (jzon:convert "false"      nil))
+  (signals (error) (jzon:convert "true"       nil))
+  (signals (error) (jzon:convert "\"str\""    nil))
+  (signals (error) (jzon:convert "[1,2]"      nil))
+  (signals (error) (jzon:convert "{\"x\":0}"  nil)))
+
+(test convert-fails-on-empty-or
+  (signals (error) (jzon:convert "null"       '(or)))
+  (signals (error) (jzon:convert "false"      '(or)))
+  (signals (error) (jzon:convert "true"       '(or)))
+  (signals (error) (jzon:convert "\"str\""    '(or)))
+  (signals (error) (jzon:convert "[1,2]"      '(or)))
+  (signals (error) (jzon:convert "{\"x\":0}"  '(or))))
 
 (test convert-noop-on-t
-  (is (eql 'null          (jzon:convert "null" t)))
-  (is (eql nil            (jzon:convert "false" t)))
-  (is (eql t              (jzon:convert "true" t)))
-  (is (equalp "str"       (jzon:convert "\"str\"" t)))
-  (is (equalp #(1 2)      (jzon:convert "[1,2]" t)))
+  (is (eql 'null          (jzon:convert "null"      t)))
+  (is (eql nil            (jzon:convert "false"     t)))
+  (is (eql t              (jzon:convert "true"      t)))
+  (is (equalp "str"       (jzon:convert "\"str\""   t)))
+  (is (equalp #(1 2)      (jzon:convert "[1,2]"     t)))
   (is (equalp (ph "x" 0)  (jzon:convert "{\"x\":0}" t))))
 
+(test convert-noop-on-empty-and
+  (is (eql 'null          (jzon:convert "null"      '(and))))
+  (is (eql nil            (jzon:convert "false"     '(and))))
+  (is (eql t              (jzon:convert "true"      '(and))))
+  (is (equalp "str"       (jzon:convert "\"str\""   '(and))))
+  (is (equalp #(1 2)      (jzon:convert "[1,2]"     '(and))))
+  (is (equalp (ph "x" 0)  (jzon:convert "{\"x\":0}" '(and)))))
+
 (test convert-to-null-only-accepts-null
-  (is       (eql nil  (jzon:convert "null" 'null)))
-  (signals  (error)   (jzon:convert "false" 'null))
-  (signals  (error)   (jzon:convert "true" 'null))
-  (signals  (error)   (jzon:convert "\"str\"" 'null))
-  (signals  (error)   (jzon:convert "[1,2]" 'null))
+  (is       (eql nil  (jzon:convert "null"      'null)))
+  (signals  (error)   (jzon:convert "false"     'null))
+  (signals  (error)   (jzon:convert "true"      'null))
+  (signals  (error)   (jzon:convert "\"str\""   'null))
+  (signals  (error)   (jzon:convert "[1,2]"     'null))
   (signals  (error)   (jzon:convert "{\"x\":0}" 'null)))
 
 (test convert-coerces-during-eql
-  (is (eql 42 (jzon:convert "42" '(eql 42))))
-  (is (eql 42d0 (jzon:convert "42" '(eql 42d0))))
-  (is (eql :42 (jzon:convert "42" '(eql :42))))
-  (is (eql #\f (jzon:convert "\"f\"" '(eql #\f)))))
+  (is (eql 42 (jzon:convert "42"      '(eql 42))))
+  (is (eql 42d0 (jzon:convert "42"    '(eql 42d0))))
+  (is (eql :42 (jzon:convert "42"     '(eql :42))))
+  (is (eql #\f (jzon:convert "\"f\""  '(eql #\f)))))
 
 (test convert-coerces-during-member
-  (is (eql 42 (jzon:convert "42" '(member 24 42))))
-  (is (eql 42d0 (jzon:convert "42" '(member 24d0 42d0))))
-  (is (eql :42 (jzon:convert "42" '(member :0 :42))))
-  (is (eql #\f (jzon:convert "\"f\"" '(member #\a #\f)))))
+  (is (eql 42 (jzon:convert "42"      '(member 24 42))))
+  (is (eql 42d0 (jzon:convert "42"    '(member 24d0 42d0))))
+  (is (eql :42 (jzon:convert "42"     '(member :0 :42))))
+  (is (eql #\f (jzon:convert "\"f\""  '(member #\a #\f)))))
 
 (test convert-on-disjoint-types-fails
   (signals  (error) (jzon:convert "null" '(and integer string)))

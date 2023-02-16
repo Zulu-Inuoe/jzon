@@ -1827,9 +1827,9 @@ see `write-object'"
 
 (defgeneric hydrate (object data)
   (:documentation "Method invoked when converting a value from JSON.
-  
+
   Specialize in order to customize the way a JSON value is converted to CL.
-  
+
   `data' can be any `json-element'
 ")
   (:method ((object standard-object) (data hash-table))
@@ -1864,11 +1864,16 @@ see `write-object'"
 
 (defun %convert (value type)
   (let* ((exp-type (ie:typexpand type))
-         (type-name (if (atom exp-type) exp-type (car exp-type))))
+         (type-name (if (atom exp-type) exp-type (car exp-type)))
+         (type-args (if (atom exp-type) () (cdr exp-type))))
     (cond
-      ((eq t          type-name)        value)
-      ((eq nil        type-name)        (error "Cannot convert '~A' to empty type. ~A" value type))
-      ((eq type-name  'values)          (error "Cannot convert '~A' to type ~A." value type))
+      ((or (eq t type-name)
+           (and (eq 'and type-name)
+                (null type-args)))  value)
+      ((or (eq nil    type-name)
+           (and (eq 'or type-name)
+                (null type-args)))  (error "Cannot convert '~A' to empty type. ~A" value type))
+      ((eq type-name  'values)      (error "Cannot convert '~A' to type ~A." value type))
 
       ;; Boolean has special logic regarding things
       ;; like strings and numbers, so needs to go first
@@ -1884,7 +1889,7 @@ see `write-object'"
 
       ((or (eq type-name 'eql)
            (eq type-name 'member))
-        (dolist (eql-value (cdr exp-type) (error "~A can't be converted to type ~A" value type))
+        (dolist (eql-value type-args (error "~A can't be converted to type ~A" value type))
           (let ((coerced-value (typecase eql-value
                                  ;; w/ ignore-errors, we know it will be nil
                                  ;; in all cases where it is NOT a symbol
@@ -1910,7 +1915,7 @@ see `write-object'"
         value)
 
       ((eq type-name 'and)
-        (let* ((types (stable-sort (copy-list (rest exp-type)) #'subtypep))
+        (let* ((types (stable-sort (copy-list type-args) #'subtypep))
                (main-type (first types))
                (coerced (%convert value main-type))
                (no-fits (remove coerced (rest types) :test #'typep)))
@@ -1924,11 +1929,10 @@ see `write-object'"
         ;; we can try and be helpful (eg if we are given (or number float ladder)
         ;; we can try for float before number, and UB with the order of ladder
         ;; or maybe it's best to leave it in the order it comes in as the user can control it
-        (let ((types (rest exp-type)))
-          (dolist (type types (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value types))
-            (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
-              (unless errorp
-                (return value))))))
+        (dolist (type type-args (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value type-args))
+          (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
+            (unless errorp
+              (return value)))))
 
       ;; 'Native' JSON types (except for boolean above)
       ((eq 'null  type-name)
