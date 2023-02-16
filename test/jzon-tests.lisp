@@ -917,7 +917,30 @@
     (jzon:parse-next p)
     (is (equalp '(:object-key "x") (multiple-value-list (jzon:parse-next p))))))
 
-(def-suite writer :in jzon)
+(def-suite writing :in jzon)
+(in-suite writing)
+
+(def-suite writing-coercion :in writing)
+(in-suite writing-coercion)
+
+(defclass coerced-fields-test-class ()
+  ((a :initarg :a)
+   (b :initarg :b
+      :type integer)))
+
+(test coerced-fields-returns-slots-with-string-names
+  (is (equalp '("a" "b") (mapcar #'first (jzon:coerced-fields (make-instance 'coerced-fields-test-class :a 1 :b 2))))))
+
+(test coerced-fields-returns-slots-with-slot-values
+  (is (equalp '(1 2) (mapcar #'second (jzon:coerced-fields (make-instance 'coerced-fields-test-class :a 1 :b 2))))))
+
+(test coerced-fields-returns-slots-with-slot-types-when-available
+  (is (equalp '(t integer) (mapcar #'third (jzon:coerced-fields (make-instance 'coerced-fields-test-class :a 1 :b 2))))))
+
+(test coerced-fields-omits-unbound-slots
+  (is (equalp '("a") (mapcar #'first (jzon:coerced-fields (make-instance 'coerced-fields-test-class :a 1))))))
+  
+(def-suite writer :in writing)
 (in-suite writer)
 
 (defmacro with-writer-to-string ((writer &key pretty max-depth coerce-key) &body body)
@@ -1569,7 +1592,8 @@ break\"]")))
                    "quote" "\""
                    "backslash" "\\"
                    "controls" "
-	"
+
+	"
                    "slash" "/ & /"
                    "alpha" "abcdefghijklmnopqrstuvwyz"
                    "ALPHA" "ABCDEFGHIJKLMNOPQRSTUVWYZ"
@@ -1591,7 +1615,8 @@ break\"]")))
                    "jsontext" "{\"object with 1 member\":[\"array with 1 element\"]}"
                    "quotes" "&#34; \" %22 0x22 034 &#x22;"
                    "/\\\"쫾몾ꮘﳞ볚
-	`1~!@#$%^&*()_+-=[]{}|;:',./<>?" "A key can be any string")
+
+	`1~!@#$%^&*()_+-=[]{}|;:',./<>?" "A key can be any string")
          0.5d0 98.6d0 99.44d0 1066 10.0d0 1.0d0 0.1d0 1.0d0 2.0d0 2.0d0 "rosebud")
        (jzon:parse "[
     \"JSON Test Pattern pass1\",
