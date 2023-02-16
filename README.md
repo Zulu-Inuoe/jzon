@@ -848,7 +848,7 @@ The behaviour of `jzon:parser` is analogous to `jzon:parse`, except you control 
 * `string`
 * `(vector (unsigned-byte 8))` - octets in utf-8
 * `stream` - character or binary in utf-8
-* `pathname` - `jzon:make-parder` will open the file for reading in utf-8
+* `pathname` - `jzon:make-parser` will open the file for reading in utf-8
 
 :warning: Because [`jzon:make-parser`](#jzonmake-parser) can open a file, it is recommended you use [`jzon:with-parser`](#jzonwith-parser) instead, unless you need indefinite extent.
 
