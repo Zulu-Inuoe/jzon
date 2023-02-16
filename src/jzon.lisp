@@ -1882,9 +1882,10 @@ see `write-object'"
           ((eq value nil)   nil)
           ((eq value t)     t)
           ((numberp value)  (not (zerop value)))
-          ((stringp value)  (multiple-value-bind (parsed-value errorp) (parse value)
-                              (when (or errorp (not (typep parsed-value 'boolean))) (error "Cannot coerce '~A' to type ~A." value type))
-                              parsed-value))
+          ((stringp value)  (cond
+                              ((string-equal value "true")  t)
+                              ((string-equal value "false") nil)
+                              (t                            (error "Cannot coerce '~A' to type ~A." value type))))
           (t                (error "Cannot coerce '~A' to type ~A." value type))))
 
       ((or (eq type-name 'eql)
