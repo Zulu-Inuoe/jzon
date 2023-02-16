@@ -19,9 +19,12 @@
 
    ;;; Conditions
    #:json-error
+   #:json-limit-error
    #:json-parse-error
+   #:json-parse-limit-error
    #:json-eof-error
    #:json-write-error
+   #:json-write-limit-error
    #:json-recursive-write-error
 
    ;;; Simple extensible writing
@@ -82,6 +85,11 @@
 (define-condition json-error (simple-error) ()
   (:documentation "Common error condition for all errors relating to reading/writing JSON."))
 
+(define-condition json-limit-error (json-error)
+  ((%limit :initarg :limit
+           :reader %json-limit-error-limit))
+  (:documentation "Error signalled when some limit in the JSON parser/writer has been exceeded."))
+  
 (define-condition json-parse-error (json-error)
   ((%line :initarg :line
           :reader %json-parse-error-line)
@@ -96,6 +104,19 @@
            (format stream ", at line ~A, column ~A." (%json-parse-error-line c) (%json-parse-error-column c))
            (format stream ", position unavailable.")))))
   (:documentation "Error occuring while parsing JSON, in some cases with row/col information."))
+
+(define-condition json-parse-limit-error (json-parse-error json-limit-error)
+  ()
+  (:report
+    (lambda (c stream)
+      (apply #'format stream (simple-condition-format-control c) (simple-condition-format-arguments c))
+      (format stream " Limit: ~A." (%json-limit-error-limit c))
+      (let ((line (%json-parse-error-line c))
+           (column (%json-parse-error-column c)))
+       (if (and line column)
+           (format stream " At line ~A, column ~A." (%json-parse-error-line c) (%json-parse-error-column c))
+           (format stream " Position unavailable.")))))
+  (:documentation "Error signalled when some limit in the JSON parser has been exceeded."))
 
 (define-condition json-eof-error (json-parse-error) ()
   (:documentation "Error signalled when reaching the end of file while parsing JSON."))
@@ -137,6 +158,16 @@ see `json-atom'"
         (error type :format-control format :format-arguments args :line line :column column))
       (error type :format-control format :format-arguments args)))
 
+(declaim (inline %raise-limit))
+(defun %raise-limit (type pos limit format &rest args)
+  (declare (type symbol type)
+           (type function pos)
+           (type string format))
+  (if (subtypep type 'json-parse-error)
+    (multiple-value-bind (line column) (funcall pos)
+      (error type :format-control format :format-arguments args :line line :column column :limit limit))
+    (error type :format-control format :format-arguments args :limit limit)))
+    
 (declaim (inline %step))
 (defun %step (step)
   (funcall (the (function () (values (or null character) &optional)) step)))
@@ -258,7 +289,7 @@ see `json-atom'"
           :until (char= #.(char "\"" 0) next)
           :do
              (when (= (fill-pointer string-accum) max-string-length)
-               (%raise 'json-parse-error pos "Maximum string length exceeded"))
+               (%raise-limit 'json-parse-limit-error pos max-string-length "Maximum string length exceeded"))
              (let ((interpreted (interpret next)))
                (vector-push-extend interpreted string-accum)
                (when (and base-string-p (not (typep interpreted 'base-char)))
@@ -414,7 +445,7 @@ see `json-atom'"
                                                     (let ((len (- j i)))
                                                       (when (< max-string-length len)
                                                         (setf i (+ i (1+ max-string-length)))
-                                                        (%raise 'json-parse-error pos "Maximum string length exceeded"))
+                                                        (%raise-limit 'json-parse-limit-error pos max-string-length "Maximum string length exceeded."))
                                                       (return
                                                         (prog1 (cond
                                                                  ((zerop len) "")
@@ -433,7 +464,7 @@ see `json-atom'"
                                                     (let ((len (- j i)))
                                                       (when (< max-string-length len)
                                                         (setf i (+ i (1+ max-string-length)))
-                                                        (%raise 'json-parse-error pos "Maximum string length exceeded"))
+                                                        (%raise-limit 'json-parse-limit-error pos max-string-length "Maximum string length exceeded."))
 
                                                       ;; Copy over what we have so far
                                                       (when (< (array-dimension string-accum 0) len)
@@ -802,7 +833,7 @@ see `close-parser'"
                 (inc-depth ()
                   `(progn
                     (when (= depth %max-depth)
-                      (%raise 'json-parse-error %pos "Maximum depth exceeded"))
+                      (%raise-limit 'json-parse-limit-error %pos %max-depth "Maximum depth exceeded."))
                     (incf depth))))
       (loop
         (multiple-value-bind (event value) (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)
@@ -944,6 +975,14 @@ Example return value:
        (format stream ", path until recursion point: ~A" (%json-recursive-write-error-path c)))))
   (:documentation "Error signalled when a recursive write is detected.
   A recursive write is when `write-value' is called from within `write-value' with a value it has 'seen' before."))
+
+(define-condition json-write-limit-error (json-write-error json-limit-error)
+  ()
+  (:report
+    (lambda (c stream)
+      (apply #'format stream (simple-condition-format-control c) (simple-condition-format-arguments c))
+      (format stream " Limit: ~A." (%json-limit-error-limit c))))
+  (:documentation "Error signalled when a limit on the JSON writer has been exceeded."))
 
 (defclass %string-output-stream (tgs:fundamental-character-output-stream)
   ((%string :initarg :string)))
@@ -1135,7 +1174,7 @@ see `end-object'"
       ((:complete)                  (error "Attempting to write object when value already written to writer")))
 
     (when (= %depth %max-depth)
-      (error "Exceeded maximum depth in writing object."))
+      (error 'json-write-limit-error :format-control "Exceeded maximum depth in writing object." :limit %max-depth))
     (incf %depth)
     (push :object %stack)
     (write-char #\{ %stream))
@@ -1219,7 +1258,7 @@ see `end-array'"
       ((:complete)             (error "Attempting to write array when value already written to writer")))
     (push :array %stack)
     (when (= %depth %max-depth)
-      (error "Exceeded maximum depth in writing array."))
+      (error 'json-write-limit-error :format-control "Exceeded maximum depth in writing array." :limit %max-depth))
     (incf %depth)
     (write-char #\[ %stream))
   writer)

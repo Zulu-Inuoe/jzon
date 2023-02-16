@@ -401,11 +401,11 @@
   (finishes (jzon:parse "\"This is a string that is exactly not too long\"" :max-string-length 45)))
 
 (test parse-limits-max-string-length
-  (signals (jzon:json-parse-error)
+  (signals (jzon:json-parse-limit-error)
     (jzon:parse "\"This is a string that is too long\"" :max-string-length 5)))
 
 (test parse-limits-max-string-length-with-escape-codes
-  (signals (jzon:json-parse-error)
+  (signals (jzon:json-parse-limit-error)
     (jzon:parse "\"This is a string that is too long\bwith some special codes \\u00f8\"" :max-string-length 5)))
 
 (test parse-max-string-length-respects-escape-codes-1
@@ -542,7 +542,7 @@
                              (jzon:write-values writer 1 2 3))))))
 
 (test writer-max-depth-works
-  (signals (error)
+  (signals (jzon:json-write-limit-error)
     (with-writer-to-string (writer :max-depth 1)
       (jzon:with-array writer
         (jzon:with-array writer))))
@@ -1076,7 +1076,7 @@
   (signals jzon:json-parse-error (jzon:parse "[\"Illegal backslash escape: \\017\"]")))
 
 (test fail18
-  (signals jzon:json-parse-error (jzon:parse "[[[[[[[[[[[[[[[[[[[[\"Too deep\"]]]]]]]]]]]]]]]]]]]]" :max-depth 19)))
+  (signals jzon:json-parse-limit-error (jzon:parse "[[[[[[[[[[[[[[[[[[[[\"Too deep\"]]]]]]]]]]]]]]]]]]]]" :max-depth 19)))
 
 (test fail19
   (signals jzon:json-parse-error (jzon:parse "{\"Missing colon\" null}")))

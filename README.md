@@ -147,6 +147,8 @@ The keyword arguments control optional features when reading:
 * `:max-depth` controls the maximum depth allowed when nesting arrays or objects.
 * `:max-string-length` controls the maximum length allowed when reading a string key or value.
 
+When either *max-depth* or *max-string-length* is exceeded, `jzon:parse` shall signal a `jzon:json-parse-limit-error` error.
+
 ##### *key-fn*
 
 When parsing objects, *key-fn* is called on each of that object's keys (`simple-string`):
@@ -211,6 +213,8 @@ If *pretty* is true, the output is formatted with spaces and newlines.
 
 In addition to serializing `json:jzon-element` values per [Type Mappings](#type-mappings), `jzon:stringify` allows other values. 
 See [Additionally Supported Types For Writing](#additionally-supported-types-for-writing) and [Custom Serialization](#custom-serialization).
+
+When either *max-depth* is exceeded, [`jzon:stringify`](#jzonstringify) shall signal a `jzon:json-write-limit-error` error.
 
 ##### stream
 
@@ -378,6 +382,8 @@ Construct a [`jzon:writer`](#jzonwriter) for writing JSON via subsequent calls t
 If *pretty* is true, all output is indented with spaces and newlines.
 
 *max-depth* limits the depth of nesting arrays/objects.
+
+When either *max-depth* is exceeded, functions which increase the depth, such as `jzon:begin-array` or `jzon:begin-object` shall signal a `jzon:json-write-limit-error` error.
 
 ##### stream
 
@@ -850,6 +856,8 @@ The behaviour of `jzon:parser` is analogous to `jzon:parse`, except you control 
 * `stream` - character or binary in utf-8
 * `pathname` - `jzon:make-parser` will open the file for reading in utf-8
 
+When *max-string-length* is exceeded, [`jzon:parse-next`](#jzonparse-next) shall signal a `jzon:json-parse-limit-error` error.
+
 :warning: Because [`jzon:make-parser`](#jzonmake-parser) can open a file, it is recommended you use [`jzon:with-parser`](#jzonwith-parser) instead, unless you need indefinite extent.
 
 ### jzon:close-parser
@@ -904,6 +912,8 @@ Always returns two values indicating the next available event on the JSON stream
 | nil           | `nil`                                   |
 
 **Note:** The `nil` *event* represents conclusion of a toplevel value, and should be taken as "parsing has successfully completed".
+
+When the parser's *max-string-length* is exceeded, [`jzon:parse-next`](#jzonparse-next) shall signal a `jzon:json-parse-limit-error` error. See [`jzon:make-parser`](#jzonmake-parser).
 
 ### Streaming Parser Example
 
