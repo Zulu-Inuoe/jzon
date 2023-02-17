@@ -4,6 +4,8 @@ A correct and safe(er) JSON [RFC 8259][JSONRFC] parser with sane defaults.
 
 Please see the section [Motivation and Features](#motivation-and-features) for a set of motivations driving jzon and why you should consider it over the other hundred options available for JSON in CL.
 
+Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
+
 [![Actions Status](https://github.com/Zulu-Inuoe/jzon/workflows/ci/badge.svg)](https://github.com/Zulu-Inuoe/jzon/actions)
 
 #### Table of Contents
