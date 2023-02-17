@@ -89,7 +89,7 @@
   ((%limit :initarg :limit
            :reader %json-limit-error-limit))
   (:documentation "Error signalled when some limit in the JSON parser/writer has been exceeded."))
-  
+
 (define-condition json-parse-error (json-error)
   ((%line :initarg :line
           :reader %json-parse-error-line)
@@ -167,7 +167,7 @@ see `json-atom'"
     (multiple-value-bind (line column) (funcall pos)
       (error type :format-control format :format-arguments args :line line :column column :limit limit))
     (error type :format-control format :format-arguments args :limit limit)))
-    
+
 (declaim (inline %step))
 (defun %step (step)
   (funcall (the (function () (values (or null character) &optional)) step)))
@@ -427,7 +427,7 @@ see `json-atom'"
                                             (t (incf col)))
                                       :finally
                                          (return (values line col)))))
-                         (read-string (let ((string-accum (make-array (min 256 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
+                         (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                                         (lambda ()
                                           ;; Scan until we hit a closing "
                                           ;; Error on EOF
@@ -510,7 +510,7 @@ see `json-atom'"
                           :finally
                              (file-position in pos)
                              (return (values line col)))))))
-         (read-string (let ((string-accum (make-array (min 256 array-dimension-limit) :element-type 'character :adjustable t :fill-pointer 0)))
+         (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                         (lambda ()
                           (setf (fill-pointer string-accum) 0)
                           (%read-json-string step pos string-accum max-string-length t)))))
@@ -543,7 +543,7 @@ see `json-atom'"
    (%key-fn
     :type function)
    (%max-string-length
-    :initform (min #x100000 array-dimension-limit)
+    :initform (min #x100000 (1- array-dimension-limit))
     :type (integer 1 (#.array-dimension-limit)))
    (%close-action
     :type (or null function))
@@ -559,7 +559,7 @@ see `close-parser'"))
 (defun make-parser (in &key
                       (allow-comments nil)
                       (allow-trailing-comma nil)
-                      (max-string-length (min #x100000 array-dimension-limit))
+                      (max-string-length (min #x100000 (1- array-dimension-limit)))
                       key-fn)
   "Construct a `parser' Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
@@ -569,7 +569,7 @@ see `close-parser'"))
 
 see `next'
 see `close-parser'"
-  (check-type max-string-length (integer 1 (#.array-dimension-limit)))
+  (check-type max-string-length (or boolean (integer 1 (#.array-dimension-limit))))
   (check-type key-fn (or null symbol function))
 
   (multiple-value-bind (input close-action)
@@ -584,7 +584,11 @@ see `close-parser'"
                               (close fstream)
                               (close bstream)))))
         (t (values in (lambda ()))))
-    (let ((parser (make-instance 'parser)))
+    (let ((parser (make-instance 'parser))
+          (max-string-length (case max-string-length
+                               ((nil) (1- array-dimension-limit))
+                               ((t)   #x100000)
+                               (t     max-string-length))))
       (with-slots (%step %read-string %pos %allow-comments %allow-trailing-comma %max-string-length %key-fn %close-action) parser
         (setf %close-action close-action)
         (setf (values %step %read-string %pos)
@@ -865,7 +869,7 @@ see `close-parser'"
                    (max-depth 128)
                    (allow-comments nil)
                    (allow-trailing-comma nil)
-                   (max-string-length (min #x100000 array-dimension-limit))
+                   (max-string-length (min #x100000 (1- array-dimension-limit)))
                    key-fn)
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:max-depth' controls the maximum depth allowed when nesting arrays or objects.
@@ -875,11 +879,16 @@ see `close-parser'"
  `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool."
   (check-type max-depth (or null (integer 1 #xFFFF)))
   (check-type key-fn (or null symbol function))
-  (check-type max-string-length (integer 1 (#.array-dimension-limit)))
+  (check-type max-string-length (or boolean (integer 1 (#.array-dimension-limit))))
   (let ((key-fn (etypecase key-fn
                   (null (%make-string-pool))
                   (function key-fn)
-                  (symbol (fdefinition key-fn)))))
+                  (symbol (fdefinition key-fn))))
+        (max-string-length (case max-string-length
+                             ((t)   #x100000)
+                             ((nil) (1- array-dimension-limit))
+                             (t     max-string-length))))
+
     (typecase in
       (pathname
        (with-open-file (in in :direction :input :external-format :utf-8)

@@ -124,7 +124,7 @@ As noted, `jzon:parse` and `jzon:stringify` suit most use-cases, this section go
 * *max-depth* - a positive `integer`, or `nil`
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
-* *max-string-length* - a positive `integer`
+* *max-string-length* - `nil`, `t`, or a positive `integer`
 * *key-fn* - a designator for a function of one argument, or `nil`
 
 *value* - a `jzon:json-element` (see [Type Mappings](#type-mappings))
@@ -146,6 +146,11 @@ The keyword arguments control optional features when reading:
 * `:key-fn` is a function of one value which is called on object keys as they are read, or null *(see below)*
 * `:max-depth` controls the maximum depth allowed when nesting arrays or objects.
 * `:max-string-length` controls the maximum length allowed when reading a string key or value.
+
+*max-string-length* may be an integer denoting the limit, or
+
+* `nil` - No limit barring `array-dimension-limit`
+* `t` - Default limit
 
 When either *max-depth* or *max-string-length* is exceeded, `jzon:parse` shall signal a `jzon:json-parse-limit-error` error.
 
@@ -213,6 +218,11 @@ If *pretty* is true, the output is formatted with spaces and newlines.
 
 In addition to serializing `json:jzon-element` values per [Type Mappings](#type-mappings), `jzon:stringify` allows other values. 
 See [Additionally Supported Types For Writing](#additionally-supported-types-for-writing) and [Custom Serialization](#custom-serialization).
+
+*max-string-length* may be an integer denoting the limit, or
+
+* `nil` - No limit barring `array-dimension-limit`
+* `t` - Default limit
 
 When either *max-depth* is exceeded, [`jzon:stringify`](#jzonstringify) shall signal a `jzon:json-write-limit-error` error.
 

@@ -408,6 +408,25 @@
   (signals (jzon:json-parse-limit-error)
     (jzon:parse "\"This is a string that is too long\bwith some special codes \\u00f8\"" :max-string-length 5)))
 
+;; TODO - pull this hardcode into a constant we can expose from jzon
+(test parse-max-string-length-accepts-nil-for-no-limit
+  (let ((big-chungus (make-array #x500000 :element-type 'character :initial-element #\space)))
+    (setf (aref big-chungus 0) #.(char "\"" 0))
+    (setf (aref big-chungus (1- (length big-chungus))) #.(char "\"" 0))
+    (is (= (- #x500000 2) (count #\Space (jzon:parse big-chungus :max-string-length nil))))))
+
+(test parse-max-string-length-accepts-nil-for-default-limit
+  (let ((big-chungus (make-array #x500000 :element-type 'character :initial-element #\space)))
+    (setf (aref big-chungus 0) #.(char "\"" 0))
+    (setf (aref big-chungus (1- (length big-chungus))) #.(char "\"" 0))
+    (signals (jzon:json-parse-limit-error) (jzon:parse big-chungus :max-string-length t))))
+
+(test parse-max-string-length-accepts-array-dimesion-limit-1
+  (let ((big-chungus (make-array #x500000 :element-type 'character :initial-element #\space)))
+    (setf (aref big-chungus 0) #.(char "\"" 0))
+    (setf (aref big-chungus (1- (length big-chungus))) #.(char "\"" 0))
+    (is (= (- #x500000 2) (count #\Space (jzon:parse big-chungus :max-string-length (1- array-dimension-limit)))))))
+
 (test parse-max-string-length-respects-escape-codes-1
   (finishes (jzon:parse "\"\\u00f8\"" :max-string-length 1)))
 
@@ -783,7 +802,7 @@
 (test stringify-coerce-key-writes-integers-base-10
   (with-standard-io-syntax
     (is (string= "{\"10\":10}" (jzon:stringify (ph 10 10))))
-    
+
     (let ((*print-base* 2))
       (is (string= "{\"10\":10}" (jzon:stringify (ph 10 10)))))))
 
@@ -802,7 +821,7 @@
 (test stringify-coerce-key-writes-rationals-like-floats
   (with-standard-io-syntax
     (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 3/2 3/2))))))
-    
+
 (test stringify-coerce-key-ignores-print-base
   (let ((*print-base* 2))
     (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 3/2 3/2))))))
