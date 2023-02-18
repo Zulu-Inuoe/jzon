@@ -9,6 +9,10 @@ Changes relative to [v1.0.0](#v100)
 * Signal `jzon:json-write-error` rather than `error` when issuing invalid commands to `jzon:writer`
 * Resolve issues around `max-string-length` and introduce the ability to choose default `t` and 'no limit' `nil`
 
+Incompatible changes relative to [v1.0.0](#v100):
+
+* `:key-fn` being `nil` now disables pooling, and `t` enables the default pool for `jzon:parse` and `jzon:make-parser`. This is for consistency with other arguments.
+
 ## v1.0.0
 
 Initial Release

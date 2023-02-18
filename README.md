@@ -127,7 +127,7 @@ As noted, `jzon:parse` and `jzon:stringify` suit most use-cases, this section go
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
 * *max-string-length* - `nil`, `t`, or a positive `integer`
-* *key-fn* - a designator for a function of one argument, or `nil`
+* *key-fn* - a designator for a function of one argument, or a boolean
 
 *value* - a `jzon:json-element` (see [Type Mappings](#type-mappings))
 
@@ -145,7 +145,7 @@ Reads JSON from `in` and returns a `jzon:json-element` per [Type Mappings](#type
 The keyword arguments control optional features when reading:
 * `:allow-comments` controls if we allow single-line // comments and /**/ multiline block comments.
 * `:allow-trailing-comma` controls if we allow a single comma `,` after all elements of an array or object.
-* `:key-fn` is a function of one value which is called on object keys as they are read, or null *(see below)*
+* `:key-fn` is a function of one value which is called on object keys as they are read, or a boolean *(see below)*
 * `:max-depth` controls the maximum depth allowed when nesting arrays or objects.
 * `:max-string-length` controls the maximum length allowed when reading a string key or value.
 
@@ -180,10 +180,10 @@ As an example, `alexandria:make-keyword` can be used to make object keys into ke
 (gethash :|y| (aref *v* 0)) #| => 2 |#
 ```
 
-Another example is to use `#'identity` in order to avoid [key pooling](#object-key-pooling):
+Pass `nil' to `key-fn` in order to avoid [key pooling](#object-key-pooling):
 
 ```lisp
-(jzon:parse "[ { \"x\": 1, \"y\": 2 }, { \"x\": 3, \"y\": 4 } ]" :key-fn #'identity)
+(jzon:parse "[ { \"x\": 1, \"y\": 2 }, { \"x\": 3, \"y\": 4 } ]" :key-fn nil)
 
 (defparameter *v* *)
 
@@ -851,7 +851,7 @@ An example:
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
 * *max-string-length* - a positive `integer`
-* *key-fn* - a designator for a function of one argument, or nil
+* *key-fn* - a designator for a function of one argument, or a boolean
 
 *value* - a `jzon:parser`
 

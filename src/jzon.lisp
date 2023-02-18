@@ -560,17 +560,17 @@ see `close-parser'"))
                       (allow-comments nil)
                       (allow-trailing-comma nil)
                       (max-string-length (min #x100000 (1- array-dimension-limit)))
-                      key-fn)
+                      (key-fn t))
   "Construct a `parser' Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
  `:allow-trailing-comma' controls if we allow a single comma `,' after all elements of an array or object.
  `:max-string-length' controls the maximum length allowed when reading a string key or value.
- `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool.
+ `:key-fn' is a function of one value which 'pools' object keys, or `nil' to disable pooling, and `t' for the default pool.
 
 see `next'
 see `close-parser'"
   (check-type max-string-length (or boolean (integer 1 (#.array-dimension-limit))))
-  (check-type key-fn (or null symbol function))
+  (check-type key-fn (or boolean symbol function))
 
   (multiple-value-bind (input close-action)
       (typecase in
@@ -600,11 +600,12 @@ see `close-parser'"
         (setf %allow-comments (and allow-comments t))
         (setf %allow-trailing-comma (and allow-trailing-comma t))
         (setf %key-fn (etypecase key-fn
-                        (null (%make-string-pool))
+                        (null     #'identity)
+                        ((eql t)  (%make-string-pool))
                         (function key-fn)
-                        (symbol (let ((sym key-fn))
-                                  (lambda (str)
-                                    (funcall (symbol-function sym) str)))))))
+                        (symbol   (let ((sym key-fn))
+                                    (lambda (str)
+                                      (funcall (symbol-function sym) str)))))))
       parser)))
 
 (defun close-parser (parser)
@@ -870,20 +871,21 @@ see `close-parser'"
                    (allow-comments nil)
                    (allow-trailing-comma nil)
                    (max-string-length (min #x100000 (1- array-dimension-limit)))
-                   key-fn)
+                   (key-fn t))
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:max-depth' controls the maximum depth allowed when nesting arrays or objects.
  `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
  `:allow-trailing-comma' controls if we allow a single comma `,' after all elements of an array or object.
  `:max-string-length' controls the maximum length allowed when reading a string key or value.
- `:key-fn' is a function of one value which 'pools' object keys, or null for the default pool."
-  (check-type max-depth (or null (integer 1 #xFFFF)))
-  (check-type key-fn (or null symbol function))
+ `:key-fn' is a function of one value which 'pools' object keys, or `nil' to disable pooling, and `t' for the default pool."
+  (check-type max-depth (or boolean (integer 1 #xFFFF)))
+  (check-type key-fn (or boolean symbol function))
   (check-type max-string-length (or boolean (integer 1 (#.array-dimension-limit))))
   (let ((key-fn (etypecase key-fn
-                  (null (%make-string-pool))
+                  (null     #'identity)
+                  ((eql t)  (%make-string-pool))
                   (function key-fn)
-                  (symbol (fdefinition key-fn))))
+                  (symbol   (fdefinition key-fn))))
         (max-string-length (case max-string-length
                              ((t)   #x100000)
                              ((nil) (1- array-dimension-limit))
