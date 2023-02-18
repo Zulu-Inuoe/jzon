@@ -123,7 +123,7 @@ As noted, `jzon:parse` and `jzon:stringify` suit most use-cases, this section go
 *=> value* 
 
 * *in* - a `string`, `vector (unsigned-byte 8)`, `stream`, or `pathname`
-* *max-depth* - a positive `integer`, or `nil`
+* *max-depth* - a positive `integer`, or a boolean
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
 * *max-string-length* - `nil`, `t`, or a positive `integer`
@@ -206,7 +206,7 @@ This *may* help speed up parsing on highly heterogeneous JSON.
 * *pretty* - a boolean
 * *replacer* - a function of two arguments (see below)
 * *coerce-key* - a function of one argument, or nil (see below)
-* *max-depth* - a positive integer, or nil
+* *max-depth* - a positive integer, or a boolean
 
 *result* - nil, or a string
 
@@ -216,7 +216,7 @@ Serializes *value* to JSON and writes it to *stream*.
 
 If *pretty* is true, the output is formatted with spaces and newlines.
 
-*max-depth* limits the depth of nesting arrays/objects.
+*max-depth* limits the depth of nesting arrays/objects. Use `nil` to disable it, or `t` to set to default.
 
 In addition to serializing `json:jzon-element` values per [Type Mappings](#type-mappings), `jzon:stringify` allows other values. 
 See [Additionally Supported Types For Writing](#additionally-supported-types-for-writing) and [Custom Serialization](#custom-serialization).
@@ -383,7 +383,7 @@ For example, these two are equivalent:
 * *pretty* - a boolean
 * *coerce-key* - a function of one argument, or nil (see below)
 * *replacer* - a function of two arguments (see below)
-* *max-depth* - a positive integer, or nil
+* *max-depth* - a positive integer, or a boolean
 
 *writer* - a `jzon:writer`
 
@@ -393,7 +393,7 @@ Construct a [`jzon:writer`](#jzonwriter) for writing JSON via subsequent calls t
 
 If *pretty* is true, all output is indented with spaces and newlines.
 
-*max-depth* limits the depth of nesting arrays/objects.
+*max-depth* limits the depth of nesting arrays/objects. Use `nil` to disable it, or `t` to set to default.
 
 When either *max-depth* is exceeded, functions which increase the depth, such as `jzon:begin-array` or `jzon:begin-object` shall signal a `jzon:json-write-limit-error` error.
 

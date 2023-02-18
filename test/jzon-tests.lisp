@@ -508,6 +508,12 @@
   (is (string= "123" (jzon:parse "/*comment before */\"123\"/*comment*/" :allow-comments t)))
   (is (= 123 (jzon:parse "/*comment before //line comment ignored inside block */123/*comment*/" :allow-comments t))))
 
+(test parse-max-depth-disabled-when-nil
+  (is (vectorp (jzon:parse (concatenate 'string (make-string 130 :initial-element #\[) (make-string 130 :initial-element #\])) :max-depth nil))))
+  
+(test parse-max-depth-defaults-when-t
+  (signals (jzon:json-parse-limit-error) (jzon:parse (make-string 130 :initial-element #\[) :max-depth t)))
+
 (def-suite incremental :in parsing)
 (in-suite incremental)
 
@@ -768,6 +774,20 @@
 (test writer-defaults-nil-coerce-key
   (is (string= "{\"hello\":42}" (with-writer-to-string (jzon:*writer* :coerce-key nil)
                                   (jzon:write-object* "hello" 42)))))
+
+(test writer-max-depth-disabled-when-nil
+  (is (string= (concatenate 'string (make-string 130 :initial-element #\[) (make-string 130 :initial-element #\]))
+               (with-output-to-string (s)
+                 (jzon:with-writer* (:stream s :max-depth nil)
+                   (loop :repeat 130 :do (jzon:begin-array*))
+                   (loop :repeat 130 :do (jzon:end-array*)))))))
+
+(test writer-max-depth-defaults-when-t
+  (signals (jzon:json-write-limit-error)
+    (with-output-to-string (s)
+      (jzon:with-writer* (:stream s :max-depth t)
+        (loop :repeat 130 :do (jzon:begin-array*))
+        (loop :repeat 130 :do (jzon:end-array*))))))
 
 (def-suite stringify :in jzon)
 

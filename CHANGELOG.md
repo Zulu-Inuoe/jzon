@@ -4,6 +4,7 @@
 
 Changes relative to [v1.0.0](#v100)
 
+* `max-depth` in reader/writer functions can now be set to `t` to indicate 'default'
 * Fix Clozure Common Lisp, and LispWorks support https://github.com/Zulu-Inuoe/jzon/issues/27
 * Add new `jzon:json-limit-error` conditions so users can discriminate between invalid JSON, and JSON that exceeds set limits
 * Signal `jzon:json-write-error` rather than `error` when issuing invalid commands to `jzon:writer`

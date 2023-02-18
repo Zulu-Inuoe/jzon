@@ -886,6 +886,10 @@ see `close-parser'"
                   ((eql t)  (%make-string-pool))
                   (function key-fn)
                   (symbol   (fdefinition key-fn))))
+        (max-depth (case max-depth
+                     ((nil) #xFFFF)
+                     ((t)   128)
+                     (t     max-depth)))
         (max-string-length (case max-string-length
                              ((t)   #x100000)
                              ((nil) (1- array-dimension-limit))
@@ -1066,7 +1070,7 @@ Example return value:
   `:max-depth' is an integer denoting the maximum depth to allow nesting during writing, or nil
 
  see `coerce-key'"
-  (check-type max-depth (or null (integer 1 #xFFFF)))
+  (check-type max-depth (or boolean (integer 1 #xFFFF)))
   (multiple-value-bind (stream close-action)
       (cond
         ((null stream) (values (make-broadcast-stream) (lambda ())))
@@ -1101,7 +1105,10 @@ Example return value:
                            :coerce-key (or coerce-key #'coerce-key)
                            :pretty (and pretty t)
                            :replacer replacer
-                           :max-depth (or max-depth #xFFFF)
+                           :max-depth (case max-depth
+                                        ((nil)  #xFFFF)
+                                        ((t)    128)
+                                        (t      max-depth))
                            :close-action close-action)))
 
 (defun close-writer (writer)
