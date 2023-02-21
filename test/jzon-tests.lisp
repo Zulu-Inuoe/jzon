@@ -531,6 +531,12 @@
 (test parse-max-depth-defaults-when-t
   (signals (jzon:json-parse-limit-error) (jzon:parse (make-string 130 :initial-element #\[) :max-depth t)))
 
+(test parse-errors-on-multiple-content
+  (signals (jzon:json-parse-error) (jzon:parse "1 2")))
+
+(test parse-errors-on-extra-content
+  (is (= 1 (jzon:parse "1 2" :allow-extra-content t))))
+
 (def-suite incremental :in parsing)
 (in-suite incremental)
 
@@ -567,6 +573,16 @@
       (jzon:parse-next parser))
     (signals (jzon:json-parse-error)
       (jzon:parse-next parser))))
+
+(test parse-next-allows-multiple-content-when-asked
+  (jzon:with-parser (parser "42 24" :allow-multiple-content t)
+    (multiple-value-bind (event value) (jzon:parse-next parser)
+      (is (eq :value event))
+      (is (= value 42)))
+    (multiple-value-bind (event value) (jzon:parse-next parser)
+      (is (eq :value event))
+      (is (= value 24)))
+    (is (null (jzon:parse-next parser)))))
 
 (test multi-close-ok
   (jzon:with-parser (parser "{}")

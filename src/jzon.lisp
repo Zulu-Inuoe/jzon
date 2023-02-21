@@ -642,6 +642,9 @@ see `json-atom'"
    (%allow-trailing-comma
     :initform nil
     :type boolean)
+   (%allow-multiple-content
+    :initform nil
+    :type boolean)
    (%key-fn
     :type function)
    (%max-string-length
@@ -676,11 +679,13 @@ see `%read-string'"
 (defun make-parser (in &key
                       (allow-comments nil)
                       (allow-trailing-comma nil)
+                      (allow-multiple-content nil)
                       (max-string-length (min #x100000 (1- array-dimension-limit)))
                       (key-fn t))
   "Construct a `parser' Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
  `:allow-trailing-comma' controls if we allow a single comma `,' after all elements of an array or object.
+ `:allow-multiple-content' controls if we alow extra content beyond a single toplevel JSON value.
  `:max-string-length' controls the maximum length allowed when reading a string key or value.
  `:key-fn' is a function of one value which 'pools' object keys, or `nil' to disable pooling, and `t' for the default pool.
 
@@ -700,12 +705,13 @@ see `close-parser'"
                                ((nil) (1- array-dimension-limit))
                                ((t)   #x100000)
                                (t     max-string-length))))
-      (with-slots (%step %read-string %pos %allow-comments %allow-trailing-comma %max-string-length %key-fn %close-action) parser
+      (with-slots (%step %read-string %pos %allow-comments %allow-trailing-comma %allow-multiple-content %max-string-length %key-fn %close-action %parser-state) parser
         (setf %close-action close-action)
         (setf (values %step %read-string %pos) (%make-fns input max-string-length))
 
         (setf %allow-comments (and allow-comments t))
         (setf %allow-trailing-comma (and allow-trailing-comma t))
+        (setf %allow-multiple-content (and allow-multiple-content t))
         (setf %key-fn (etypecase key-fn
                         (null     #'identity)
                         ((eql t)  (%make-string-pool))
@@ -738,7 +744,7 @@ see `close-parser'"
         (close-parser ,parser-sym)))))
 
 (declaim (inline %parse-next))
-(defun %parse-next (%parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)
+(defun %parse-next (%parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content)
   (declare (type %parser-state %parser-state)
            (type function %step %read-string %pos %key-fn)
            (type boolean %allow-trailing-comma)
@@ -869,8 +875,9 @@ see `close-parser'"
         (let ((lc (%skip-whitespace %step %pos (%parser-state-lookahead %parser-state) %allow-comments)))
           (setf (%parser-state-lookahead %parser-state) lc)
           (cond
-            (lc (%raise 'json-parse-error %pos "Content after reading element"))
-            (t  (values nil nil))))))))
+            ((null lc)                  (values nil nil))
+            (%allow-multiple-content    (read-element lc))
+            (t                          (%raise 'json-parse-error %pos "Content after reading element"))))))))
 
 (defun parse-next (parser)
   "Read the next token from `parser'.
@@ -890,8 +897,8 @@ see `close-parser'"
   (check-type parser parser)
   (when (null (slot-value parser '%close-action))
     (error 'json-error :format-control "The parser has been closed."))
-  (with-slots (%step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %parser-state) parser
-    (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)))
+  (with-slots (%step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content %parser-state) parser
+    (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content)))
 
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
@@ -920,7 +927,7 @@ see `close-parser'"
           (or (gethash key pool)
               (setf (gethash key pool) key)))))))
 
-(defun %parse (%step %read-string %pos %key-fn %max-depth %allow-comments %allow-trailing-comma)
+(defun %parse (%step %read-string %pos %key-fn %max-depth %allow-comments %allow-trailing-comma %allow-multiple-content)
   (declare (type function %step %read-string %pos %key-fn))
   (declare (type (integer 1 #xFFFF) %max-depth))
   (declare (type boolean %allow-comments %allow-trailing-comma))
@@ -936,7 +943,9 @@ see `close-parser'"
     (macrolet ((finish-value (value)
                  `(let ((value ,value))
                     (if (null stack)
-                      (setf top value)
+                      (if %allow-multiple-content
+                        (return value)
+                        (setf top value))
                       (let ((container (car stack)))
                         (if (listp container)
                           (progn (push value (the list (car stack)))
@@ -948,7 +957,7 @@ see `close-parser'"
                       (%raise-limit 'json-parse-limit-error %pos %max-depth "Maximum depth exceeded."))
                     (incf depth))))
       (loop
-        (multiple-value-bind (event value) (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments)
+        (multiple-value-bind (event value) (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content)
           (declare (dynamic-extent event))
           (case event
             ((nil)          (return top))
@@ -977,12 +986,14 @@ see `close-parser'"
                    (max-depth 128)
                    (allow-comments nil)
                    (allow-trailing-comma nil)
+                   (allow-multiple-content nil)
                    (max-string-length (min #x100000 (1- array-dimension-limit)))
                    (key-fn t))
   "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
  `:max-depth' controls the maximum depth allowed when nesting arrays or objects.
  `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
  `:allow-trailing-comma' controls if we allow a single comma `,' after all elements of an array or object.
+ `:allow-multiple-content' controls if we alow extra content beyond a single toplevel JSON value.
  `:max-string-length' controls the maximum length allowed when reading a string key or value.
  `:key-fn' is a function of one value which 'pools' object keys, or `nil' to disable pooling, and `t' for the default pool."
   (check-type max-depth (or boolean (integer 1 #xFFFF)))
@@ -1005,11 +1016,11 @@ see `close-parser'"
     (typecase in
       (pathname
        (with-open-file (in in :direction :input :external-format :utf-8)
-         (parse in :max-depth max-depth :allow-comments allow-comments :allow-trailing-comma allow-trailing-comma :max-string-length max-string-length :key-fn key-fn)))
+         (parse in :max-depth max-depth :allow-comments allow-comments :allow-trailing-comma allow-trailing-comma :allow-multiple-content allow-multiple-content :max-string-length max-string-length :key-fn key-fn)))
       (t
         (multiple-value-bind (%step %read-string %pos) (%make-fns in max-string-length)
           (declare (dynamic-extent %step %read-string %pos))
-          (%parse %step %read-string %pos key-fn max-depth (and allow-comments t) (and allow-trailing-comma t)))))))
+          (%parse %step %read-string %pos key-fn max-depth (and allow-comments t) (and allow-trailing-comma t) (and allow-multiple-content t)))))))
 
 (macrolet ((%coerced-fields-slots (element)
              `(let ((class (class-of ,element)))
