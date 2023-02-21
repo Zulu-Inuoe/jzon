@@ -556,6 +556,17 @@ see `make-parser'
 see `next'
 see `close-parser'"))
 
+(declaim (inline %make-fns))
+(defun %make-fns (in max-string-length)
+  "Create the step, read-string, and pos functions for `in'.
+  
+see `%step'
+see `%read-string'"
+  (etypecase in
+    (simple-string  (%make-fns-simple-string in max-string-length))
+    (string         (%make-fns-string in max-string-length))
+    (stream         (%make-fns-stream in max-string-length))))
+
 (defun make-parser (in &key
                       (allow-comments nil)
                       (allow-trailing-comma nil)
@@ -591,11 +602,7 @@ see `close-parser'"
                                (t     max-string-length))))
       (with-slots (%step %read-string %pos %allow-comments %allow-trailing-comma %max-string-length %key-fn %close-action) parser
         (setf %close-action close-action)
-        (setf (values %step %read-string %pos)
-              (etypecase input
-                (simple-string (%make-fns-simple-string input max-string-length))
-                (string (%make-fns-string input max-string-length))
-                (stream (%make-fns-stream input max-string-length))))
+        (setf (values %step %read-string %pos) (%make-fns input max-string-length))
 
         (setf %allow-comments (and allow-comments t))
         (setf %allow-trailing-comma (and allow-trailing-comma t))
@@ -904,11 +911,7 @@ see `close-parser'"
          (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
            (parse stream :max-depth max-depth :allow-comments allow-comments :key-fn key-fn))))
       (t
-        (multiple-value-bind (%step %read-string %pos)
-            (etypecase in
-              (simple-string (%make-fns-simple-string in max-string-length))
-              (string (%make-fns-string in max-string-length))
-              (stream (%make-fns-stream in max-string-length)))
+        (multiple-value-bind (%step %read-string %pos) (%make-fns in max-string-length)
           (declare (dynamic-extent %step %read-string %pos))
           (%parse %step %read-string %pos key-fn max-depth (and allow-comments t) (and allow-trailing-comma t)))))))
 
