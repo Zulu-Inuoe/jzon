@@ -43,7 +43,7 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
 
 # Quickstart
 
-**Note**: *Examples in this README can be copy-pasted in your REPL assuming you've got a nickname set up for jzon. Try `(add-package-local-nickname '#:jzon '#:com.inuoe.jzon)` while in CL-USER.*
+**Note**: *Examples in this README can be copy-pasted in your REPL assuming you've got a nickname set up for jzon. Try `(uiop:add-package-local-nickname '#:jzon '#:com.inuoe.jzon)`.*
 
 Most users will simply use `jzon:parse` for reading, and `jzon:stringify` for writing. These mirror the [JSON methods in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON).
 
