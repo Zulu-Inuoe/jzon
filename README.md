@@ -180,7 +180,7 @@ As an example, `alexandria:make-keyword` can be used to make object keys into ke
 (gethash :|y| (aref *v* 0)) #| => 2 |#
 ```
 
-Pass `nil' to `key-fn` in order to avoid [key pooling](#object-key-pooling):
+Pass `nil` to *key-fn* in order to avoid [key pooling](#object-key-pooling):
 
 ```lisp
 (jzon:parse "[ { \"x\": 1, \"y\": 2 }, { \"x\": 3, \"y\": 4 } ]" :key-fn nil)
