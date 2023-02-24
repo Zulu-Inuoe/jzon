@@ -408,6 +408,19 @@ see `json-atom'"
        fail
          (return (values nil lc))))))
 
+(defun %calc-pos (step n)
+  "Calculate line, column numbers by `step' ping through the input `n' times."
+  (loop :with line :of-type (integer 1)  := 1
+        :with col :of-type (integer 1) := 1
+        :with cr := nil
+        :for p :from 0 :below (1- n)
+        :for c := (%step step)
+        :do (case c
+              (#\Linefeed (incf line) (setf col 1))
+              (t (incf col)))
+        :finally
+           (return (values line col))))
+
 (macrolet ((def-make-string-fns (name type)
              `(defun ,name (in max-string-length)
                 "Create step, and read-string functions for the string `in'."
@@ -416,17 +429,7 @@ see `json-atom'"
                 (let ((i 0))
                   (declare (type (integer 0 #.array-dimension-limit) i))
                   (let* ((step (lambda () (when (< i (length in)) (prog1 (char in i) (incf i)))))
-                         (pos (lambda ()
-                                (loop :with line :of-type (integer 1)  := 1
-                                      :with col :of-type (integer 1) := 1
-                                      :with cr := nil
-                                      :for p :from 0 :below (1- i)
-                                      :for c := (char in p)
-                                      :do (case c
-                                            (#\Linefeed (incf line) (setf col 1))
-                                            (t (incf col)))
-                                      :finally
-                                         (return (values line col)))))
+                         (pos (lambda () (%calc-pos step (shiftf i 0))))
                          (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                                         (lambda ()
                                           ;; Scan until we hit a closing "
@@ -493,23 +496,12 @@ see `json-atom'"
     (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8) max-string-length)))
   (let* ((step (lambda () (read-char in nil)))
          (pos (lambda ()
-                (block nil
-                  (let ((pos (ignore-errors (file-position in))))
-                    (unless (and pos (ignore-errors (file-position in 0)))
-                      (return (values nil nil)))
-
-                    (loop :with pos :of-type integer := pos
-                          :with line :of-type (integer 1) := 1
-                          :with col :of-type (integer 1) := 1
-                          :with cr := nil
-                          :for p :from 0 :below (1- pos)
-                          :for c := (read-char in)
-                          :do (case c
-                                (#\Linefeed (incf line) (setf col 1))
-                                (t (incf col)))
-                          :finally
-                             (file-position in pos)
-                             (return (values line col)))))))
+                (let ((n (ignore-errors (file-position in))))
+                  (if (and n (ignore-errors (file-position in 0)))
+                    (multiple-value-bind (line col) (%calc-pos step n)
+                      (file-position in n)
+                      (values line col))
+                    (values nil nil)))))
          (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                         (lambda ()
                           (setf (fill-pointer string-accum) 0)
