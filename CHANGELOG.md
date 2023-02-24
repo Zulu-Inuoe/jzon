@@ -4,6 +4,8 @@
 
 Changes relative to [v1.0.0](#v100)
 
+* bugfix - `allow-trailing-comma` was not being properly applied when reading from vectors or pathnames
+* bugfix - `max-string-length` was not being properly applied when reading from vectors or pathnames
 * `max-depth` in reader/writer functions can now be set to `t` to indicate 'default'
 * Fix Clozure Common Lisp, and LispWorks support https://github.com/Zulu-Inuoe/jzon/issues/27
 * Add new `jzon:json-limit-error` conditions so users can discriminate between invalid JSON, and JSON that exceeds set limits

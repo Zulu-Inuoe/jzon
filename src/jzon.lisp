@@ -905,11 +905,11 @@ see `close-parser'"
     (typecase in
       (pathname
        (with-open-file (in in :direction :input :external-format :utf-8)
-         (parse in :max-depth max-depth :allow-comments allow-comments :key-fn key-fn)))
+         (parse in :max-depth max-depth :allow-comments allow-comments :allow-trailing-comma allow-trailing-comma :max-string-length max-string-length :key-fn key-fn)))
       ((vector (unsigned-byte 8))
        (flexi-streams:with-input-from-sequence (stream in)
          (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
-           (parse stream :max-depth max-depth :allow-comments allow-comments :key-fn key-fn))))
+           (parse stream :max-depth max-depth :allow-comments allow-comments :allow-trailing-comma allow-trailing-comma :max-string-length max-string-length :key-fn key-fn))))
       (t
         (multiple-value-bind (%step %read-string %pos) (%make-fns in max-string-length)
           (declare (dynamic-extent %step %read-string %pos))

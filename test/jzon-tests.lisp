@@ -203,6 +203,9 @@
 (test parses-arrays-allows-trailing-comma-when-asked
   (is (equalp #(1 2 3) (jzon:parse "[1, 2, 3,]" :allow-trailing-comma t))))
 
+(test parses-arrays-allows-trailing-comma-on-vector-input
+  (is (equalp #(1 2 3) (jzon:parse (flexi-streams:string-to-octets "[1,2,3,]" :external-format :utf-8) :allow-trailing-comma t))))
+
 (test parses-arrays-disallows-several-trailing-commas
   (signals (jzon:json-parse-error)
     (jzon:parse "[1, 2, 3,,]"))
@@ -426,6 +429,10 @@
 (test parse-limits-max-string-length
   (signals (jzon:json-parse-limit-error)
     (jzon:parse "\"This is a string that is too long\"" :max-string-length 5)))
+
+(test parse-limits-max-string-length-on-vector-inputs
+  (signals (jzon:json-parse-limit-error)
+    (jzon:parse (flexi-streams:string-to-octets "\"This is a string that is too long\"" :external-format :utf-8) :max-string-length 5)))
 
 (test parse-limits-max-string-length-with-escape-codes
   (signals (jzon:json-parse-limit-error)
