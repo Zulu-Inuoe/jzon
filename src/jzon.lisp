@@ -491,64 +491,54 @@ see `json-atom'"
 (declaim (inline %utf-8-decode))
 (defun %utf-8-decode (u1 consume-octet)
   (declare (type (unsigned-byte 8) u1))
-  (macrolet ((check-icb (var)
-              `(unless(< #x7f ,var #xc0)
-                (error "Unexpected value #x~2,'0X in UTF-8 sequence." ,var)))
-             (consume-octet ()
-               `(funcall (the (function () (values (unsigned-byte 8) &optional)) consume-octet)))
-             (emit-char (c)
-              `(code-char ,c)))
-    (let ((u2 0) (u3 0) (u4 0) (u5 0) (u6 0))
-      (declare (type (unsigned-byte 8) u2 u3 u4 u5 u6))
-      (cond
-        ((< u1 #x80) (emit-char u1))    ; 1 octet
-        ((< u1 #xc0) (error "Unexpected value #x~2,'0X at start of UTF-8 sequence." u1))
-        (t
-          (setf u2 (consume-octet))
-          (check-icb u2)
+  (macrolet ((consume-octet ()
+               `(let ((o (funcall (the (function () (values (unsigned-byte 8) &optional)) consume-octet))))
+                 (unless(< #x7f o #xc0) (error "Unexpected value #x~2,'0X in UTF-8 sequence." o))
+                 o)))
+    (cond
+      ((< u1 #x80) (code-char u1))
+      ((< u1 #xc0) (error "Unexpected value #x~2,'0X at start of UTF-8 sequence." u1))
+      (t
+        (let ((u2 (consume-octet)))
           (cond
             ((< u1 #xc2) (error "Overlong UTF-8 sequence."))
-            ((< u1 #xe0) ; 2 octets
-              (emit-char (logior (ash (logand u1 #x1f) 6)
+            ((< u1 #xe0)
+              (code-char (logior (ash (logand u1 #x1f) 6)
                                  (ash (logxor u2 #x80) 0))))
             (t
-              (setf u3 (consume-octet))
-              (check-icb u3)
-              (cond
-                ((and (= u1 #xe0) (< u2 #xa0)) (error "Overlong UTF-8 sequence."))
-                ((< u1 #xf0)  ; 3 octets
-                  (let ((start (logior (ash (logand u1 #x0f) 12)
-                                      (ash (logand u2 #x3f) 6))))
-                    (if (<= #xd800 start #xdfc0)
-                      (error "Character out of range in UTF-8 sequence.")
-                      (emit-char (logior start (logand u3 #x3f))))))
-                (t ; 4 octets
-                  (setf u4 (consume-octet))
-                  (check-icb u4)
-                  (cond
-                    ((and (= u1 #xf0) (< u2 #x90)) (error "Overlong UTF-8 sequence."))
-                    ((< u1 #xf8)
-                      (if (or (> u1 #xf4) (and (= u1 #xf4) (> u2 #x8f)))
+              (let ((u3 (consume-octet)))
+                (cond
+                  ((and (= u1 #xe0) (< u2 #xa0)) (error "Overlong UTF-8 sequence."))
+                  ((< u1 #xf0)
+                    (let ((start (logior (ash (logand u1 #x0f) 12)
+                                         (ash (logand u2 #x3f) 6))))
+                      (if (<= #xd800 start #xdfc0)
                         (error "Character out of range in UTF-8 sequence.")
-                        (emit-char (logior (ash (logand u1 #x07) 18)
-                                           (ash (logxor u2 #x80) 12)
-                                           (ash (logxor u3 #x80) 6)
-                                           (ash (logxor u4 #x80) 0)))))
-                    ;; from here on we'll be getting either
-                    ;; invalid continuation bytes or overlong
-                    ;; 5-byte or 6-byte sequences.
-                    (t
-                      (setf u5 (consume-octet))
-                      (check-icb u5)
+                        (code-char (logior start (logand u3 #x3f))))))
+                  (t ; 4 octets
+                    (let ((u4 (consume-octet)))
                       (cond
-                        ((and (= u1 #xf8) (< u2 #x88)) (error "Overlong UTF-8 sequence."))
-                        ((< u1 #xfc) (error "Character out of range in UTF-8 sequence."))
+                        ((and (= u1 #xf0) (< u2 #x90)) (error "Overlong UTF-8 sequence."))
+                        ((< u1 #xf8)
+                          (if (or (> u1 #xf4) (and (= u1 #xf4) (> u2 #x8f)))
+                            (error "Character out of range in UTF-8 sequence.")
+                            (code-char (logior (ash (logand u1 #x07) 18)
+                                               (ash (logxor u2 #x80) 12)
+                                               (ash (logxor u3 #x80) 6)
+                                               (ash (logxor u4 #x80) 0)))))
+                        ;; from here on we'll be getting either
+                        ;; invalid continuation bytes or overlong
+                        ;; 5-byte or 6-byte sequences.
                         (t
-                          (setf u6 (consume-octet))
-                          (check-icb u6)
+                          (consume-octet)
                           (cond
-                            ((and (= u1 #xfc) (< u2 #x84)) (error "Overlong UTF-8 sequence."))
-                            (t (error "Character out of range in UTF-8 sequence."))))))))))))))))
+                            ((and (= u1 #xf8) (< u2 #x88)) (error "Overlong UTF-8 sequence."))
+                            ((< u1 #xfc) (error "Character out of range in UTF-8 sequence."))
+                            (t
+                              (consume-octet)
+                              (cond
+                                ((and (= u1 #xfc) (< u2 #x84)) (error "Overlong UTF-8 sequence."))
+                                (t (error "Character out of range in UTF-8 sequence."))))))))))))))))))
 
 (defun %make-fns-simple-array-ub8 (in max-string-length)
   (declare (type (simple-array (unsigned-byte 8) (*)) in))
