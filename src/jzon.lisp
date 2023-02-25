@@ -408,6 +408,19 @@ see `json-atom'"
        fail
          (return (values nil lc))))))
 
+(defun %calc-pos (step n)
+  "Calculate line, column numbers by `step' ping through the input `n' times."
+  (loop :with line :of-type (integer 1)  := 1
+        :with col :of-type (integer 1) := 1
+        :with cr := nil
+        :for p :from 0 :below (1- n)
+        :for c := (%step step)
+        :do (case c
+              (#\Linefeed (incf line) (setf col 1))
+              (t (incf col)))
+        :finally
+           (return (values line col))))
+
 (macrolet ((def-make-string-fns (name type)
              `(defun ,name (in max-string-length)
                 "Create step, and read-string functions for the string `in'."
@@ -416,17 +429,7 @@ see `json-atom'"
                 (let ((i 0))
                   (declare (type (integer 0 #.array-dimension-limit) i))
                   (let* ((step (lambda () (when (< i (length in)) (prog1 (char in i) (incf i)))))
-                         (pos (lambda ()
-                                (loop :with line :of-type (integer 1)  := 1
-                                      :with col :of-type (integer 1) := 1
-                                      :with cr := nil
-                                      :for p :from 0 :below (1- i)
-                                      :for c := (char in p)
-                                      :do (case c
-                                            (#\Linefeed (incf line) (setf col 1))
-                                            (t (incf col)))
-                                      :finally
-                                         (return (values line col)))))
+                         (pos (lambda () (%calc-pos step (shiftf i 0))))
                          (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                                         (lambda ()
                                           ;; Scan until we hit a closing "
@@ -485,31 +488,130 @@ see `json-atom'"
   (def-make-string-fns %make-fns-simple-string simple-string)
   (def-make-string-fns %make-fns-string (and string (not simple-string))))
 
+(declaim (inline %utf-8-decode))
+(defun %utf-8-decode (u1 consume-octet)
+  (declare (type (unsigned-byte 8) u1))
+  (macrolet ((consume-octet ()
+               `(let ((o (funcall (the (function () (values (unsigned-byte 8) &optional)) consume-octet))))
+                 (unless(< #x7f o #xc0) (error "Unexpected value #x~2,'0X in UTF-8 sequence." o))
+                 o)))
+    (cond
+      ((< u1 #x80) (code-char u1))
+      ((< u1 #xc0) (error "Unexpected value #x~2,'0X at start of UTF-8 sequence." u1))
+      (t
+        (let ((u2 (consume-octet)))
+          (cond
+            ((< u1 #xc2) (error "Overlong UTF-8 sequence."))
+            ((< u1 #xe0)
+              (code-char (logior (ash (logand u1 #x1f) 6)
+                                 (ash (logxor u2 #x80) 0))))
+            (t
+              (let ((u3 (consume-octet)))
+                (cond
+                  ((and (= u1 #xe0) (< u2 #xa0)) (error "Overlong UTF-8 sequence."))
+                  ((< u1 #xf0)
+                    (let ((start (logior (ash (logand u1 #x0f) 12)
+                                         (ash (logand u2 #x3f) 6))))
+                      (if (<= #xd800 start #xdfc0)
+                        (error "Character out of range in UTF-8 sequence.")
+                        (code-char (logior start (logand u3 #x3f))))))
+                  (t ; 4 octets
+                    (let ((u4 (consume-octet)))
+                      (cond
+                        ((and (= u1 #xf0) (< u2 #x90)) (error "Overlong UTF-8 sequence."))
+                        ((< u1 #xf8)
+                          (if (or (> u1 #xf4) (and (= u1 #xf4) (> u2 #x8f)))
+                            (error "Character out of range in UTF-8 sequence.")
+                            (code-char (logior (ash (logand u1 #x07) 18)
+                                               (ash (logxor u2 #x80) 12)
+                                               (ash (logxor u3 #x80) 6)
+                                               (ash (logxor u4 #x80) 0)))))
+                        ;; from here on we'll be getting either
+                        ;; invalid continuation bytes or overlong
+                        ;; 5-byte or 6-byte sequences.
+                        (t
+                          (consume-octet)
+                          (cond
+                            ((and (= u1 #xf8) (< u2 #x88)) (error "Overlong UTF-8 sequence."))
+                            ((< u1 #xfc) (error "Character out of range in UTF-8 sequence."))
+                            (t
+                              (consume-octet)
+                              (cond
+                                ((and (= u1 #xfc) (< u2 #x84)) (error "Overlong UTF-8 sequence."))
+                                (t (error "Character out of range in UTF-8 sequence."))))))))))))))))))
+
+(defun %make-fns-simple-array-ub8 (in max-string-length)
+  (declare (type (simple-array (unsigned-byte 8) (*)) in))
+  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
+  (let ((i 0))
+    (declare (type (integer 0 #.array-dimension-limit) i))
+    (let* ((consume-octet (lambda ()
+                            (if (< i (length in))
+                              (aref in (shiftf i (1+ i)))
+                              (error "End of data while in UTF-8 sequence."))))
+           (step (lambda ()
+                   (when (< i (length in))
+                     (%utf-8-decode (aref in (shiftf i (1+ i))) consume-octet))))
+           (pos (lambda () (%calc-pos step (shiftf i 0))))
+           (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
+                          (lambda ()
+                            (setf (fill-pointer string-accum) 0)
+                            (%read-json-string step pos string-accum max-string-length t)))))
+      (values step read-string pos))))
+
+(defun %make-fns-array-ub8 (in max-string-length)
+  (declare (type (and (array (unsigned-byte 8) (*)) (not simple-array)) in))
+  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
+  (let ((i 0))
+    (declare (type (integer 0 #.array-dimension-limit) i))
+    (let* ((consume-octet (lambda ()
+                            (if (< i (length in))
+                              (aref in (shiftf i (1+ i)))
+                              (error "End of data while in UTF-8 sequence."))))
+           (step (lambda ()
+                   (when (< i (length in))
+                     (%utf-8-decode (aref in (shiftf i (1+ i))) consume-octet))))
+           (pos (lambda () (%calc-pos step (shiftf i 0))))
+           (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
+                          (lambda ()
+                            (setf (fill-pointer string-accum) 0)
+                            (%read-json-string step pos string-accum max-string-length t)))))
+      (values step read-string pos))))
+
+(defun %make-fns-binary-stream (in max-string-length)
+  (declare (type stream in))
+  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
+  (let* ((consume-octet (lambda () (or (read-byte in nil nil)
+                                       (error "End of data while in UTF-8 sequence."))))
+         (step (lambda ()
+                 (let ((u1 (read-byte in nil nil)))
+                   (when u1
+                     (%utf-8-decode u1 consume-octet)))))
+         (pos (lambda ()
+                (let ((n (ignore-errors (file-position in))))
+                  (if (and n (ignore-errors (file-position in 0)))
+                    (multiple-value-bind (line col) (%calc-pos step n)
+                      (file-position in n)
+                      (values line col))
+                    (values nil nil)))))
+         (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
+                        (lambda ()
+                          (setf (fill-pointer string-accum) 0)
+                          (%read-json-string step pos string-accum max-string-length t)))))
+    (values step read-string pos)))
+
 (defun %make-fns-stream (in max-string-length)
   "Create step, and read-string functions for the stream `in'."
   (declare (type stream in))
   (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
-  (unless (subtypep (stream-element-type in) 'character)
-    (return-from %make-fns-stream (%make-fns-stream (flexi-streams:make-flexi-stream in :external-format :utf-8) max-string-length)))
   (let* ((step (lambda () (read-char in nil)))
          (pos (lambda ()
-                (block nil
-                  (let ((pos (ignore-errors (file-position in))))
-                    (unless (and pos (ignore-errors (file-position in 0)))
-                      (return (values nil nil)))
-
-                    (loop :with pos :of-type integer := pos
-                          :with line :of-type (integer 1) := 1
-                          :with col :of-type (integer 1) := 1
-                          :with cr := nil
-                          :for p :from 0 :below (1- pos)
-                          :for c := (read-char in)
-                          :do (case c
-                                (#\Linefeed (incf line) (setf col 1))
-                                (t (incf col)))
-                          :finally
-                             (file-position in pos)
-                             (return (values line col)))))))
+                (let ((n (ignore-errors (file-position in))))
+                  (if (and n (ignore-errors (file-position in 0)))
+                    (multiple-value-bind (line col) (%calc-pos step n)
+                      (file-position in n)
+                      (values line col))
+                    (values nil nil)))))
          (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                         (lambda ()
                           (setf (fill-pointer string-accum) 0)
@@ -559,13 +661,17 @@ see `close-parser'"))
 (declaim (inline %make-fns))
 (defun %make-fns (in max-string-length)
   "Create the step, read-string, and pos functions for `in'.
-  
+
 see `%step'
 see `%read-string'"
   (etypecase in
     (simple-string  (%make-fns-simple-string in max-string-length))
     (string         (%make-fns-string in max-string-length))
-    (stream         (%make-fns-stream in max-string-length))))
+    (stream         (if (subtypep (stream-element-type in) 'character)
+                      (%make-fns-stream in max-string-length)
+                      (%make-fns-binary-stream in max-string-length)))
+    ((simple-array (unsigned-byte 8) (*)) (%make-fns-simple-array-ub8 in max-string-length))
+    ((array (unsigned-byte 8) (*))        (%make-fns-array-ub8 in max-string-length))))
 
 (defun make-parser (in &key
                       (allow-comments nil)
@@ -588,12 +694,6 @@ see `close-parser'"
         (pathname
           (let ((f (open in :direction :input :external-format :utf-8)))
             (values f (lambda () (close f)))))
-        ((vector (unsigned-byte 8))
-          (let* ((bstream (flexi-streams:make-in-memory-input-stream in))
-                 (fstream (flexi-streams:make-flexi-stream bstream :external-format :utf-8)))
-            (values fstream (lambda ()
-                              (close fstream)
-                              (close bstream)))))
         (t (values in (lambda ()))))
     (let ((parser (make-instance 'parser))
           (max-string-length (case max-string-length
@@ -906,10 +1006,6 @@ see `close-parser'"
       (pathname
        (with-open-file (in in :direction :input :external-format :utf-8)
          (parse in :max-depth max-depth :allow-comments allow-comments :allow-trailing-comma allow-trailing-comma :max-string-length max-string-length :key-fn key-fn)))
-      ((vector (unsigned-byte 8))
-       (flexi-streams:with-input-from-sequence (stream in)
-         (let ((stream (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
-           (parse stream :max-depth max-depth :allow-comments allow-comments :allow-trailing-comma allow-trailing-comma :max-string-length max-string-length :key-fn key-fn))))
       (t
         (multiple-value-bind (%step %read-string %pos) (%make-fns in max-string-length)
           (declare (dynamic-extent %step %read-string %pos))
