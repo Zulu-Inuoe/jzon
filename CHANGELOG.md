@@ -4,6 +4,7 @@
 
 Changes relative to [v1.0.0](#v100)
 
+* faster parsing from (vector (unsigned-byte 8)) and binary streams https://github.com/Zulu-Inuoe/jzon/issues/29
 * bugfix - `allow-trailing-comma` was not being properly applied when reading from vectors or pathnames
 * bugfix - `max-string-length` was not being properly applied when reading from vectors or pathnames
 * `max-depth` in reader/writer functions can now be set to `t` to indicate 'default'
