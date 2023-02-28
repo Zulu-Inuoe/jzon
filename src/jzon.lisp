@@ -187,6 +187,12 @@ see `json-atom'"
   (and (member char '(#\Space #\Linefeed #\Return #\Tab))
        t))
 
+(declaim (inline %ends-token-p))
+(defun %ends-token-p (char)
+  (or (%whitespace-p char)
+      (and (find char "[]{},/\"")
+            t)))
+
 (defun %skip-cpp-comment (step pos)
   (declare (type function step pos))
   ;; Skip the second slash, or open a block comment
@@ -307,14 +313,12 @@ see `json-atom'"
   (flet ((digit09-p (c &aux (val (- (char-code c) #.(char-code #\0))))
            (and (<= 0 val 9) val))
          (digit19-p (c &aux (val (- (char-code c) #.(char-code #\0))))
-           (and (<= 1 val 9) val))
-         (ends-number-p (c)
-           (or (%whitespace-p c) (find c "]},/\""))))
-    (declare (inline digit09-p digit19-p ends-number-p))
+           (and (<= 1 val 9) val)))
+    (declare (inline digit09-p digit19-p))
     (macrolet ((takec (on-eof)
                  "Take the next character, `go'ing to `label' on EOF or end of token"
                  `(let ((c (%step step)))
-                    (when (or (null c) (ends-number-p c))
+                    (when (or (null c) (%ends-token-p c))
                       (setf lc c)
                       (go ,on-eof))
                     c)))
@@ -756,22 +760,31 @@ see `close-parser'"
                          `(progn
                             ,@(loop :for i :from 1 :below (length string)
                                     :for expect-c := (char string i)
-                                    :collect `(let ((c (or (%step %step)
+                                    :collect `(let ((lc (or (%step %step)
                                                            (%raise 'json-parse-error %pos ,(concatenate 'string "Unexpected token '" (subseq string 0 i) "'")))))
-                                                (unless (char= c ,expect-c)
+                                                (unless (char= lc ,expect-c)
                                                   (%raise 'json-parse-error %pos "Unexpected token '~A'" (concatenate 'string
                                                                                                                  ,(subseq string 0 i)
-                                                                                                                 (loop :for c := c :then (%step %step)
-                                                                                                                       :until (or (null c) (%whitespace-p c) (find c "{}[],-/"))
-                                                                                                                       :collect c))))))
-                            (setf (%parser-state-lookahead %parser-state) (%step %step))
+                                                                                                                 (loop :for c := lc :then (%step %step)
+                                                                                                                       :until (or (null c) (%ends-token-p c))
+                                                                                                                       :collect c
+                                                                                                                       :finally (setf (%parser-state-lookahead %parser-state) c)))))))
+                            (let ((lc (%step %step)))
+                              (unless (or (null lc) (%ends-token-p lc))
+                                (%raise 'json-parse-error %pos "Unexpected token '~A'" (concatenate 'string
+                                                                                                    ,string
+                                                                                                    (loop :for c := lc :then (%step %step)
+                                                                                                          :until (or (null c) (%ends-token-p c))
+                                                                                                          :collect c
+                                                                                                          :finally (setf (%parser-state-lookahead %parser-state) c)))))
+                              (setf (%parser-state-lookahead %parser-state) lc))
                             (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
                             (values :value ,value))))
               (case lc
                 (#\[              (push-state :begin-array))
                 (#\{              (push-state :begin-object))
                 (#.(char "\"" 0)  (let ((value (%read-string %read-string)))
-                                    (setf (%parser-state-lookahead %parser-state) (%step %step))
+                                    (setf (%parser-state-lookahead %parser-state) nil)
                                     (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
                                     (values :value value)))
                 (#\f              (expect "false" nil))
@@ -788,11 +801,11 @@ see `close-parser'"
                                     (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
                                     (values :value number))))))
             (push-state (kind)
+              (setf (%parser-state-lookahead %parser-state) nil)
               (setf (%parser-state-state %parser-state) kind)
               (values kind nil))
             (pop-state (kind)
               (pop (%parser-state-context %parser-state))
-              (setf (%parser-state-lookahead %parser-state) (%step %step))
               (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
               (values kind nil)))
     (declare (dynamic-extent #'read-element #'push-state #'pop-state))
@@ -806,13 +819,17 @@ see `close-parser'"
         (let ((lc (%skip-whitespace %step %pos (%step %step) %allow-comments)))
           (case lc
             ((nil)  (%raise 'json-eof-error %pos "End of input when reading array, expecting element or array close"))
-            (#\]    (setf (%parser-state-lookahead %parser-state) (%step %step))
-                    (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
+            (#\]    (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
                     (values :end-array nil))
             (t      (push 'after-read-array-element (%parser-state-context %parser-state))
                     (read-element lc)))))
       (after-read-array-element
-        (let ((lc (%skip-whitespace %step %pos (%parser-state-lookahead %parser-state) %allow-comments)))
+        (let ((lc (%skip-whitespace %step %pos (let ((lc (%parser-state-lookahead %parser-state)))
+                                                 (if lc
+                                                   (progn (setf (%parser-state-lookahead %parser-state) nil)
+                                                          lc)
+                                                   (%step %step)))
+                                    %allow-comments)))
           (case lc
             ((nil)  (%raise 'json-eof-error %pos "End of input when reading array, expecting comma or array close"))
             (#\,    (let ((lc (%skip-whitespace %step %pos (%step %step) %allow-comments)))
@@ -830,8 +847,7 @@ see `close-parser'"
         (let ((lc (%skip-whitespace %step %pos (%step %step) %allow-comments)))
           (case lc
             ((nil)            (%raise 'json-eof-error %pos "End of input when reading object, expecting key or object close"))
-            (#\}              (setf (%parser-state-lookahead %parser-state) (%step %step))
-                              (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
+            (#\}              (setf (%parser-state-state %parser-state) (car (%parser-state-context %parser-state)))
                               (values :end-object nil))
             (#.(char "\"" 0)  (setf (%parser-state-state %parser-state) 'after-read-key)
                               (push 'after-read-property (%parser-state-context %parser-state))
@@ -849,7 +865,12 @@ see `close-parser'"
             ((nil)  (%raise 'json-eof-error %pos "End of input when reading object, expecting value after colon"))
             (t      (read-element lc)))))
       (after-read-property
-        (let ((lc (%skip-whitespace %step %pos (%parser-state-lookahead %parser-state) %allow-comments)))
+        (let ((lc (%skip-whitespace %step %pos (let ((lc (%parser-state-lookahead %parser-state)))
+                                                 (if lc
+                                                   (progn (setf (%parser-state-lookahead %parser-state) nil)
+                                                          lc)
+                                                   (%step %step)))
+                                    %allow-comments)))
           (case lc
             ((nil)  (%raise 'json-eof-error %pos "End of input when reading object. Expecting comma or object close"))
             (#\,    (let ((lc (%skip-whitespace %step %pos (%step %step) %allow-comments)))
@@ -872,7 +893,7 @@ see `close-parser'"
             (#\}    (pop-state :end-object))
             (t      (%raise 'json-parse-error %pos "Unexpected character '~A' (~A) when reading object, expecting comma or object close" lc (char-name lc))))))
       ((nil)
-        (let ((lc (%skip-whitespace %step %pos (%parser-state-lookahead %parser-state) %allow-comments)))
+        (let ((lc (%skip-whitespace %step %pos (or (%parser-state-lookahead %parser-state) (%step %step)) %allow-comments)))
           (setf (%parser-state-lookahead %parser-state) lc)
           (cond
             ((null lc)                  (values nil nil))
@@ -940,11 +961,16 @@ see `close-parser'"
     (declare (dynamic-extent %parser-state stack key))
     (declare (type (integer 0 #xFFFF) depth))
     (declare (type list stack key len))
-    (macrolet ((finish-value (value)
+    (macrolet ((finish-value (value &optional check-lc)
                  `(let ((value ,value))
                     (if (null stack)
                       (if %allow-multiple-content
-                        (return value)
+                        ,(if check-lc
+                          `(let ((lc (%parser-state-lookahead %parser-state)))
+                            (unless (or (null lc) (%whitespace-p lc))
+                              (%raise 'json-parse-error %pos "Non-whitespace character after JSON atom '~A': '~C' (~A)" (stringify value) lc (char-name lc)))
+                            (return value))
+                          `(return value))
                         (setf top value))
                       (let ((container (car stack)))
                         (if (listp container)
@@ -961,7 +987,7 @@ see `close-parser'"
           (declare (dynamic-extent event))
           (case event
             ((nil)          (return top))
-            (:value         (finish-value value))
+            (:value         (finish-value value t))
             (:begin-array   (inc-depth)
                             (push (list) stack)
                             (push 0 len))
