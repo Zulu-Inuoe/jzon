@@ -675,22 +675,20 @@ see `close-parser'"))
 
 see `%step'
 see `%read-string'"
-  (etypecase in
-    (%string-span   (with-slots (%vector %start %end) in
-                      (etypecase %vector
-                        (simple-string (%make-fns-simple-string %vector %start %end max-string-length))
-                        (string (%make-fns-string %vector %start %end max-string-length)))))
-    (simple-string  (%make-fns-simple-string in 0 (length in) max-string-length))
-    (string         (%make-fns-string in 0 (length in) max-string-length))
-    (stream         (if (subtypep (stream-element-type in) 'character)
-                      (%make-fns-stream in max-string-length)
-                      (%make-fns-binary-stream in max-string-length)))
-    ((simple-array (unsigned-byte 8) (*)) (%make-fns-simple-array-ub8 in 0 (length in) max-string-length))
-    ((array (unsigned-byte 8) (*))        (%make-fns-array-ub8 in 0 (length in) max-string-length))
-    (%octet-vector-span (with-slots (%vector %start %end) in
-                          (etypecase %vector
-                            ((simple-array (unsigned-byte 8) (*)) (%make-fns-simple-array-ub8 %vector %start %end max-string-length))
-                            ((array (unsigned-byte 8) (*))        (%make-fns-array-ub8 %vector %start %end max-string-length)))))))
+  (labels ((recurse (in start end)
+            (etypecase in
+              (simple-string  (%make-fns-simple-string in start (or end (length in)) max-string-length))
+              (string         (%make-fns-string in start (or end (length in)) max-string-length))
+              (stream         (if (subtypep (stream-element-type in) 'character)
+                                (%make-fns-stream in max-string-length)
+                                (%make-fns-binary-stream in max-string-length)))
+              ((simple-array (unsigned-byte 8) (*)) (%make-fns-simple-array-ub8 in start (or end (length in)) max-string-length))
+              ((array (unsigned-byte 8) (*))        (%make-fns-array-ub8 in start (or end (length in)) max-string-length))
+              (%string-span       (with-slots (%vector %start %end) in
+                                    (recurse %vector %start %end)))
+              (%octet-vector-span (with-slots (%vector %start %end) in
+                                    (recurse %vector %start %end))))))
+    (recurse in 0 nil)))
 
 (defun make-parser (in &key
                       (allow-comments nil)
