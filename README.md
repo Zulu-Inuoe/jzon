@@ -246,7 +246,7 @@ Create a span to be used in [`jzon:parse`](#jzonparse), or [`jzon:make-parser`](
 ##### Example
 
 ```lisp
-(jzon:parse (jzon:make-span "garbage42moregarbage" :start 7 :end 9)) 
+(jzon:parse (jzon:span "garbage42moregarbage" :start 7 :end 9)) 
 #| => 42 |#
 ```
 
