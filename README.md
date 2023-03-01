@@ -32,11 +32,10 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
     * [`jzon:with-parser`](#jzonwith-parser)
     * [`jzon:parse-next`](#jzonparse-next)
     * [Streaming Parser Example](#streaming-parser-example)
-
 * [Motivation and Features](#motivation-and-features)
   * [Safety](#safety)
   * [Correctness](#correctness)
-  * [Simplicity](#simplicity)
+  * [Convenience](#convenience)
   * [Performance](#performance)
 * [Dependencies](#dependencies)
 * [License](#license)
@@ -53,7 +52,7 @@ Most users will simply use [`jzon:parse`](#jzonparse) for reading, and [`jzon:st
 [`jzon:parse`](#jzonparse) will parse JSON and produce a CL value
 
 ```lisp
-(jzon:parse "{
+(defparameter *ht* (jzon:parse "{
   \"license\": null,
   \"active\": false,
   \"important\": true,
@@ -63,10 +62,7 @@ Most users will simply use [`jzon:parse`](#jzonparse) for reading, and [`jzon:st
   \"tags\":  [
     \"alone\"
   ]
-}") 
-#| => #<HASH-TABLE :TEST EQUAL :COUNT 7 {100693CD63} |#
-
-(defparameter *ht* *)
+}"))
 
 (equalp 'null       (gethash "licence" *ht*))
 (equalp nil         (gethash "active" *ht*))
@@ -993,10 +989,9 @@ When the parser's *max-string-length* is exceeded, [`jzon:parse-next`](#jzonpars
 When *allow-multiple-content* enabled in the [`jzon:parser`](#jzonparser), it shall emit the `nil` event after no more content is available.
 
 ```lisp
-(jzon:with-parser (parser "1 2 3")
+(jzon:with-parser (parser "1 2")
   (jzon:parse-next parser)  #| :value, 1 |#
   (jzon:parse-next parser)  #| :value, 2 |#
-  (jzon:parse-next parser)  #| :value, 3 |#
   (jzon:parse-next parser)) #| nil, nil |#
 ```
 
@@ -1031,7 +1026,7 @@ In writing jzon, we prioritize the following properties, in order:
 
 * [Safety](#safety)
 * [Correctness](#correctness)
-* [Simplicity](#simplicity)
+* [Convenience](#convenience)
 * [Performance](#performance)
 
 ## Safety
@@ -1088,7 +1083,7 @@ While more work is doubtlessly necessary to validate further, care has been take
 
 In particular, certain edge-case values such as subnormals shall parse `===` with JavaScript parsing libraries.
 
-## Simplicity
+## Convenience
 
 You call `jzon:parse`, and you get a reasonably standard CL object back.
 You call `jzon:stringify` with a reasonably standard CL object and you should get reasonable JSON.
