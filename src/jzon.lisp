@@ -1028,17 +1028,19 @@ see `close-parser'"
 (defclass %string-span (%span) ())
 (defclass %octet-vector-span (%span) ())
 
-(defun span (in &key start end)
+(defun span (in &key (start 0) end)
   "Define a bounded sequence in `in' for use in `parse' and `make-parser' with a `start' and `end'."
+  (check-type start (integer 0 (#.array-dimension-limit)))
+  (check-type end (or null (integer 0 (#.array-dimension-limit))))
   (etypecase in
     (string
-      (let ((start (or start 0))
+      (let ((start start)
             (end (or end (length in))))
         (unless (<= 0 start end (length in))
           (error "The bounding indices ~A and ~A are bad for a sequence of length ~A." start end (length in)))
         (make-instance '%string-span :vector in :start start :end end)))
     ((vector (unsigned-byte 8))
-      (let ((start (or start 0))
+      (let ((start start)
             (end (or end (length in))))
         (unless (<= 0 start end (length in))
           (error "The bounding indices ~A and ~A are bad for a sequence of length ~A." start end (length in)))

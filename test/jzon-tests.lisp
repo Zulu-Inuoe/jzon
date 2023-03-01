@@ -454,6 +454,25 @@
   (is (= 42 (jzon:parse (jzon:span (not-simple (fs:string-to-octets "42moregarbage" :external-format :utf-8)) :end 2))))
   (is (= 42 (jzon:parse (jzon:span (not-simple (fs:string-to-octets "garbage42moregarbage" :external-format :utf-8)) :start 7 :end 9)))))
 
+(test spans-error-on-bad-ranges
+  (signals (error) (jzon:span "hello" :start 50))
+  (signals (type-error) (jzon:span "hello" :start nil))
+  (signals (error) (jzon:span "hello" :end 50))
+  (finishes (jzon:span "hello" :end nil))
+
+  (signals (error) (jzon:span (utf-8 "hello") :start 50))
+  (signals (type-error) (jzon:span (utf-8 "hello") :start nil))
+  (signals (error) (jzon:span (utf-8 "hello") :end 50))
+  (finishes (jzon:span (utf-8 "hello") :end nil)))
+
+(test spans-error-on-bad-ranges-floats
+  (signals (type-error) (jzon:span "hello" :start 1.0))
+  (signals (type-error) (jzon:span "hello" :end 2.0))
+  (signals (type-error) (jzon:span "hello" :start 1.0 :end 2.0))
+  
+  (signals (type-error) (jzon:span (utf-8 "hello") :start 1.0))
+  (signals (type-error) (jzon:span (utf-8 "hello") :end 2.0))
+  (signals (type-error) (jzon:span (utf-8 "hello") :start 1.0 :end 2.0)))
 
 (test parse-allows-strings-below-max-string-length
   (finishes (jzon:parse "\"This is a string that is not long\"" :max-string-length 45)))
