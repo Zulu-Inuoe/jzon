@@ -935,6 +935,93 @@ see `close-parser'"
   (with-slots (%step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content %parser-state) parser
     (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content)))
 
+(defun parse-next-element (parser &key max-depth (eof-error-p t) eof-value)
+  "Read the next available `json-element' from `parser'.
+  
+  This is a utility function around `parse-next' for advancing the `parser' to a certain point, and reading
+  an element at that point.
+  
+  `parse-next-element' must be called when the `parser' is in a position that allows values:
+  
+  1. toplevel
+  2. inside reading array
+  3. after reading object key
+  4. after toplevel when `allow-multiple-content' is true on the `parser'
+  
+  In the case that we are in the middle of reading an array, or after reading toplevel content, signals an error if `eof-error-p` is true, otherwise returns `eof-value'.
+"
+  (check-type parser parser)
+  (check-type max-depth (or boolean (integer 1 #xFFFF)))
+  (unless (member (%parser-state-state (slot-value parser '%parser-state))
+                  (if (slot-value parser '%allow-multiple-content)
+                    '(toplevel :begin-array after-read-array-element after-read-key nil)
+                    '(toplevel :begin-array after-read-array-element after-read-key)))
+    (error "Parser is not in a valid value position."))
+  (when (null (slot-value parser '%close-action))
+    (error 'json-error :format-control "The parser has been closed."))
+
+  (let (stack
+        key
+        len
+        (depth 0)
+        (%max-depth (case max-depth
+                      ((nil) #xFFFF)
+                      ((t)   128)
+                      (t     max-depth)))
+        (%step (slot-value parser '%step))
+        (%read-string (slot-value parser '%read-string))
+        (%pos (slot-value parser '%pos))
+        (%key-fn (slot-value parser '%key-fn))
+        (%allow-trailing-comma (slot-value parser '%allow-trailing-comma))
+        (%allow-comments (slot-value parser '%allow-comments))
+        (%allow-multiple-content (slot-value parser '%allow-multiple-content))
+        (%parser-state (slot-value parser '%parser-state)))
+    (declare (dynamic-extent stack key len))
+    (declare (type list stack key len))
+    (macrolet ((finish-value (value)
+                 `(let ((value ,value))
+                    (if (null stack)
+                      (return value)
+                      (let ((container (car stack)))
+                        (if (listp container)
+                          (progn (push value (the list (car stack)))
+                                 (incf (the (integer 0) (car len))))
+                          (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+               (inc-depth ()
+                 `(progn
+                   (when (= depth %max-depth)
+                     (%raise-limit 'json-parse-limit-error %pos %max-depth "Maximum depth exceeded."))
+                   (incf depth))))
+      (loop
+        (multiple-value-bind (event value) (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content)
+          (declare (dynamic-extent event))
+          (case event
+            ((nil)          (when eof-error-p (error "No more elements."))
+                            (return eof-value))
+            (:value         (finish-value value))
+            (:begin-array   (inc-depth)
+                            (push (list) stack)
+                            (push 0 len))
+            (:end-array     (when (null stack)
+                              (when eof-error-p (error "No more elements."))
+                              (return eof-value))
+                            (decf depth)
+                            (let ((elements (the list (pop stack)))
+                                  (length (the (integer 0) (pop len))))
+                              (finish-value
+                                (if (zerop length)
+                                  #()
+                                  (loop :with array := (make-array length)
+                                        :for i :from (1- length) :downto 0
+                                        :for elt :in elements
+                                        :do (setf (aref array i) elt)
+                                        :finally (return array))))))
+            (:begin-object  (inc-depth)
+                            (push (make-hash-table :test 'equal) stack))
+            (:object-key    (push value key))
+            (:end-object    (decf depth)
+                            (finish-value (pop stack)))))))))
+
 (defun %make-string-pool ()
   "Make a function for 'interning' strings in a pool."
   (let ((pool (list "")))
@@ -961,54 +1048,6 @@ see `close-parser'"
         (hash-table
           (or (gethash key pool)
               (setf (gethash key pool) key)))))))
-
-(defun parse-next-element (parser &optional (eof-error-p t) eof-value)
-  "Read the next full element from `parser'."
-  (check-type parser parser)
-  (unless (member (%parser-state-state (slot-value parser '%parser-state))
-                  (if (slot-value parser '%allow-multiple-content)
-                    '(toplevel :begin-array after-read-array-element after-read-key nil)
-                    '(toplevel :begin-array after-read-array-element after-read-key)))
-    (error "Parser is not in a valid value position."))
-  (let (stack
-        key
-        len)
-    (declare (dynamic-extent stack key len))
-    (declare (type list stack key len))
-    (macrolet ((finish-value (value)
-                 `(let ((value ,value))
-                    (if (null stack)
-                      (return value)
-                      (let ((container (car stack)))
-                        (if (listp container)
-                          (progn (push value (the list (car stack)))
-                                 (incf (the (integer 0) (car len))))
-                          (setf (gethash (pop key) (the hash-table (car stack))) value)))))))
-      (loop
-        (multiple-value-bind (event value) (parse-next parser)
-          (declare (dynamic-extent event))
-          (case event
-            ((nil)          (when eof-error-p (error "No more eleements."))
-                            (return eof-value))
-            (:value         (finish-value value))
-            (:begin-array   (push (list) stack)
-                            (push 0 len))
-            (:end-array     (when (null stack)
-                              (when eof-error-p (error "No more eleements."))
-                              (return eof-value))
-                            (let ((elements (the list (pop stack)))
-                                  (length (the (integer 0) (pop len))))
-                              (finish-value
-                                (if (zerop length)
-                                  #()
-                                  (loop :with array := (make-array length)
-                                        :for i :from (1- length) :downto 0
-                                        :for elt :in elements
-                                        :do (setf (aref array i) elt)
-                                        :finally (return array))))))
-            (:begin-object  (push (make-hash-table :test 'equal) stack))
-            (:object-key    (push value key))
-            (:end-object    (finish-value (pop stack)))))))))
 
 (defun %parse (%step %read-string %pos %key-fn %max-depth %allow-comments %allow-trailing-comma %allow-multiple-content)
   (declare (type function %step %read-string %pos %key-fn))

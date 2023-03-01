@@ -731,7 +731,7 @@
     (is (= 1 (jzon:parse-next-element p)))
     (is (= 2 (jzon:parse-next-element p)))
     (is (= 3 (jzon:parse-next-element p)))
-    (is (null (jzon:parse-next-element p nil nil)))
+    (is (null (jzon:parse-next-element p :eof-error-p  nil)))
     (is (eq nil (jzon:parse-next p)))))
 
 (test parse-next-element-nested-array-in-array
@@ -790,7 +790,19 @@
     (is (eq :object-key (jzon:parse-next p)))
     (is (eq :value (jzon:parse-next p)))
     (is (eq :end-object (jzon:parse-next p)))
-    (is (null (jzon:parse-next-element p nil nil)))))
+    (is (null (jzon:parse-next-element p :eof-error-p nil)))))
+
+(test parse-next-element-uses-max-depth-array
+  (jzon:with-parser (p "{ \"foo\": [1, [2], 3] }")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (signals (jzon:json-parse-limit-error) (jzon:parse-next-element p :max-depth 1))))
+
+(test parse-next-element-uses-max-depth-object
+  (jzon:with-parser (p "{ \"foo\": [1, {\"x\": 2}, 3] }")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (signals (jzon:json-parse-limit-error) (jzon:parse-next-element p :max-depth 1))))
 
 (test multi-close-ok
   (jzon:with-parser (parser "{}")
