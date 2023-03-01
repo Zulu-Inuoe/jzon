@@ -693,6 +693,33 @@ see `%read-string'"
                                     (recurse %vector %start %end))))))
     (recurse in 0 nil)))
 
+(defun %make-string-pool ()
+  "Make a function for 'interning' strings in a pool."
+  (let ((pool (list "")))
+    (lambda (key)
+      (declare (type simple-string key))
+      (etypecase pool
+        (list
+          (loop :for elt :of-type simple-string :in pool
+                :for i :from 0
+                :do
+                  (when (string= key elt)
+                    (return elt))
+                  (when (> i 64) ;; had to search too long
+                    (let ((old pool)
+                          (new (make-hash-table :size (* i 2) :test 'equal)))
+                     (dolist (key old)
+                       (setf (gethash key new) key))
+                     (setf pool new))
+
+                     (return (or (gethash key pool)
+                                 (setf (gethash key pool) key))))
+                :finally (push key pool)
+                         (return key)))
+        (hash-table
+          (or (gethash key pool)
+              (setf (gethash key pool) key)))))))
+
 (defun make-parser (in &key
                       (allow-comments nil)
                       (allow-trailing-comma nil)
@@ -933,33 +960,6 @@ see `close-parser'"
     (error 'json-error :format-control "The parser has been closed."))
   (with-slots (%step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content %parser-state) parser
     (%parse-next %parser-state %step %read-string %pos %key-fn %allow-trailing-comma %allow-comments %allow-multiple-content)))
-
-(defun %make-string-pool ()
-  "Make a function for 'interning' strings in a pool."
-  (let ((pool (list "")))
-    (lambda (key)
-      (declare (type simple-string key))
-      (etypecase pool
-        (list
-          (loop :for elt :of-type simple-string :in pool
-                :for i :from 0
-                :do
-                  (when (string= key elt)
-                    (return elt))
-                  (when (> i 64) ;; had to search too long
-                    (let ((old pool)
-                          (new (make-hash-table :size (* i 2) :test 'equal)))
-                     (dolist (key old)
-                       (setf (gethash key new) key))
-                     (setf pool new))
-
-                     (return (or (gethash key pool)
-                                 (setf (gethash key pool) key))))
-                :finally (push key pool)
-                         (return key)))
-        (hash-table
-          (or (gethash key pool)
-              (setf (gethash key pool) key)))))))
 
 (defun %parse (%step %read-string %pos %key-fn %max-depth %allow-comments %allow-trailing-comma %allow-multiple-content)
   (declare (type function %step %read-string %pos %key-fn))
