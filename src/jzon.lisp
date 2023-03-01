@@ -417,6 +417,7 @@ see `json-atom'"
 
 (defun %calc-pos (step n)
   "Calculate line, column numbers by `step' ping through the input `n' times."
+  (declare (type (integer 1) n))
   (loop :with line :of-type (integer 1)  := 1
         :with col :of-type (integer 1) := 1
         :with cr := nil
