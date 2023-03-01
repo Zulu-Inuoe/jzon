@@ -50,6 +50,9 @@
 (defun utf-8 (string)
   (fs:string-to-octets string :external-format :utf-8))
 
+(defun not-simple (vector)
+  (make-array (length vector) :element-type (array-element-type vector) :fill-pointer t :initial-contents vector))
+
 (test parses-atoms
   (is (eq 'null (jzon:parse "null")))
   (is (eq 'null (jzon:parse "  null")))
@@ -426,6 +429,27 @@
       ("Hello, world!"   (jzon:parse "\"Hello, world!\""))
       (#(1 2 3)          (jzon:parse "[1,2,3]"))
       ((ph "x" 10 "y" 0) (jzon:parse "{ \"x\": 10, \"y\": 0}")))))
+
+(test parse-accepts-simple-string-span
+  (is (= 42 (jzon:parse (jzon:span "garbage42" :start 7))))
+  (is (= 42 (jzon:parse (jzon:span "42moregarbage" :end 2))))
+  (is (= 42 (jzon:parse (jzon:span "garbage42moregarbage" :start 7 :end 9)))))
+
+(test parse-accepts-string-span
+  (is (= 42 (jzon:parse (jzon:span (not-simple "garbage42") :start 7))))
+  (is (= 42 (jzon:parse (jzon:span (not-simple "42moregarbage") :end 2))))
+  (is (= 42 (jzon:parse (jzon:span (not-simple "garbage42moregarbage") :start 7 :end 9)))))
+
+(test parse-accepts-simple-octet-vector-span
+  (is (= 42 (jzon:parse (jzon:span (fs:string-to-octets "garbage42" :external-format :utf-8) :start 7))))
+  (is (= 42 (jzon:parse (jzon:span (fs:string-to-octets "42moregarbage" :external-format :utf-8) :end 2))))
+  (is (= 42 (jzon:parse (jzon:span (fs:string-to-octets "garbage42moregarbage" :external-format :utf-8) :start 7 :end 9)))))
+
+(test parse-accepts-octet-vector-span
+  (is (= 42 (jzon:parse (jzon:span (not-simple (fs:string-to-octets "garbage42" :external-format :utf-8)) :start 7))))
+  (is (= 42 (jzon:parse (jzon:span (not-simple (fs:string-to-octets "42moregarbage" :external-format :utf-8)) :end 2))))
+  (is (= 42 (jzon:parse (jzon:span (not-simple (fs:string-to-octets "garbage42moregarbage" :external-format :utf-8)) :start 7 :end 9)))))
+
 
 (test parse-allows-strings-below-max-string-length
   (finishes (jzon:parse "\"This is a string that is not long\"" :max-string-length 45)))
