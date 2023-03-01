@@ -10,6 +10,9 @@
    #:close-parser
    #:with-parser
 
+   ;; Reading utils
+   #:span
+
    ;;; Write
    #:stringify
 
@@ -426,14 +429,15 @@ see `json-atom'"
            (return (values line col))))
 
 (macrolet ((def-make-string-fns (name type)
-             `(defun ,name (in max-string-length)
+             `(defun ,name (in start end max-string-length)
                 "Create step, and read-string functions for the string `in'."
                 (declare (type ,type in))
+                (declare (type (integer 0 (#.array-dimension-limit)) start end))
                 (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
-                (let ((i 0))
+                (let ((i start))
                   (declare (type (integer 0 #.array-dimension-limit) i))
-                  (let* ((step (lambda () (when (< i (length in)) (prog1 (char in i) (incf i)))))
-                         (pos (lambda () (%calc-pos step (shiftf i 0))))
+                  (let* ((step (lambda () (when (< i end) (char in (shiftf i (1+ i))))))
+                         (pos (lambda () (%calc-pos step (- (shiftf i start) start))))
                          (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                                         (lambda ()
                                           ;; Scan until we hit a closing "
@@ -444,7 +448,7 @@ see `json-atom'"
                                             :with base-string-p := t
                                             :for j :from i
                                             :do
-                                              (when (<= (length in) j)
+                                              (when (<= end j)
                                                 (%raise 'json-eof-error pos "Unexpected end of input when reading string."))
                                               (let ((c (char in j)))
                                                 (case c
@@ -544,38 +548,38 @@ see `json-atom'"
                                 ((and (= u1 #xfc) (< u2 #x84)) (error "Overlong UTF-8 sequence."))
                                 (t (error "Character out of range in UTF-8 sequence."))))))))))))))))))
 
-(defun %make-fns-simple-array-ub8 (in max-string-length)
+(defun %make-fns-simple-array-ub8 (in start end max-string-length)
   (declare (type (simple-array (unsigned-byte 8) (*)) in))
   (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
-  (let ((i 0))
+  (let ((i start))
     (declare (type (integer 0 #.array-dimension-limit) i))
     (let* ((consume-octet (lambda ()
-                            (if (< i (length in))
+                            (if (< i end)
                               (aref in (shiftf i (1+ i)))
                               (error "End of data while in UTF-8 sequence."))))
            (step (lambda ()
-                   (when (< i (length in))
+                   (when (< i end)
                      (%utf-8-decode (aref in (shiftf i (1+ i))) consume-octet))))
-           (pos (lambda () (%calc-pos step (shiftf i 0))))
+           (pos (lambda () (%calc-pos step (- (shiftf i start) start))))
            (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                           (lambda ()
                             (setf (fill-pointer string-accum) 0)
                             (%read-json-string step pos string-accum max-string-length t)))))
       (values step read-string pos))))
 
-(defun %make-fns-array-ub8 (in max-string-length)
+(defun %make-fns-array-ub8 (in start end max-string-length)
   (declare (type (and (array (unsigned-byte 8) (*)) (not simple-array)) in))
   (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
-  (let ((i 0))
+  (let ((i start))
     (declare (type (integer 0 #.array-dimension-limit) i))
     (let* ((consume-octet (lambda ()
-                            (if (< i (length in))
+                            (if (< i end)
                               (aref in (shiftf i (1+ i)))
                               (error "End of data while in UTF-8 sequence."))))
            (step (lambda ()
-                   (when (< i (length in))
+                   (when (< i end)
                      (%utf-8-decode (aref in (shiftf i (1+ i))) consume-octet))))
-           (pos (lambda () (%calc-pos step (shiftf i 0))))
+           (pos (lambda () (%calc-pos step (- (shiftf i start) start))))
            (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
                           (lambda ()
                             (setf (fill-pointer string-accum) 0)
@@ -671,14 +675,20 @@ see `close-parser'"))
 
 see `%step'
 see `%read-string'"
-  (etypecase in
-    (simple-string  (%make-fns-simple-string in max-string-length))
-    (string         (%make-fns-string in max-string-length))
-    (stream         (if (subtypep (stream-element-type in) 'character)
-                      (%make-fns-stream in max-string-length)
-                      (%make-fns-binary-stream in max-string-length)))
-    ((simple-array (unsigned-byte 8) (*)) (%make-fns-simple-array-ub8 in max-string-length))
-    ((array (unsigned-byte 8) (*))        (%make-fns-array-ub8 in max-string-length))))
+  (labels ((recurse (in start end)
+            (etypecase in
+              (simple-string  (%make-fns-simple-string in start (or end (length in)) max-string-length))
+              (string         (%make-fns-string in start (or end (length in)) max-string-length))
+              (stream         (if (subtypep (stream-element-type in) 'character)
+                                (%make-fns-stream in max-string-length)
+                                (%make-fns-binary-stream in max-string-length)))
+              ((simple-array (unsigned-byte 8) (*)) (%make-fns-simple-array-ub8 in start (or end (length in)) max-string-length))
+              ((array (unsigned-byte 8) (*))        (%make-fns-array-ub8 in start (or end (length in)) max-string-length))
+              (%string-span       (with-slots (%vector %start %end) in
+                                    (recurse %vector %start %end)))
+              (%octet-vector-span (with-slots (%vector %start %end) in
+                                    (recurse %vector %start %end))))))
+    (recurse in 0 nil)))
 
 (defun make-parser (in &key
                       (allow-comments nil)
@@ -1008,6 +1018,30 @@ see `close-parser'"
             (:end-object    (decf depth)
                             (finish-value (pop stack)))))))))
 
+(defclass %span ()
+  ((%vector :initarg :vector)
+   (%start :initarg :start)
+   (%end :initarg :end)))
+
+(defclass %string-span (%span) ())
+(defclass %octet-vector-span (%span) ())
+
+(defun span (in &key start end)
+  "Define a bounded sequence in `in' for use in `parse' and `make-parser' with a `start' and `end'."
+  (etypecase in
+    (string
+      (let ((start (or start 0))
+            (end (or end (length in))))
+        (unless (<= 0 start end (length in))
+          (error "The bounding indices ~A and ~A are bad for a sequence of length ~A." start end (length in)))
+        (make-instance '%string-span :vector in :start start :end end)))
+    ((vector (unsigned-byte 8))
+      (let ((start (or start 0))
+            (end (or end (length in))))
+        (unless (<= 0 start end (length in))
+          (error "The bounding indices ~A and ~A are bad for a sequence of length ~A." start end (length in)))
+        (make-instance '%octet-vector-span :vector in :start start :end end)))))
+
 (defun parse (in &key
                    (max-depth 128)
                    (allow-comments nil)
@@ -1015,7 +1049,7 @@ see `close-parser'"
                    (allow-multiple-content nil)
                    (max-string-length (min #x100000 (1- array-dimension-limit)))
                    (key-fn t))
-  "Read a JSON value from `in', which may be a vector, a stream, or a pathname.
+  "Read a JSON value from `in', which may be a vector, a stream, a pathname, or a span from `span'.
  `:max-depth' controls the maximum depth allowed when nesting arrays or objects.
  `:allow-comments' controls if we allow single-line // comments and /**/ multiline block comments.
  `:allow-trailing-comma' controls if we allow a single comma `,' after all elements of an array or object.

@@ -16,6 +16,7 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
   * [Type Mappings](#type-mappings)
 * [Usage](#usage)
   * [`jzon:parse`](#jzonparse)
+    * [`jzon:span`](#jzonspan)
   * [`jzon:stringify`](#jzonstringify)
     * [Additional Types for Writing](#additionally-supported-types-for-writing)
   * [`jzon:writer`](#jzonwriter)
@@ -122,7 +123,7 @@ As noted, `jzon:parse` and `jzon:stringify` suit most use-cases, this section go
 
 *=> value* 
 
-* *in* - a `string`, `vector (unsigned-byte 8)`, `stream`, or `pathname`
+* *in* - a `string`, `vector (unsigned-byte 8)`, `stream`, `pathname`, or [`jzon:span`](#jzonspan)
 * *max-depth* - a positive `integer`, or a boolean
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
@@ -142,6 +143,9 @@ Reads JSON from `in` and returns a `jzon:json-element` per [Type Mappings](#type
 * (vector (unsigned-byte 8)) - octets in utf-8
 * stream - character or binary in utf-8
 * pathname - `jzon:parse` will open the file for reading in utf-8
+* [`jzon:span`](#jzonspan) - denoting a part of a string/vector
+
+**Tip:** *You can also use a displaced array to denote a region of an array without copying it.*
 
 The keyword arguments control optional features when reading:
 * `:allow-comments` controls if we allow single-line // comments and /**/ multiline block comments.
@@ -223,6 +227,28 @@ Pass `nil` to *key-fn* in order to avoid [key pooling](#object-key-pooling):
 This *may* help speed up parsing on highly heterogeneous JSON.
 
 **Note**: It is recommended leave this as default. The performance improvement is usually not substantive enough to warrant duplicated strings, and interning strings from untrusted JSON is a security risk.
+
+### jzon:span
+
+*Function* **jzon:span** *in* *&key start end*
+
+*=> span*
+
+* *in* - a `string`, or `vector (unsigned-byte 8)`
+* *start, end* - bounding index designators of sequence. The defaults for *start* and *end* are 0 and nil, respectively.
+
+*span* a span object representing the range.
+
+#### Description
+
+Create a span to be used in [`jzon:parse`](#jzonparse), or [`jzon:make-parser`](#jzonparser) in order to specify a bounded *start* and *end* for a string or vector.
+
+##### Example
+
+```lisp
+(jzon:parse (jzon:make-span "garbage42moregarbage" :start 7 :end 9)) 
+#| => 42 |#
+```
 
 ### jzon:stringify
 
@@ -876,7 +902,7 @@ An example:
 
 *=> writer*
 
-* *in* - a string, vector (unsigned-byte 8), stream, or pathname
+* *in* - a string, vector (unsigned-byte 8), stream, pathname, or [`jzon:span`](#jzonspan)
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
 * *allow-multiple-content* - a `boolean`
@@ -897,6 +923,9 @@ The behaviour of `jzon:parser` is analogous to `jzon:parse`, except you control 
 * `(vector (unsigned-byte 8))` - octets in utf-8
 * `stream` - character or binary in utf-8
 * `pathname` - `jzon:make-parser` will open the file for reading in utf-8
+* [`jzon:span`](#jzonspan) - denoting a part of a string/vector
+
+**Tip:** *You can also use a displaced array to denote a region of an array without copying it.*
 
 When *max-string-length* is exceeded, [`jzon:parse-next`](#jzonparse-next) shall signal a `jzon:json-parse-limit-error` error.
 
