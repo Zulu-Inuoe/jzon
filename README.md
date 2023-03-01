@@ -175,6 +175,16 @@ When reading a stream we can call [`jzon:parse`](#jzonparse) several times:
   (jzon:parse s :allow-multiple-content t)) #| => 3 |#
 ```
 
+:warning: When reading numbers, `null`, `false`, or `true`, they **must** be followed by whitespace. [`jzon:parse`](#jzonparse) shall signal an error otherwise:
+
+```lisp
+(jzon:parse "123[1, 2, 3]" :allow-multiple-content t) #| error |#
+```
+
+This is to prevent errors caused by the lookahead necessary for parsing non-delimited tokens.
+
+This is not required when using [`jzon:parse-next`](#jzonparse-next).
+
 ##### *key-fn*
 
 When parsing objects, *key-fn* is called on each of that object's keys (`simple-string`):
