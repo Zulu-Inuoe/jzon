@@ -433,12 +433,16 @@
 (test parse-accepts-simple-string-span
   (is (= 42 (jzon:parse (jzon:span "garbage42" :start 7))))
   (is (= 42 (jzon:parse (jzon:span "42moregarbage" :end 2))))
-  (is (= 42 (jzon:parse (jzon:span "garbage42moregarbage" :start 7 :end 9)))))
+  (is (= 42 (jzon:parse (jzon:span "garbage42moregarbage" :start 7 :end 9))))
+  (is (string= "hello" (jzon:parse (jzon:span "garbage\"hello\"moregarbage" :start 7 :end 14))))
+  (is (string= "Poop:💩" (jzon:parse (jzon:span "garbage\"Poop:\\uD83D\\uDCA9\"moregarbage" :start 7 :end 26)))))
 
 (test parse-accepts-string-span
   (is (= 42 (jzon:parse (jzon:span (not-simple "garbage42") :start 7))))
   (is (= 42 (jzon:parse (jzon:span (not-simple "42moregarbage") :end 2))))
-  (is (= 42 (jzon:parse (jzon:span (not-simple "garbage42moregarbage") :start 7 :end 9)))))
+  (is (= 42 (jzon:parse (jzon:span (not-simple "garbage42moregarbage") :start 7 :end 9))))
+  (is (string= "hello" (jzon:parse (jzon:span (not-simple "garbage\"hello\"moregarbage") :start 7 :end 14))))
+  (is (string= "Poop:💩" (jzon:parse (jzon:span (not-simple "garbage\"Poop:\\uD83D\\uDCA9\"moregarbage") :start 7 :end 26)))))
 
 (test parse-accepts-simple-octet-vector-span
   (is (= 42 (jzon:parse (jzon:span (fs:string-to-octets "garbage42" :external-format :utf-8) :start 7))))
