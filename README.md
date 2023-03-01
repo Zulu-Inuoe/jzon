@@ -46,11 +46,11 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
 
 **Note**: *Examples in this README can be copy-pasted in your REPL assuming you've got a nickname set up for jzon. Try `(uiop:add-package-local-nickname '#:jzon '#:com.inuoe.jzon)`.*
 
-Most users will simply use `jzon:parse` for reading, and `jzon:stringify` for writing. These mirror the [JSON methods in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON).
+Most users will simply use [`jzon:parse`](#jzonparse) for reading, and [`jzon:stringify`](#jzonstringify) for writing. These mirror the [JSON methods in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON).
 
 ### Reading
 
-`jzon:parse` will parse JSON and produce a CL value
+[`jzon:parse`](#jzonparse) will parse JSON and produce a CL value
 
 ```lisp
 (jzon:parse "{
@@ -79,7 +79,7 @@ Most users will simply use `jzon:parse` for reading, and `jzon:stringify` for wr
 
 ### Writing
 
-`jzon:stringify` will serialize a value to JSON:
+[`jzon:stringify`](#jzonstringify) will serialize a value to JSON:
 
 ```lisp
 (jzon:stringify #(null nil t 42 3.14 "Hello, world!") :stream t :pretty t)
@@ -115,7 +115,7 @@ When writing, additional values are supported. Please see the section [jzon:stri
 
 # Usage
 
-As noted, `jzon:parse` and `jzon:stringify` suit most use-cases, this section goes into more detail, as well as an introduction to the [`jzon:writer` interface](#jzonwriter).
+As noted, [`jzon:parse`](#jzonparse) and [`jzon:stringify`](#jzonstringify) suit most use-cases, this section goes into more detail, as well as an introduction to the [`jzon:writer` interface](#jzonwriter).
 
 ### jzon:parse
 
