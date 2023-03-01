@@ -4,6 +4,8 @@
 
 Changes relative to [v1.0.0](#v100)
 
+* `jzon:parse-next` no longer 'over-reads' strings, objects, and arrays.
+* `allow-multiple-content` in reader functions now prevents jzon from scanning content after the toplevel object to signal error. Can be used to support formats like [JSON Lines][json-lines].
 * faster parsing from (vector (unsigned-byte 8)) and binary streams https://github.com/Zulu-Inuoe/jzon/issues/29
 * bugfix - `allow-trailing-comma` was not being properly applied when reading from vectors or pathnames
 * bugfix - `max-string-length` was not being properly applied when reading from vectors or pathnames
@@ -22,3 +24,5 @@ Incompatible changes relative to [v1.0.0](#v100):
 Initial Release
 
 :tada:
+
+[json-lines]: https://jsonlines.org/

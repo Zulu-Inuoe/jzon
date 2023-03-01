@@ -118,7 +118,7 @@ As noted, `jzon:parse` and `jzon:stringify` suit most use-cases, this section go
 
 ### jzon:parse
 
-*Function* **jzon:parse** *in &key max-depth allow-comments allow-trailing-comma max-string-length key-fn*
+*Function* **jzon:parse** *in &key max-depth allow-comments allow-trailing-comma allow-multiple-content max-string-length key-fn*
 
 *=> value* 
 
@@ -126,6 +126,7 @@ As noted, `jzon:parse` and `jzon:stringify` suit most use-cases, this section go
 * *max-depth* - a positive `integer`, or a boolean
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
+* *allow-multiple-content* - a `boolean`
 * *max-string-length* - `nil`, `t`, or a positive `integer`
 * *key-fn* - a designator for a function of one argument, or a boolean
 
@@ -145,6 +146,7 @@ Reads JSON from `in` and returns a `jzon:json-element` per [Type Mappings](#type
 The keyword arguments control optional features when reading:
 * `:allow-comments` controls if we allow single-line // comments and /**/ multiline block comments.
 * `:allow-trailing-comma` controls if we allow a single comma `,` after all elements of an array or object.
+* `:allow-multiple-content` controls if we allow for more than one element at the 'toplevel' *see below*
 * `:key-fn` is a function of one value which is called on object keys as they are read, or a boolean *(see below)*
 * `:max-depth` controls the maximum depth allowed when nesting arrays or objects.
 * `:max-string-length` controls the maximum length allowed when reading a string key or value.
@@ -155,6 +157,33 @@ The keyword arguments control optional features when reading:
 * `t` - Default limit
 
 When either *max-depth* or *max-string-length* is exceeded, `jzon:parse` shall signal a `jzon:json-parse-limit-error` error.
+
+##### *allow-multiple-content*
+
+JSON requires there  be only one toplevel element. Using *allow-multiple-content* tells `jzon:parse` to stop after reading one full toplevel element:
+
+```lisp
+(jzon:parse "1 2 3" :allow-multiple-content t) #| => 1 |#
+```
+
+When reading a stream we can call [`jzon:parse`](#jzonparse) several times:
+
+```lisp
+(with-input-from-string (s "1 2 3")
+  (jzon:parse s :allow-multiple-content t)  #| => 1 |#
+  (jzon:parse s :allow-multiple-content t)  #| => 2 |#
+  (jzon:parse s :allow-multiple-content t)) #| => 3 |#
+```
+
+:warning: When reading numbers, `null`, `false`, or `true`, they **must** be followed by whitespace. [`jzon:parse`](#jzonparse) shall signal an error otherwise:
+
+```lisp
+(jzon:parse "123[1, 2, 3]" :allow-multiple-content t) #| error |#
+```
+
+This is to prevent errors caused by the lookahead necessary for parsing non-delimited tokens.
+
+This is not required when using [`jzon:parse-next`](#jzonparse-next).
 
 ##### *key-fn*
 
@@ -843,13 +872,14 @@ An example:
 
 ### jzon:make-parser
 
-*Function* **jzon:make-parser** *in &key allow-comments allow-trailing-comma max-string-length key-fn*
+*Function* **jzon:make-parser** *in &key allow-comments allow-trailing-comma *allow-multiple-content* max-string-length key-fn*
 
 *=> writer*
 
 * *in* - a string, vector (unsigned-byte 8), stream, or pathname
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
+* *allow-multiple-content* - a `boolean`
 * *max-string-length* - a positive `integer`
 * *key-fn* - a designator for a function of one argument, or a boolean
 
@@ -869,6 +899,8 @@ The behaviour of `jzon:parser` is analogous to `jzon:parse`, except you control 
 * `pathname` - `jzon:make-parser` will open the file for reading in utf-8
 
 When *max-string-length* is exceeded, [`jzon:parse-next`](#jzonparse-next) shall signal a `jzon:json-parse-limit-error` error.
+
+JSON requires there  be only one toplevel element. Using *allow-multiple-content* allows parsing of multiple toplevel JSON elements. See [`jzon:parse-next`](#jzonparse-next) on how this affects the results.
 
 :warning: Because [`jzon:make-parser`](#jzonmake-parser) can open a file, it is recommended you use [`jzon:with-parser`](#jzonwith-parser) instead, unless you need indefinite extent.
 
@@ -926,6 +958,18 @@ Always returns two values indicating the next available event on the JSON stream
 **Note:** The `nil` *event* represents conclusion of a toplevel value, and should be taken as "parsing has successfully completed".
 
 When the parser's *max-string-length* is exceeded, [`jzon:parse-next`](#jzonparse-next) shall signal a `jzon:json-parse-limit-error` error. See [`jzon:make-parser`](#jzonmake-parser).
+
+##### *allow-multiple-content*
+
+When *allow-multiple-content* enabled in the [`jzon:parser`](#jzonparser), it shall emit the `nil` event after no more content is available.
+
+```lisp
+(jzon:with-parser (parser "1 2 3")
+  (jzon:parse-next parser)  #| :value, 1 |#
+  (jzon:parse-next parser)  #| :value, 2 |#
+  (jzon:parse-next parser)  #| :value, 3 |#
+  (jzon:parse-next parser)) #| nil, nil |#
+```
 
 ### Streaming Parser Example
 
@@ -1135,6 +1179,7 @@ I believe jzon to be the superior choice and hope for it to become the new, true
 
 [JSONRFC]: https://tools.ietf.org/html/rfc8259
 [JSONTestSuite]: https://github.com/nst/JSONTestSuite
+[json-lines]: https://jsonlines.org/
 [jsown]: https://github.com/madnificent/jsown
 [cl-json]: https://cl-json.common-lisp.dev/cl-json.html
 [jonathan]: https://github.com/Rudolph-Miller/jonathan

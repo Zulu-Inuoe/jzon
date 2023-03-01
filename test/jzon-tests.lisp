@@ -531,6 +531,106 @@
 (test parse-max-depth-defaults-when-t
   (signals (jzon:json-parse-limit-error) (jzon:parse (make-string 130 :initial-element #\[) :max-depth t)))
 
+(test parse-errors-on-multiple-content
+  (signals (jzon:json-parse-error) (jzon:parse "1 2")))
+
+(test parse-no-error-on-multiple-content-when-asked
+  (is (= 1 (jzon:parse "1 2" :allow-multiple-content t))))
+
+(test parse-doesnt-overread-on-multiple-content-null
+  (with-input-from-string (s "null  ")
+    (jzon:parse s :allow-multiple-content t)
+    (is (= 5 (file-position s)))))
+
+(test parse-doesnt-overread-on-multiple-content-false
+  (with-input-from-string (s "false  ")
+    (jzon:parse s :allow-multiple-content t)
+    (is (= 6 (file-position s)))))
+
+(test parse-doesnt-overread-on-multiple-content-true
+  (with-input-from-string (s "true  ")
+    (jzon:parse s :allow-multiple-content t)
+    (is (= 5 (file-position s)))))
+
+(test parse-doesnt-overread-on-multiple-content-1234
+  (with-input-from-string (s "1234  ")
+    (jzon:parse s :allow-multiple-content t)
+    (is (= 5 (file-position s)))))
+
+(test parse-doesnt-overread-on-multiple-content-string
+  (with-input-from-string (s "\"hello\"  ")
+    (jzon:parse s :allow-multiple-content t)
+    (is (= 7 (file-position s)))))
+
+(test parse-doesnt-overread-on-multiple-content-array
+  (with-input-from-string (s "[\"hello\"]  ")
+    (jzon:parse s :allow-multiple-content t)
+    (is (= 9 (file-position s))))
+  (with-input-from-string (s "[1,2]  ")
+    (jzon:parse s :allow-multiple-content t)
+    (is (= 5 (file-position s)))))
+
+(test parse-doesnt-overread-on-multiple-content-object
+  (with-input-from-string (s "{\"x\":2}  ")
+    (jzon:parse s :allow-multiple-content t)
+    (is (= 7 (file-position s)))))
+
+(test parse-needs-whitespace-for-bare-tokens-nullnull
+  (signals (jzon:json-parse-error) (jzon:parse "nullnull" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-nulllbrace
+  (signals (jzon:json-parse-error) (jzon:parse "null[" :allow-multiple-content t))
+  (signals (jzon:json-parse-error) (jzon:parse "null{" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-nullrbrace
+  (signals (jzon:json-parse-error) (jzon:parse "null]" :allow-multiple-content t))
+  (signals (jzon:json-parse-error) (jzon:parse "null}" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-falsequote
+  (signals (jzon:json-parse-error) (jzon:parse "false\"" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-falsefalse
+  (signals (jzon:json-parse-error) (jzon:parse "falsefalse" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-falselbrace
+  (signals (jzon:json-parse-error) (jzon:parse "false[" :allow-multiple-content t))
+  (signals (jzon:json-parse-error) (jzon:parse "false{" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-falserbrace
+  (signals (jzon:json-parse-error) (jzon:parse "false]" :allow-multiple-content t))
+  (signals (jzon:json-parse-error) (jzon:parse "false}" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-falsequote
+  (signals (jzon:json-parse-error) (jzon:parse "false\"" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-truetrue
+  (signals (jzon:json-parse-error) (jzon:parse "truetrue" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-truelbrace
+  (signals (jzon:json-parse-error) (jzon:parse "true[" :allow-multiple-content t))
+  (signals (jzon:json-parse-error) (jzon:parse "true{" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-truerbrace
+  (signals (jzon:json-parse-error) (jzon:parse "true]" :allow-multiple-content t))
+  (signals (jzon:json-parse-error) (jzon:parse "true}" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-truequote
+  (signals (jzon:json-parse-error) (jzon:parse "true\"" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-1234null
+  (signals (jzon:json-parse-error) (jzon:parse "1234null" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-1234lbrace
+  (signals (jzon:json-parse-error) (jzon:parse "1234[" :allow-multiple-content t))
+  (signals (jzon:json-parse-error) (jzon:parse "1234{" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-1234rbrace
+  (signals (jzon:json-parse-error) (jzon:parse "1234]" :allow-multiple-content t))
+  (signals (jzon:json-parse-error) (jzon:parse "1234}" :allow-multiple-content t)))
+
+(test parse-needs-whitespace-for-bare-tokens-1234quote
+  (signals (jzon:json-parse-error) (jzon:parse "1234\"" :allow-multiple-content t)))
+
 (def-suite incremental :in parsing)
 (in-suite incremental)
 
@@ -567,6 +667,16 @@
       (jzon:parse-next parser))
     (signals (jzon:json-parse-error)
       (jzon:parse-next parser))))
+
+(test parse-next-allows-multiple-content-when-asked
+  (jzon:with-parser (parser "42 24" :allow-multiple-content t)
+    (multiple-value-bind (event value) (jzon:parse-next parser)
+      (is (eq :value event))
+      (is (= value 42)))
+    (multiple-value-bind (event value) (jzon:parse-next parser)
+      (is (eq :value event))
+      (is (= value 24)))
+    (is (null (jzon:parse-next parser)))))
 
 (test multi-close-ok
   (jzon:with-parser (parser "{}")
@@ -669,6 +779,62 @@
       (is (null (jzon:parse-next parser)))
       (is (not (eq x1 x2)))
       (is (not (eq x2 x3))))))
+
+(test parse-next-need-whitespace-for-bare-tokens-nullnull
+  (jzon:with-parser (p "nullnull" :allow-multiple-content t)
+    (signals (jzon:json-parse-error) (jzon:parse-next p))))
+
+(test parse-next-no-need-whitespace-for-bare-tokens-nulllbrace
+  (jzon:with-parser (p "null[" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p))))
+  (jzon:with-parser (p "null{" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p)))))
+
+(test parse-next-no-need-whitespace-for-bare-tokens-nullquote
+  (jzon:with-parser (p "null\"" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p)))))
+
+(test parse-next-need-whitespace-for-bare-tokens-falsenull
+  (jzon:with-parser (p "falsenull" :allow-multiple-content t)
+    (signals (jzon:json-parse-error) (jzon:parse-next p))))
+
+(test parse-next-no-need-whitespace-for-bare-tokens-falselbrace
+  (jzon:with-parser (p "false[" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p))))
+  (jzon:with-parser (p "false{" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p)))))
+
+(test parse-next-no-need-whitespace-for-bare-tokens-falsequote
+  (jzon:with-parser (p "false\"" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p)))))
+
+(test parse-next-need-whitespace-for-bare-tokens-truenull
+  (jzon:with-parser (p "truenull" :allow-multiple-content t)
+    (signals (jzon:json-parse-error) (jzon:parse-next p))))
+
+(test parse-next-no-need-whitespace-for-bare-tokens-truelbrace
+  (jzon:with-parser (p "true[" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p))))
+  (jzon:with-parser (p "true{" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p)))))
+
+(test parse-next-no-need-whitespace-for-bare-tokens-truequote
+  (jzon:with-parser (p "true\"" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p)))))
+
+(test parse-next-need-whitespace-for-bare-tokens-1234null
+  (jzon:with-parser (p "1234null" :allow-multiple-content t)
+    (signals (jzon:json-parse-error) (jzon:parse-next p))))
+
+(test parse-next-no-need-whitespace-for-bare-tokens-1234lbrace
+  (jzon:with-parser (p "1234[" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p))))
+  (jzon:with-parser (p "1234{" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p)))))
+
+(test parse-next-no-need-whitespace-for-bare-tokens-1234quote
+  (jzon:with-parser (p "1234\"" :allow-multiple-content t)
+    (is (eq :value (jzon:parse-next p)))))
 
 (def-suite writer :in jzon)
 (in-suite writer)
