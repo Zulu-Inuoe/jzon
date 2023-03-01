@@ -550,6 +550,7 @@ see `json-atom'"
 
 (defun %make-fns-simple-array-ub8 (in start end max-string-length)
   (declare (type (simple-array (unsigned-byte 8) (*)) in))
+  (declare (type (integer 0 (#.array-dimension-limit)) start end))
   (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
   (let ((i start))
     (declare (type (integer 0 #.array-dimension-limit) i))
@@ -569,6 +570,7 @@ see `json-atom'"
 
 (defun %make-fns-array-ub8 (in start end max-string-length)
   (declare (type (and (array (unsigned-byte 8) (*)) (not simple-array)) in))
+  (declare (type (integer 0 (#.array-dimension-limit)) start end))
   (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
   (let ((i start))
     (declare (type (integer 0 #.array-dimension-limit) i))
