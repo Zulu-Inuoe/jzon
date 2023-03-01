@@ -7,6 +7,7 @@
    ;;;; Streaming reader
    #:make-parser
    #:parse-next
+   #:parse-next-element
    #:close-parser
    #:with-parser
 
@@ -960,6 +961,54 @@ see `close-parser'"
         (hash-table
           (or (gethash key pool)
               (setf (gethash key pool) key)))))))
+
+(defun parse-next-element (parser &optional (eof-error-p t) eof-value)
+  "Read the next full element from `parser'."
+  (check-type parser parser)
+  (unless (member (%parser-state-state (slot-value parser '%parser-state))
+                  (if (slot-value parser '%allow-multiple-content)
+                    '(toplevel :begin-array after-read-array-element after-read-key nil)
+                    '(toplevel :begin-array after-read-array-element after-read-key)))
+    (error "Parser is not in a valid value position."))
+  (let (stack
+        key
+        len)
+    (declare (dynamic-extent stack key len))
+    (declare (type list stack key len))
+    (macrolet ((finish-value (value)
+                 `(let ((value ,value))
+                    (if (null stack)
+                      (return value)
+                      (let ((container (car stack)))
+                        (if (listp container)
+                          (progn (push value (the list (car stack)))
+                                 (incf (the (integer 0) (car len))))
+                          (setf (gethash (pop key) (the hash-table (car stack))) value)))))))
+      (loop
+        (multiple-value-bind (event value) (parse-next parser)
+          (declare (dynamic-extent event))
+          (case event
+            ((nil)          (when eof-error-p (error "No more eleements."))
+                            (return eof-value))
+            (:value         (finish-value value))
+            (:begin-array   (push (list) stack)
+                            (push 0 len))
+            (:end-array     (when (null stack)
+                              (when eof-error-p (error "No more eleements."))
+                              (return eof-value))
+                            (let ((elements (the list (pop stack)))
+                                  (length (the (integer 0) (pop len))))
+                              (finish-value
+                                (if (zerop length)
+                                  #()
+                                  (loop :with array := (make-array length)
+                                        :for i :from (1- length) :downto 0
+                                        :for elt :in elements
+                                        :do (setf (aref array i) elt)
+                                        :finally (return array))))))
+            (:begin-object  (push (make-hash-table :test 'equal) stack))
+            (:object-key    (push value key))
+            (:end-object    (finish-value (pop stack)))))))))
 
 (defun %parse (%step %read-string %pos %key-fn %max-depth %allow-comments %allow-trailing-comma %allow-multiple-content)
   (declare (type function %step %read-string %pos %key-fn))

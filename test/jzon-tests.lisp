@@ -725,6 +725,73 @@
       (is (= value 24)))
     (is (null (jzon:parse-next parser)))))
 
+(test parse-next-element-basics
+  (jzon:with-parser (p "[1,2,3]")
+    (is (eq :begin-array (jzon:parse-next p)))
+    (is (= 1 (jzon:parse-next-element p)))
+    (is (= 2 (jzon:parse-next-element p)))
+    (is (= 3 (jzon:parse-next-element p)))
+    (is (null (jzon:parse-next-element p nil nil)))
+    (is (eq nil (jzon:parse-next p)))))
+
+(test parse-next-element-nested-array-in-array
+  (jzon:with-parser (p "[[1,2,3]]")
+    (is (eq :begin-array (jzon:parse-next p)))
+    (is (equalp #(1 2 3) (jzon:parse-next-element p)))
+    (is (eq :end-array (jzon:parse-next p)))))
+
+(test parse-next-element-nested-object-in-array
+  (jzon:with-parser (p "[{\"x\":42}]")
+    (is (eq :begin-array (jzon:parse-next p)))
+    (is (equalp (ph "x" 42) (jzon:parse-next-element p)))
+    (is (eq :end-array (jzon:parse-next p)))))
+
+(test parse-next-element-nested-array-in-object
+  (jzon:with-parser (p "{\"foo\":[1,2,3]}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (equalp #(1 2 3) (jzon:parse-next-element p)))
+    (is (eq :end-object (jzon:parse-next p)))))
+
+(test parse-next-element-nested-object-in-object
+  (jzon:with-parser (p "{\"foo\":{\"x\":42}}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (equalp (ph "x" 42) (jzon:parse-next-element p)))
+    (is (eq :end-object (jzon:parse-next p)))))
+
+(test parse-next-element-errors-on-bad-position-begin-object
+  (jzon:with-parser (p "{\"x\":0}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (signals (error) (jzon:parse-next-element p))))
+
+(test parse-next-element-errors-on-bad-position-after-property
+  (jzon:with-parser (p "{\"x\":0,\"y\":1}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (signals (error) (jzon:parse-next-element p))))
+
+(test parse-next-element-errors-on-bad-position-after-toplevel
+  (jzon:with-parser (p "{\"x\":0,\"y\":1}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (is (eq :end-object (jzon:parse-next p)))
+    (signals (error) (jzon:parse-next-element p))))
+
+(test parse-next-element-allows-after-toplevel-when-multiple-content
+  (jzon:with-parser (p "{\"x\":0,\"y\":1}" :allow-multiple-content t)
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (is (eq :end-object (jzon:parse-next p)))
+    (is (null (jzon:parse-next-element p nil nil)))))
+
 (test multi-close-ok
   (jzon:with-parser (parser "{}")
     (jzon:close-parser parser)
