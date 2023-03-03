@@ -672,6 +672,14 @@ see `make-parser'
 see `next'
 see `close-parser'"))
 
+(defclass %span ()
+  ((%vector :initarg :vector)
+   (%start :initarg :start)
+   (%end :initarg :end)))
+
+(defclass %string-span (%span) ())
+(defclass %octet-vector-span (%span) ())
+
 (declaim (inline %make-fns))
 (defun %make-fns (in max-string-length)
   "Create the step, read-string, and pos functions for `in'.
@@ -1020,14 +1028,6 @@ see `close-parser'"
             (:object-key    (push value key))
             (:end-object    (decf depth)
                             (finish-value (pop stack)))))))))
-
-(defclass %span ()
-  ((%vector :initarg :vector)
-   (%start :initarg :start)
-   (%end :initarg :end)))
-
-(defclass %string-span (%span) ())
-(defclass %octet-vector-span (%span) ())
 
 (defun span (in &key (start 0) end)
   "Define a bounded sequence in `in' for use in `parse' and `make-parser' with a `start' and `end'."
