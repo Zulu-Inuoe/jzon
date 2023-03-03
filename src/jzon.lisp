@@ -899,7 +899,7 @@ see `close-parser'"
                               (values :end-object nil))
             (#.(char "\"" 0)  (setf (%parser-state-state %parser-state) 'after-read-key)
                               (push 'after-read-property (%parser-state-context %parser-state))
-                              (values :object-key (%key-fn %key-fn (%read-string %read-string)) nil))
+                              (values :object-key (%key-fn %key-fn (%read-string %read-string))))
             (t                (%raise 'json-parse-error %pos "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc))))))
       (after-read-key
         (let ((lc (%skip-whitespace %step %pos (%step %step) %allow-comments)))

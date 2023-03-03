@@ -4,6 +4,7 @@
 
 Changes relative to [v1.0.0](#v100)
 
+* bugfix - `jzon:parse-next` no longer returns 3 values on `:object-key`
 * Add `jzon:span` for easier subsequence support for `jzon:parse` and `jzon:parser` https://github.com/Zulu-Inuoe/jzon/issues/30
 * `jzon:parse-next` no longer 'over-reads' strings, objects, and arrays.
 * `allow-multiple-content` in reader functions now prevents jzon from scanning content after the toplevel object to signal error. Can be used to support formats like [JSON Lines][json-lines].

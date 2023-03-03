@@ -883,6 +883,11 @@
   (jzon:with-parser (p "1234\"" :allow-multiple-content t)
     (is (eq :value (jzon:parse-next p)))))
 
+(test parse-next-return-2-values-on-object-key
+  (jzon:with-parser (p "{\"x\":42}")
+    (jzon:parse-next p)
+    (is (equalp '(:object-key "x") (multiple-value-list (jzon:parse-next p))))))
+
 (def-suite writer :in jzon)
 (in-suite writer)
 
