@@ -416,6 +416,10 @@
     (#(1 2 3)          (jzon:parse (utf-8 "[1,2,3]")))
     ((ph "x" 10 "y" 0) (jzon:parse (utf-8 "{ \"x\": 10, \"y\": 0}")))))
 
+(test octet-vector-decodes-utf-8
+  (is (equalp #("λlambda" "💩poop")
+              (jzon:parse (utf-8 "[\"λlambda\",  \"💩poop\"]")))))
+
 
 (test parse-accepts-binary-stream
   (flet ((jzon:parse (str)
