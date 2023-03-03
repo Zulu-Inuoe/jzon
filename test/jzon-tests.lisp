@@ -420,7 +420,6 @@
   (is (equalp #("λlambda" "💩poop")
               (jzon:parse (utf-8 "[\"λlambda\",  \"💩poop\"]")))))
 
-
 (test parse-accepts-binary-stream
   (flet ((jzon:parse (str)
            (jzon:parse (fs:make-in-memory-input-stream (fs:string-to-octets str)))))
@@ -495,6 +494,21 @@
 (test parse-limits-max-string-length-with-escape-codes
   (signals (jzon:json-parse-limit-error)
     (jzon:parse "\"This is a string that is too long\bwith some special codes \\u00f8\"" :max-string-length 5)))
+
+(test parse-reports-correct-position-when-encountering-control-char-in-string
+  (handler-case (jzon:parse (concatenate 'string "\"null:" (string (code-char 0)) "\""))
+    (jzon:json-parse-error (e)
+      (is (= 7 (jzon::%json-parse-error-column e))))))
+
+(test parse-reports-correct-position-when-encountering-eof-in-string
+  (handler-case (jzon:parse "\"null:")
+    (jzon:json-eof-error (e)
+      (is (= 6 (jzon::%json-parse-error-column e))))))
+
+(test parse-reports-correct-position-when-encountering-max-string-length-in-string
+  (handler-case (jzon:parse "\"null:" :max-string-length 2)
+    (jzon:json-parse-error (e)
+      (is (= 4 (jzon::%json-parse-error-column e))))))
 
 ;; TODO - pull this hardcode into a constant we can expose from jzon
 (test parse-max-string-length-accepts-nil-for-no-limit
