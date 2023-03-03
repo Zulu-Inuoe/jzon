@@ -2080,12 +2080,12 @@ see `write-object'"
        (let ((name (typecase value
                      (json-atom (%stringify-atom value))
                      (t         (error "Cannot coerce '~A' into type ~A" value type)))))
-         (intern name '#:keyword)))
+         (values (intern name '#:keyword))))
       ((eq type-name 'symbol)
        (let ((name (typecase value
                      (json-atom (%stringify-atom value))
                      (t         (error "Cannot coerce '~A' into type ~A" value type)))))
-         (intern name)))
+         (values (intern name))))
       (t
        (let ((class (find-class type nil)))
          (unless class (error "Cannot coerce '~A' to ~A." value type))
