@@ -1872,7 +1872,8 @@ see `write-object'"
 
 (defun %read-json-number-from-string (value)
   (with-input-from-string (s value)
-    (%read-json-number (lambda () (read-char s nil)) (read-char s nil))))
+    (let ((c (read-char s nil)))
+      (and c (%read-json-number (lambda () (read-char s nil)) c)))))
 
 (defun %convert (value type)
   (let* ((exp-type (ie:typexpand type))
