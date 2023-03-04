@@ -311,6 +311,19 @@
   (is (equalp (ph "lambdaλlambda" "poop💩poop")
               (jzon:parse "{\"lambda\\u03BBlambda\":\"poop\\ud83d\\udca9poop\"}"))))
 
+(test signals-eof-in-unicode-escape
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud83d\\udca"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud83d\\udc"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud83d\\ud"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud83d\\u"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud83d\\"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud83d"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud83"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud8"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\ud"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\u"))
+  (signals jzon:json-eof-error (jzon:parse "\"\\")))
+  
 (test parse-pools-keys
   (let* ((objects (jzon:parse "[{\"x\": 5}, {\"x\": 10}, {\"x\": 15}]"))
          (keys (map 'list #'hash-table-keys objects))

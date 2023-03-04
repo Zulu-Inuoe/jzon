@@ -4,6 +4,7 @@
 
 Changes relative to [v1.0.0](#v100)
 
+* bugfix - signal `jzon:json-eof-error` when we encounter an incomplete unicode escape sequence such as `\uAD`. Used to signal `cl:type-error`.
 * bugfix - `jzon:parse-next` no longer returns 3 values on `:object-key`
 * Add `jzon:span` for easier subsequence support for `jzon:parse` and `jzon:parser` https://github.com/Zulu-Inuoe/jzon/issues/30
 * `jzon:parse-next` no longer 'over-reads' strings, objects, and arrays.
