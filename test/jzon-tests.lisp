@@ -1724,20 +1724,20 @@ break\"]")))
 (in-suite convert)
 
 (test convert-fails-on-nil
-  (signals (error) (jzon:convert "null"       nil))
-  (signals (error) (jzon:convert "false"      nil))
-  (signals (error) (jzon:convert "true"       nil))
-  (signals (error) (jzon:convert "\"str\""    nil))
-  (signals (error) (jzon:convert "[1,2]"      nil))
-  (signals (error) (jzon:convert "{\"x\":0}"  nil)))
+  (signals (jzon:json-convert-error) (jzon:convert "null"       nil))
+  (signals (jzon:json-convert-error) (jzon:convert "false"      nil))
+  (signals (jzon:json-convert-error) (jzon:convert "true"       nil))
+  (signals (jzon:json-convert-error) (jzon:convert "\"str\""    nil))
+  (signals (jzon:json-convert-error) (jzon:convert "[1,2]"      nil))
+  (signals (jzon:json-convert-error) (jzon:convert "{\"x\":0}"  nil)))
 
 (test convert-fails-on-empty-or
-  (signals (error) (jzon:convert "null"       '(or)))
-  (signals (error) (jzon:convert "false"      '(or)))
-  (signals (error) (jzon:convert "true"       '(or)))
-  (signals (error) (jzon:convert "\"str\""    '(or)))
-  (signals (error) (jzon:convert "[1,2]"      '(or)))
-  (signals (error) (jzon:convert "{\"x\":0}"  '(or))))
+  (signals (jzon:json-convert-error) (jzon:convert "null"       '(or)))
+  (signals (jzon:json-convert-error) (jzon:convert "false"      '(or)))
+  (signals (jzon:json-convert-error) (jzon:convert "true"       '(or)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"str\""    '(or)))
+  (signals (jzon:json-convert-error) (jzon:convert "[1,2]"      '(or)))
+  (signals (jzon:json-convert-error) (jzon:convert "{\"x\":0}"  '(or))))
 
 (test convert-noop-on-t
   (is (eql 'null          (jzon:convert "null"      t)))
@@ -1756,12 +1756,12 @@ break\"]")))
   (is (equalp (ph "x" 0)  (jzon:convert "{\"x\":0}" '(and)))))
 
 (test convert-to-null-only-accepts-null
-  (is       (eql nil  (jzon:convert "null"      'null)))
-  (signals  (error)   (jzon:convert "false"     'null))
-  (signals  (error)   (jzon:convert "true"      'null))
-  (signals  (error)   (jzon:convert "\"str\""   'null))
-  (signals  (error)   (jzon:convert "[1,2]"     'null))
-  (signals  (error)   (jzon:convert "{\"x\":0}" 'null)))
+  (is (eql nil (jzon:convert "null" 'null)))
+  (signals  (jzon:json-convert-error)   (jzon:convert "false"     'null))
+  (signals  (jzon:json-convert-error)   (jzon:convert "true"      'null))
+  (signals  (jzon:json-convert-error)   (jzon:convert "\"str\""   'null))
+  (signals  (jzon:json-convert-error)   (jzon:convert "[1,2]"     'null))
+  (signals  (jzon:json-convert-error)   (jzon:convert "{\"x\":0}" 'null)))
 
 (test convert-coerces-during-eql
   (is (eql 42 (jzon:convert "42"      '(eql 42))))
@@ -1776,28 +1776,28 @@ break\"]")))
   (is (eql #\f (jzon:convert "\"f\""  '(member #\a #\f)))))
 
 (test convert-error-on-empty-eql
-  (signals (error)  (jzon:convert "null"      '(eql)))
-  (signals (error)  (jzon:convert "false"     '(eql)))
-  (signals (error)  (jzon:convert "true"      '(eql)))
-  (signals (error)  (jzon:convert "\"str\""   '(eql)))
-  (signals (error)  (jzon:convert "[1,2]"     '(eql)))
-  (signals (error)  (jzon:convert "{\"x\":0}" '(eql))))
+  (signals (error) (jzon:convert "null"      '(eql)))
+  (signals (error) (jzon:convert "false"     '(eql)))
+  (signals (error) (jzon:convert "true"      '(eql)))
+  (signals (error) (jzon:convert "\"str\""   '(eql)))
+  (signals (error) (jzon:convert "[1,2]"     '(eql)))
+  (signals (error) (jzon:convert "{\"x\":0}" '(eql))))
 
 (test convert-error-on-empty-member
-  (signals (error)  (jzon:convert "null"      '(member)))
-  (signals (error)  (jzon:convert "false"     '(member)))
-  (signals (error)  (jzon:convert "true"      '(member)))
-  (signals (error)  (jzon:convert "\"str\""   '(member)))
-  (signals (error)  (jzon:convert "[1,2]"     '(member)))
-  (signals (error)  (jzon:convert "{\"x\":0}" '(member))))
+  (signals (jzon:json-convert-error) (jzon:convert "null"      '(member)))
+  (signals (jzon:json-convert-error) (jzon:convert "false"     '(member)))
+  (signals (jzon:json-convert-error) (jzon:convert "true"      '(member)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"str\""   '(member)))
+  (signals (jzon:json-convert-error) (jzon:convert "[1,2]"     '(member)))
+  (signals (jzon:json-convert-error) (jzon:convert "{\"x\":0}" '(member))))
 
 (test convert-on-disjoint-types-fails
-  (signals  (error) (jzon:convert "null" '(and integer string)))
-  (signals  (error) (jzon:convert "false" '(and integer string)))
-  (signals  (error) (jzon:convert "true" '(and integer string)))
-  (signals  (error) (jzon:convert "\"str\"" '(and integer string)))
-  (signals  (error) (jzon:convert "[1,2]" '(and integer string)))
-  (signals  (error) (jzon:convert "{\"x\":0}" '(and integer string))))
+  (signals (jzon:json-convert-error) (jzon:convert "null" '(and integer string)))
+  (signals (jzon:json-convert-error) (jzon:convert "false" '(and integer string)))
+  (signals (jzon:json-convert-error) (jzon:convert "true" '(and integer string)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"str\"" '(and integer string)))
+  (signals (jzon:json-convert-error) (jzon:convert "[1,2]" '(and integer string)))
+  (signals (jzon:json-convert-error) (jzon:convert "{\"x\":0}" '(and integer string))))
 
 (test convert-on-overlapping-types-succeeds
   (is (eql 42 (jzon:convert "42" '(and integer (satisfies evenp))))))
@@ -1819,8 +1819,7 @@ break\"]")))
     (is (= 2 (slot-value res 'c)))))
 
 (test convert-null-boolean-signals
-  (signals (error)
-    (jzon:convert "null" 'boolean)))
+  (signals (jzon:json-convert-error) (jzon:convert "null" 'boolean)))
 
 (test convert-nil-boolean
   (is (eq nil (jzon:convert "false" 'boolean))))
@@ -1838,10 +1837,10 @@ break\"]")))
   (is (eq t (jzon:convert "1.5" 'boolean))))
 
 (test convert-signal-non-bool-string-boolean
-  (signals (error) (jzon:convert "\"hello\""))
-  (signals (error) (jzon:convert "[]"))
-  (signals (error) (jzon:convert "{}"))
-  (signals (error) (jzon:convert "\"null\"")))
+  (signals (jzon:json-convert-error) (jzon:convert "\"hello\"" 'boolean))
+  (signals (jzon:json-convert-error) (jzon:convert "[]" 'boolean))
+  (signals (jzon:json-convert-error) (jzon:convert "{}" 'boolean))
+  (signals (jzon:json-convert-error) (jzon:convert "\"null\"" 'boolean)))
 
 (test convert-false-string-boolean
   (is (eq nil (jzon:convert "\"false\"" 'boolean))))
@@ -1850,19 +1849,19 @@ break\"]")))
   (is (eq t (jzon:convert "\"true\"" 'boolean))))
 
 (test convert-embedded-false-string-signals
-  (signals (error) (jzon:convert "\"\\\"false\\\"\"" 'boolean)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"\\\"false\\\"\"" 'boolean)))
 
 (test convert-embedded-true-string-signals
-  (signals (error) (jzon:convert "\"\\\"true\\\"\"" 'boolean)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"\\\"true\\\"\"" 'boolean)))
 
 (test convert-null-integer-signals
-  (signals (error) (jzon:convert "null" 'integer)))
+  (signals (jzon:json-convert-error) (jzon:convert "null" 'integer)))
 
 (test convert-nil-integer-signals
-  (signals (error) (jzon:convert "false" 'integer)))
+  (signals (jzon:json-convert-error) (jzon:convert "false" 'integer)))
 
 (test convert-t-integer-signals
-  (signals (error) (jzon:convert "true" 'integer)))
+  (signals (jzon:json-convert-error) (jzon:convert "true" 'integer)))
 
 (test convert-0-integer
   (is (= 0 (jzon:convert "0" 'integer))))
@@ -1871,7 +1870,7 @@ break\"]")))
   (is (= 1 (jzon:convert "1" 'integer))))
 
 (test convert-1.5-integer-signals
-  (signals (error) (jzon:convert "1.5" 'integer)))
+  (signals (jzon:json-convert-error) (jzon:convert "1.5" 'integer)))
 
 (test convert-0-string-integer
   (is (= 0 (jzon:convert "\"0\"" 'integer))))
@@ -1880,22 +1879,22 @@ break\"]")))
   (is (= 1 (jzon:convert "\"1\"" 'integer))))
 
 (test convert-1.5-string-integer-signals
-  (signals (error) (jzon:convert "\"1.5\"" 'integer)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"1.5\"" 'integer)))
 
 (test convert-embedded-0-string-integer
-  (signals (error) (jzon:convert "\"\\\"0\\\"\"" 'integer)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"\\\"0\\\"\"" 'integer)))
 
 (test convert-embedded-1-string-integer
-  (signals (error) (jzon:convert "\"\\\"1\\\"\"" 'integer)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"\\\"1\\\"\"" 'integer)))
 
 (test convert-null-double-float-signals
-  (signals (error) (jzon:convert "null" 'double-float)))
+  (signals (jzon:json-convert-error) (jzon:convert "null" 'double-float)))
 
 (test convert-nil-double-float-signals
-  (signals (error) (jzon:convert "false" 'double-float)))
+  (signals (jzon:json-convert-error) (jzon:convert "false" 'double-float)))
 
 (test convert-t-double-float-signals
-  (signals (error) (jzon:convert "true" 'double-float)))
+  (signals (jzon:json-convert-error) (jzon:convert "true" 'double-float)))
 
 (test convert-0-double-float
   (is (= 0d0 (jzon:convert "0" 'double-float))))
@@ -1916,10 +1915,10 @@ break\"]")))
   (is (= 1.5d0 (jzon:convert "\"1.5\"" 'double-float))))
 
 (test convert-embedded-0-string-double-float
-  (signals (error) (jzon:convert "\"\\\"0\\\"\"" 'double-float)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"\\\"0\\\"\"" 'double-float)))
 
 (test convert-embedded-1-string-double-float
-  (signals (error) (jzon:convert "\"\\\"1\\\"\"" 'double-float)))
+  (signals (jzon:json-convert-error) (jzon:convert "\"\\\"1\\\"\"" 'double-float)))
 
 (test convert-nil-string
   (is (string= "false" (jzon:convert "false" 'string))))
@@ -1952,10 +1951,10 @@ break\"]")))
   (is (string= "1.5" (jzon:convert "\"1.5\"" 'string))))
 
 (test convert-array-string-signals
-  (signals (error) (jzon:convert "[]" 'string)))
+  (signals (jzon:json-convert-error) (jzon:convert "[]" 'string)))
 
 (test convert-hash-table-string-signals
-  (signals (error) (jzon:convert "{}" 'string)))
+  (signals (jzon:json-convert-error) (jzon:convert "{}" 'string)))
 
 (test convert-array-array
   (is (equalp #() (jzon:convert "[]" 'array)))

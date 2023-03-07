@@ -29,6 +29,7 @@
    #:json-write-error
    #:json-write-limit-error
    #:json-recursive-write-error
+   #:json-convert-error
 
    ;; Simple extensible writing and converting
    #:object-slot-name
@@ -131,6 +132,11 @@
 
 (define-condition json-eof-error (json-parse-error) ()
   (:documentation "Error signalled when reaching the end of file while parsing JSON."))
+
+
+(define-condition json-convert-error (json-error type-error)
+  ()
+  (:documentation "Error occuring while using `convert' to convert JSON text to a CL value."))
 
 (deftype json-atom ()
   "A 'native' atomic JSON value one can receive from `parse'.
@@ -1875,30 +1881,36 @@ see `write-object'"
     (let ((c (read-char s nil)))
       (and c (%read-json-number (lambda () (read-char s nil)) c)))))
 
+(declaim (inline %json-convert-error))
+(defun %json-convert-error (datum type)
+  (error 'json-convert-error :format-control "~A cannot be converted to type ~A." :format-arguments (list datum type) :datum datum :expected-type type))
+
 (defun %convert (value type)
-  (let* ((exp-type (ie:typexpand type))
+  (let* ((exp-type (handler-case (ie:typexpand type)
+                     (error () (error "bad type specifier ~A" type))))
          (type-name (if (atom exp-type) exp-type (car exp-type)))
          (type-args (if (atom exp-type) () (cdr exp-type))))
     (cond
       ;;; Handle all of the 'special' compound types
-      ((eq type-name  'values)      (error "Cannot convert '~A' to type ~A." value type))
+      ((eq type-name  'values)      (%json-convert-error value type))
 
       ((or (eq type-name 'eql)
            (eq type-name 'member))
         (when (null type-args)
           (if (eq type-name 'eql)
-            (error "Illegal type specifier '~A'" type)
-            (error "Cannot convert '~A' to empty type. ~A" value type)))
+            (error "bad type specifier ~A" type)
+            (%json-convert-error value type)))
 
-        (dolist (eql-value type-args (error "~A can't be converted to type ~A" value type))
+        (dolist (eql-value type-args (%json-convert-error value type))
           (let ((coerced-value (typecase eql-value
-                                 ;; w/ ignore-errors, we know it will be nil
+                                 ;; w/ returning nil for conversion failures,
+                                 ;; for integer, float, character we know it will be nil
                                  ;; in all cases where it is NOT a symbol
                                  ;; so we won't accidentlaly match the symbol nil
-                                 (integer    (ignore-errors (%convert value 'integer)))
-                                 (float      (ignore-errors (float (%convert value 'float) eql-value)))
-                                 (character  (ignore-errors (%convert value 'character)))
-                                 ;; Handle nil/t
+                                 (integer    (handler-case (%convert value 'integer) (json-convert-error () nil)))
+                                 (float      (handler-case (float (%convert value 'float) eql-value) (json-convert-error () nil)))
+                                 (character  (handler-case (%convert value 'character) (json-convert-error () nil)))
+                                 ;; Handle nil/t per boolean coercion rules
                                  ((eql nil)  (if (or (eql value nil)
                                                      (and (numberp value) (zerop value))
                                                      (and (stringp value) (string-equal value "false")))
@@ -1924,7 +1936,7 @@ see `write-object'"
       ((or (eq type-name 'atom)
            (eq type-name 'not)
            (eq type-name 'satisfies))
-        (unless (typep value type) (error "~A can't be converted to type ~A" value type))
+        (unless (typep value type) (%json-convert-error value type))
         value)
 
       ((eq type-name 'and)
@@ -1936,30 +1948,30 @@ see `write-object'"
                  (coerced (%convert value main-type))
                  (no-fits (remove coerced (rest types) :test #'typep)))
             (when no-fits
-              (error "Coercing 'and' - Value '~A' coerced to '~A' via '~A' fails constraint for ~A" value coerced main-type no-fits))
+              (%json-convert-error value type))
             (values coerced no-fits))))
 
       ((eq type-name 'or)
         (if (null type-args)  ; (or) is nil
-          (error "Cannot convert '~A' to empty type. ~A" value type)
+          (%json-convert-error value type)
           ;; TODO - Should we try and be nice and order the types for them?
           ;; there's no absolute ordering of types, but at least within some group
           ;; we can try and be helpful (eg if we are given (or number float ladder)
           ;; we can try for float before number, and UB with the order of ladder
           ;; or maybe it's best to leave it in the order it comes in as the user can control it
-          (dolist (type type-args (error "Coercing 'or' - '~A' is not any of ~{~A~^, ~}" value type-args))
+          (dolist (type type-args (%json-convert-error value type))
             (multiple-value-bind (value errorp) (ignore-errors (%convert value type))
               (unless errorp
                 (return value))))))
 
       ((eq t    type-name)  value)
-      ((eq nil  type-name)  (error "Cannot convert '~A' to empty type. ~A" value type))
+      ((eq nil  type-name)  (%json-convert-error value type))
 
       ;; 'Native' JSON types
       ((eq 'null  type-name)
         (cond
           ((eq value 'null) nil)
-          (t                (error "Cannot coerce '~A' to ~A" value type))))
+          (t                (%json-convert-error value type))))
 
       ;; Boolean has special logic regarding things
       ;; like strings and numbers
@@ -1971,37 +1983,37 @@ see `write-object'"
           ((stringp value)  (cond
                               ((string-equal value "true")  t)
                               ((string-equal value "false") nil)
-                              (t                            (error "Cannot coerce '~A' to type ~A." value type))))
-          (t                (error "Cannot coerce '~A' to type ~A." value type))))
+                              (t                            (%json-convert-error value type))))
+          (t                (%json-convert-error value type))))
 
       ((subtypep type 'number)
         (typecase value
-          (string (coerce (or (%read-json-number-from-string value)
-                              (error "Cannot coerce '~A' to type ~A." value type))
-                           type))
-          (number (coerce value type))
+          (string (handler-case (coerce (%read-json-number-from-string value) type)
+                    (type-error () (%json-convert-error value type))))
+          (number (handler-case (coerce value type)
+                    (type-error () (%json-convert-error value type))))
           (vector
-            (unless (and (eq type-name 'complex)
-                         (= (length value) 2))
-              (error "Cannot coerce '~A' into type ~A." value type))
-            (let ((realpart (%convert (aref value 0) 'real))
-                  (imagpart (%convert (aref value 1) 'real)))
-              (complex realpart imagpart)))
-          (t  (error "Cannot coerce '~A' into type ~A." value type))))
+            (if (and (eq type-name 'complex)
+                     (= (length value) 2))
+              (let ((realpart (%convert (aref value 0) 'real))
+                    (imagpart (%convert (aref value 1) 'real)))
+                (complex realpart imagpart))
+              (%json-convert-error value type)))
+          (t  (%json-convert-error value type))))
 
       ((subtypep type 'string)
         (let ((value (typecase value
                        (json-atom (%stringify-atom value))
-                       (t (error "Cannot coerce '~A' to type ~A." value type)))))
+                       (t (%json-convert-error value type)))))
           (coerce value type)))
       ((eq type-name 'simple-vector)
         (unless (vectorp value)
-          (error "Cannot coerce '~A' into type ~A" value type))
+          (%json-convert-error value type))
         ;; need to make sure len matches
         (coerce value type))
       ((eq type-name 'hash-table)
         (unless (hash-table-p value)
-          (error "Cannot coerce '~A' into type ~A" value type))
+          (%json-convert-error value type))
         value)
 
       ;; Note, we handle strings separately because
@@ -2039,7 +2051,7 @@ see `write-object'"
                             (cond
                               ((null dimensions) (%convert x elt-type))
                               (t
-                                (unless (typep x 'sequence) (error "Cannot coerce '~A' into type ~A" value type))
+                                (unless (typep x 'sequence) (%json-convert-error value type))
                                 (let* ((dimension (car dimensions))
                                        (dimension (if (eq dimension '*) (length x) dimension)))
                                   (unless (or (integerp dimension) (eq '* dimension))
@@ -2061,37 +2073,37 @@ see `write-object'"
         (coerce
           (typecase value
             (json-atom (%stringify-atom value))
-            (t         (error "Cannot coerce '~A' into type ~A" value type)))
+            (t         (%json-convert-error value type)))
           type))
       ((subtypep type 'sequence)
         (unless (vectorp value)
-          (error "Cannot coerce '~A' into type ~A" value type))
+          (%json-convert-error value type))
         (coerce value type))
       ((eq type-name 'package)
         (let ((name (typecase value
                      (json-atom (%stringify-atom value))
-                     (t         (error "Cannot coerce '~A' into type ~A" value type)))))
+                     (t         (%json-convert-error value type)))))
          (or (find-package name)
-             (error "Cannot coerce '~A' into type ~A (package does not exist)." value type))))
+             (%json-convert-error value type))))
       ((eq type-name 'pathname)
        (values (parse-namestring (typecase value
                                    (json-atom (%stringify-atom value))
-                                   (t         (error "Cannot coerce '~A' into type ~A" value type))))))
+                                   (t         (%json-convert-error value type))))))
       ((eq type-name 'keyword)
        (let ((name (typecase value
                      (json-atom (%stringify-atom value))
-                     (t         (error "Cannot coerce '~A' into type ~A" value type)))))
+                     (t         (%json-convert-error value type)))))
          (values (intern name '#:keyword))))
       ((eq type-name 'symbol)
        (let ((name (typecase value
                      (json-atom (%stringify-atom value))
-                     (t         (error "Cannot coerce '~A' into type ~A" value type)))))
+                     (t         (%json-convert-error value type)))))
          (values (intern name))))
       (t
        (let ((class (find-class type nil)))
-         (unless class (error "Cannot coerce '~A' to ~A." value type))
+         (unless class (%json-convert-error value type))
          #- (or ecl ccl sbcl)
-         (when (typep class 'structure-class) (error "Cannot coerce '~A' to ~A" value type))
+         (when (typep class 'structure-class) (%json-convert-error value type))
          (let ((instance (allocate-instance class)))
            (hydrate instance value)
            instance))))))
