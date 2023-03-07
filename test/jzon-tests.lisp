@@ -1618,8 +1618,7 @@ break\"]")))
                    "quote" "\""
                    "backslash" "\\"
                    "controls" "
-
-	"
+	"
                    "slash" "/ & /"
                    "alpha" "abcdefghijklmnopqrstuvwyz"
                    "ALPHA" "ABCDEFGHIJKLMNOPQRSTUVWYZ"
@@ -1641,8 +1640,7 @@ break\"]")))
                    "jsontext" "{\"object with 1 member\":[\"array with 1 element\"]}"
                    "quotes" "&#34; \" %22 0x22 034 &#x22;"
                    "/\\\"쫾몾ꮘﳞ볚
-
-	`1~!@#$%^&*()_+-=[]{}|;:',./<>?" "A key can be any string")
+	`1~!@#$%^&*()_+-=[]{}|;:',./<>?" "A key can be any string")
          0.5d0 98.6d0 99.44d0 1066 10.0d0 1.0d0 0.1d0 1.0d0 2.0d0 2.0d0 "rosebud")
        (jzon:parse "[
     \"JSON Test Pattern pass1\",
