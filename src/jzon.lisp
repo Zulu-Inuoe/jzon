@@ -243,64 +243,66 @@ see `json-atom'"
   (declare (type character c))
   (<= #x00 (char-code c) #x1F))
 
+(defun %read-unicode (step pos)
+  (declare (type function step pos))
+  ;; refer to ECMA-404, strings.
+  (macrolet ((%read-code-point ()
+              `(logior (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
+                               (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
+                           12)
+                      (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
+                               (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
+                           8)
+                      (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
+                               (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
+                           4)
+                      (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
+                               (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
+                           0))))
+    (let ((code-point (%read-code-point)))
+      (code-char
+       (if (<= #xD800 code-point #xDBFF)
+         (let ((hi code-point))
+           (let ((c (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading low surrogate pair in string"))))
+              (unless (char= #\\ c) (%raise 'json-parse-error pos "Expecting \\u after high surrogate pair, found '~A'" c)))
+           (let ((c (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading low surrogate pair in string"))))
+              (unless (char= #\u c) (%raise 'json-parse-error pos "Expecting \\u after high surrogate pair, found '\\~A'" c)))
+           (let ((lo (%read-code-point)))
+             (unless (<= #xDC00 lo #xDFFF)
+               (%raise 'json-parse-error pos "Unexpected UTF-16 surrogate pair: ~4,'0X and ~4,'0X" hi lo))
+             (logior  #x10000 (ash (- hi #xD800) 10) (- lo #xDC00))))
+         code-point)))))
+
 (defun %read-json-string (step pos string-accum max-string-length base-string-p)
   "Reads a JSON string step-wise using `step' until an unescaped double-quote.
  Returns a `simple-string' representing the string."
+  (declare (type function step pos))
   (declare (type (and string (not simple-string)) string-accum))
   (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
-  (labels ((interpret (char)
+  (labels ((interpret (char step pos)
              (cond
                ((char= #\\ char)
                 (let ((escaped (%step step)))
                   (case escaped
                     ((nil) (%raise 'json-eof-error pos "Unexpected end of input after '\\' in string"))
                     ((#.(char "\"" 0) #\\ #\/) escaped)
-                    (#\b #\Backspace)
-                    (#\f #\Page)
-                    (#\n #\Linefeed)
-                    (#\r #\Return)
-                    (#\t #\Tab)
-                    (#\u (read-unicode))
-                    (t (%raise 'json-parse-error pos "Invalid escape sequence in string '\\~A'" escaped)))))
+                    (#\b  #\Backspace)
+                    (#\f  #\Page)
+                    (#\n  #\Linefeed)
+                    (#\r  #\Return)
+                    (#\t  #\Tab)
+                    (#\u  (%read-unicode step pos))
+                    (t    (%raise 'json-parse-error pos "Invalid escape sequence in string '\\~A'" escaped)))))
                ((%control-char-p char)
                 (%raise 'json-parse-error pos "Unexpected control character in string '~A' (~A)" char (char-name char)))
-               (t char)))
-           (read-unicode ()
-             ;; refer to ECMA-404, strings.
-             (flet ((read-code-point ()
-                      (the (unsigned-byte 32)
-                           (loop :for offset :of-type (integer 0 4) :from 0 :below 4
-                                 :for weight :of-type (integer 1 4096) := #.(expt 16 3) :then (ash weight -4)
-                                 :for digit := (digit-char-p (%step step) 16)
-                                 :do (unless digit (%raise 'json-parse-error pos "Invalid unicode constant in string"))
-                                 :sum (the (unsigned-byte 32) (* digit weight)) :of-type (unsigned-byte 32))))
-                    (expect-char (char)
-                      (let ((c (%step step)))
-                        (unless (char= char c)
-                          (%raise 'json-parse-error pos "Expecting ~C, found ~C instead" char c)))))
-               (let ((code-point (read-code-point)))
-                 (declare (type (unsigned-byte 32) code-point))
-                 (code-char
-                  (if (<= #xD800 code-point #xDBFF)
-                      (let ((utf-16-high-surrogate-pair code-point))
-                        (expect-char #\\)
-                        (expect-char #\u)
-                        (let ((utf-16-low-surrogate-pair (read-code-point)))
-                          (declare (type (unsigned-byte 32) utf-16-low-surrogate-pair))
-                          (unless (<= #xDC00 utf-16-low-surrogate-pair #xDFFF)
-                            (%raise 'json-parse-error pos "Unexpected UTF-16 surrogate pair: ~A and ~A"
-                                    utf-16-high-surrogate-pair
-                                    utf-16-low-surrogate-pair))
-                          (+ #x010000
-                             (ash (- utf-16-high-surrogate-pair #xD800) 10)
-                             (- utf-16-low-surrogate-pair #xDC00))))
-                      code-point))))))
+               (t char))))
+    (declare (inline interpret))
     (loop :for next :of-type character := (or (%step step) (%raise 'json-eof-error pos "Encountered end of input inside string constant"))
           :until (char= #.(char "\"" 0) next)
           :do
              (when (= (fill-pointer string-accum) max-string-length)
                (%raise-limit 'json-parse-limit-error pos max-string-length "Maximum string length exceeded"))
-             (let ((interpreted (interpret next)))
+             (let ((interpreted (interpret next step pos)))
                (vector-push-extend interpreted string-accum)
                (when (and base-string-p (not (typep interpreted 'base-char)))
                  (setf base-string-p nil)))
@@ -314,107 +316,84 @@ see `json-atom'"
   "Reads an RFC 8259 number, starting with `c'."
   (declare (type function step))
   (declare (type character c))
-  (flet ((digit09-p (c &aux (val (- (char-code c) #.(char-code #\0))))
-           (and (<= 0 val 9) val))
-         (digit19-p (c &aux (val (- (char-code c) #.(char-code #\0))))
-           (and (<= 1 val 9) val)))
-    (declare (inline digit09-p digit19-p))
-    (macrolet ((takec (on-eof)
-                 "Take the next character, `go'ing to `label' on EOF or end of token"
+  (macrolet ((takec-or-fail ()
+               "Take the next character, `go'ing to `label' on EOF or end of token"
+               `(let ((c (%step step)))
+                  (if (or (null c) (%ends-token-p c)) (return (values nil c)) c)))
+               (digit-or-fail (c)
+                 `(let ((val (- (char-code ,c) #.(char-code #\0))))
+                   (if (<= 0 val 9) val (return (values nil ,c)))))
+               (takec-or-done ()
                  `(let ((c (%step step)))
-                    (when (or (null c) (%ends-token-p c))
-                      (setf lc c)
-                      (go ,on-eof))
-                    c)))
-      (prog ((sign 1)
-             (mantissa 0)
-             (exp10 0)
-             (exp-sign 1)
-             (exp-val 0)
-             (lc c))
-         (declare (type (member -1 1) sign))
-         (declare (type (integer 0) mantissa))
-         (declare (type integer exp10))
-         (declare (type (member -1 1) exp-sign))
-         (declare (type (integer 0) exp-val))
-         (declare (type (or null character) lc))
-         (let ((c c))
-           (when (char= c #\-)
-             (setf sign -1)
-             (setf c (takec fail)))
+                   (if (or (null c) (%ends-token-p c))
+                     (let ((exp10 (+ exp10 (* exp-sign exp-val))))
+                       (return  (values
+                                  (or (el:make-double mantissa exp10 (minusp sign))
+                                  (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
+                                  c)))
+                     c))))
+    (prog ((sign 1)
+           (mantissa 0)
+           (exp10 0)
+           (exp-sign 1)
+           (exp-val 0))
+       (declare (type (member -1 1) sign))
+       (declare (type (integer 0) mantissa))
+       (declare (type integer exp10))
+       (declare (type (member -1 1) exp-sign))
+       (declare (type (integer 0) exp-val))
+       (let ((c c))
+         (when (char= c #\-)
+           (setf sign -1)
+           (setf c (takec-or-fail)))
 
-           (when (char= c #\0)
-             (case (takec done-0)
-               (#\.       (go parse-frac))
-               ((#\e #\E) (go parse-exp))
-               (t         (go fail))))
+         (if (char= c #\0)
+           (let ((c (%step step)))
+             (cond
+                ((or (null c)
+                     (%ends-token-p c)) (return (values (if (plusp sign) 0 -0.0d0) c)))
+                ((char= c #\.)          (go parse-frac))
+                ((or (char= c #\e)
+                     (char= c #\E))     (go parse-exp))
+                (t                      (return (values nil c)))))
+           (setf mantissa (digit-or-fail c))))
 
-           (let ((digit (digit19-p c)))
-             (unless digit (go fail))
-             (setf mantissa digit)
-             (go parse-int)))
+     parse-int-loop
+       (let ((c (%step step)))
+         (cond
+          ((or (null c)
+               (%ends-token-p c)) (return (values (* mantissa sign) c)))
+          ((char= c #\.)          (go parse-frac))
+          ((or (char= c #\e)
+               (char= c #\E))     (go parse-exp))
+          (t
+            (setf mantissa (+ (* mantissa 10) (digit-or-fail c)))
+            (go parse-int-loop))))
 
-       done-0
-         (return (values (if (plusp sign) 0 -0.0d0) lc))
+     parse-frac
+       (let ((c (takec-or-fail)))
+         (setf mantissa (+ (* mantissa 10) (digit-or-fail c))))
 
-       parse-int
-         (let ((c (takec done-int)))
-           (case c
-             (#\.       (go parse-frac))
-             ((#\e #\E) (go parse-exp)))
-           (let ((digit (digit09-p c)))
-             (unless digit (go fail))
-             (setf mantissa (+ (* mantissa 10) digit))))
-         (go parse-int)
+     parse-frac-loop
+       (decf exp10)
+       (let ((c (takec-or-done)))
+         (when (or (char= c #\e) (char= c #\E))
+           (go parse-exp))
+         (setf mantissa (+ (* mantissa 10) (digit-or-fail c))))
+       (go parse-frac-loop)
 
-       done-int
-         (return (values (* mantissa sign) lc))
+     parse-exp
+       (let ((c (takec-or-fail)))
+         (case c
+           (#\- (setf c (takec-or-fail))
+                (setf exp-sign -1))
+           (#\+ (setf c (takec-or-fail))))
+         (setf exp-val (digit-or-fail c)))
 
-       parse-frac
-         (let* ((c (takec fail))
-                (digit (digit09-p c)))
-           (unless digit (go fail))
-           (setf mantissa (+ (* mantissa 10) digit))
-           (decf exp10))
-
-       parse-frac-loop
-         (let ((c (takec done)))
-           (when (or (char= c #\e) (char= c #\E))
-             (go parse-exp))
-           (let ((digit (digit09-p c)))
-             (unless digit (go fail))
-             (setf mantissa (+ (* mantissa 10) digit))
-             (decf exp10)))
-         (go parse-frac-loop)
-
-       parse-exp
-         (let ((c (takec fail)))
-           (case c
-             (#\-
-              (setf exp-sign -1)
-              (setf c (takec fail)))
-             (#\+
-              (setf c (takec fail))))
-           (let ((digit (digit09-p c)))
-             (unless digit (go fail))
-             (setf exp-val digit)))
-
-       parse-exp-loop
-        (let* ((c (takec done))
-               (digit (digit09-p c)))
-           (unless digit (go fail))
-           (setf exp-val (+ (* exp-val 10) digit)))
-         (go parse-exp-loop)
-
-       done
-         (setf exp10 (+ exp10 (* exp-sign exp-val)))
-         (return
-             (values
-                (or (el:make-double mantissa exp10 (minusp sign))
-                    (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
-                lc))
-       fail
-         (return (values nil lc))))))
+     parse-exp-loop
+      (let ((c (takec-or-done)))
+         (setf exp-val (+ (* exp-val 10) (digit-or-fail c))))
+      (go parse-exp-loop))))
 
 (defun %calc-pos (step n)
   "Calculate line, column numbers by `step' ping through the input `n' times."
@@ -427,8 +406,7 @@ see `json-atom'"
         :do (case c
               (#\Linefeed (incf line) (setf col 1))
               (t (incf col)))
-        :finally
-           (return (values line col))))
+        :finally (return (values line col))))
 
 (macrolet ((def-make-string-fns (name type)
              `(defun ,name (in start end max-string-length)
@@ -448,46 +426,44 @@ see `json-atom'"
                                           ;; Track suitable element-type
                                           (loop
                                             :with base-string-p := t
-                                            :for j :from i
+                                            :for j :of-type (integer 1 (#.array-dimension-limit)) :from i
+                                            :for len :of-type (integer 0 (#.array-dimension-limit)) :from 0
                                             :do
                                               (when (<= end j)
+                                                (setf i end)
                                                 (%raise 'json-eof-error pos "Unexpected end of input when reading string."))
                                               (let ((c (char in j)))
                                                 (case c
                                                   (#.(char "\"" 0)
-                                                    (let ((len (- j i)))
-                                                      (when (< max-string-length len)
-                                                        (setf i (+ i (1+ max-string-length)))
-                                                        (%raise-limit 'json-parse-limit-error pos max-string-length "Maximum string length exceeded."))
-                                                      (return
-                                                        (prog1 (cond
-                                                                 ((zerop len) "")
-                                                                 (base-string-p
-                                                                   (loop :with ret := (make-array len :element-type 'base-char)
-                                                                         :for k :from 0 :below len
-                                                                         :do (setf (char ret k) (char in (+ i k)))
-                                                                         :finally (return ret)))
-                                                                 (t
-                                                                   (loop :with ret := (make-array len :element-type 'character)
-                                                                         :for k :from 0 :below len
-                                                                         :do (setf (char ret k) (char in (+ i k)))
-                                                                         :finally (return ret))))
-                                                          (setf i (1+ j))))))
-                                                  (#\\ ;; we need to worry about escape sequences, unicode, etc.
-                                                    (let ((len (- j i)))
-                                                      (when (< max-string-length len)
-                                                        (setf i (+ i (1+ max-string-length)))
-                                                        (%raise-limit 'json-parse-limit-error pos max-string-length "Maximum string length exceeded."))
-
+                                                    (return
+                                                      (prog1 (cond
+                                                               ((zerop len) "")
+                                                               (base-string-p
+                                                                 (loop :with ret := (make-array len :element-type 'base-char)
+                                                                       :for k :from 0 :below len
+                                                                       :do (setf (char ret k) (char in (+ i k)))
+                                                                       :finally (return ret)))
+                                                               (t
+                                                                 (loop :with ret := (make-array len :element-type 'character)
+                                                                       :for k :from 0 :below len
+                                                                       :do (setf (char ret k) (char in (+ i k)))
+                                                                       :finally (return ret))))
+                                                        (setf i (1+ j)))))
+                                                  (#\\ 
+                                                      ;; we need to worry about escape sequences, unicode, etc.
                                                       ;; Copy over what we have so far
                                                       (when (< (array-dimension string-accum 0) len)
                                                         (adjust-array string-accum (* len 2)))
                                                       (setf (fill-pointer string-accum) len)
                                                       (replace string-accum in :start2 i :end2 j)
                                                       (setf i j)
-                                                      (return (%read-json-string step pos string-accum max-string-length base-string-p))))
+                                                      (return (%read-json-string step pos string-accum max-string-length base-string-p)))
                                                   (t
+                                                    (when (= max-string-length len)
+                                                      (setf i (1+ j))
+                                                      (%raise-limit 'json-parse-limit-error pos max-string-length "Maximum string length exceeded."))
                                                     (when (%control-char-p c)
+                                                      (setf i (1+ j))
                                                       (%raise 'json-parse-error pos "Unexpected control character in string '~A' (~A)" c (char-name c)))
 
                                                     (when (and base-string-p (not (typep c 'base-char)))
@@ -503,8 +479,7 @@ see `json-atom'"
   (declare (type (unsigned-byte 8) u1))
   (macrolet ((consume-octet ()
                `(let ((o (funcall (the (function () (values (unsigned-byte 8) &optional)) consume-octet))))
-                 (unless(< #x7f o #xc0) (error "Unexpected value #x~2,'0X in UTF-8 sequence." o))
-                 o)))
+                 (if (< #x7f o #xc0) o (error "Unexpected value #x~2,'0X in UTF-8 sequence." o)))))
     (cond
       ((< u1 #x80) (code-char u1))
       ((< u1 #xc0) (error "Unexpected value #x~2,'0X at start of UTF-8 sequence." u1))
@@ -550,55 +525,30 @@ see `json-atom'"
                                 ((and (= u1 #xfc) (< u2 #x84)) (error "Overlong UTF-8 sequence."))
                                 (t (error "Character out of range in UTF-8 sequence."))))))))))))))))))
 
-(defun %make-fns-simple-array-ub8 (in start end max-string-length)
-  (declare (type (simple-array (unsigned-byte 8) (*)) in))
-  (declare (type (integer 0 (#.array-dimension-limit)) start end))
-  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
-  (let ((i start))
-    (declare (type (integer 0 #.array-dimension-limit) i))
-    (let* ((consume-octet (lambda ()
-                            (if (< i end)
-                              (aref in (shiftf i (1+ i)))
-                              (error "End of data while in UTF-8 sequence."))))
-           (step (lambda ()
-                   (when (< i end)
-                     (%utf-8-decode (aref in (shiftf i (1+ i))) consume-octet))))
-           (pos (lambda () (%calc-pos step (- (shiftf i start) start))))
-           (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
-                          (lambda ()
-                            (setf (fill-pointer string-accum) 0)
-                            (%read-json-string step pos string-accum max-string-length t)))))
-      (values step read-string pos))))
-
-(defun %make-fns-array-ub8 (in start end max-string-length)
-  (declare (type (and (array (unsigned-byte 8) (*)) (not simple-array)) in))
-  (declare (type (integer 0 (#.array-dimension-limit)) start end))
-  (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
-  (let ((i start))
-    (declare (type (integer 0 #.array-dimension-limit) i))
-    (let* ((consume-octet (lambda ()
-                            (if (< i end)
-                              (aref in (shiftf i (1+ i)))
-                              (error "End of data while in UTF-8 sequence."))))
-           (step (lambda ()
-                   (when (< i end)
-                     (%utf-8-decode (aref in (shiftf i (1+ i))) consume-octet))))
-           (pos (lambda () (%calc-pos step (- (shiftf i start) start))))
-           (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
-                          (lambda ()
-                            (setf (fill-pointer string-accum) 0)
-                            (%read-json-string step pos string-accum max-string-length t)))))
-      (values step read-string pos))))
+(macrolet ((def-make-ub8-fns (name type)
+             `(defun ,name (in start end max-string-length)
+               (declare (type ,type in))
+               (declare (type (integer 0 (#.array-dimension-limit)) start end))
+               (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
+               (let ((i start))
+                 (declare (type (integer 0 #.array-dimension-limit) i))
+                 (let* ((consume-octet (lambda () (if (< i end) (aref in (shiftf i (1+ i))) (error "End of data while in UTF-8 sequence."))))
+                        (step (lambda () (when (< i end) (%utf-8-decode (aref in (shiftf i (1+ i))) consume-octet))))
+                        (pos (lambda () (%calc-pos step (- (shiftf i start) start))))
+                        (read-string (let ((string-accum (make-array (min 256 (1- array-dimension-limit)) :element-type 'character :adjustable t :fill-pointer 0)))
+                                       (lambda ()
+                                         (setf (fill-pointer string-accum) 0)
+                                         (%read-json-string step pos string-accum max-string-length t)))))
+                   (values step read-string pos))))))
+  (def-make-ub8-fns %make-fns-simple-array-ub8 (simple-array (unsigned-byte 8) (*)))
+  (def-make-ub8-fns %make-fns-array-ub8 (and (array (unsigned-byte 8) (*)) (not (simple-array (unsigned-byte 8) (*))))))
 
 (defun %make-fns-binary-stream (in max-string-length)
   (declare (type stream in))
   (declare (type (integer 1 (#.array-dimension-limit)) max-string-length))
   (let* ((consume-octet (lambda () (or (read-byte in nil nil)
                                        (error "End of data while in UTF-8 sequence."))))
-         (step (lambda ()
-                 (let ((u1 (read-byte in nil nil)))
-                   (when u1
-                     (%utf-8-decode u1 consume-octet)))))
+         (step (lambda () (let ((u1 (read-byte in nil nil))) (when u1 (%utf-8-decode u1 consume-octet)))))
          (pos (lambda ()
                 (let ((n (ignore-errors (file-position in))))
                   (if (and n (ignore-errors (file-position in 0)))
@@ -673,6 +623,14 @@ see `make-parser'
 see `next'
 see `close-parser'"))
 
+(defclass %span ()
+  ((%vector :initarg :vector)
+   (%start :initarg :start)
+   (%end :initarg :end)))
+
+(defclass %string-span (%span) ())
+(defclass %octet-vector-span (%span) ())
+
 (declaim (inline %make-fns))
 (defun %make-fns (in max-string-length)
   "Create the step, read-string, and pos functions for `in'.
@@ -693,6 +651,33 @@ see `%read-string'"
               (%octet-vector-span (with-slots (%vector %start %end) in
                                     (recurse %vector %start %end))))))
     (recurse in 0 nil)))
+
+(defun %make-string-pool ()
+  "Make a function for 'interning' strings in a pool."
+  (let ((pool (list "")))
+    (lambda (key)
+      (declare (type simple-string key))
+      (etypecase pool
+        (list
+          (loop :for elt :of-type simple-string :in pool
+                :for i :from 0
+                :do
+                  (when (string= key elt)
+                    (return elt))
+                  (when (> i 64) ;; had to search too long
+                    (let ((old pool)
+                          (new (make-hash-table :size (* i 2) :test 'equal)))
+                     (dolist (key old)
+                       (setf (gethash key new) key))
+                     (setf pool new))
+
+                     (return (or (gethash key pool)
+                                 (setf (gethash key pool) key))))
+                :finally (push key pool)
+                         (return key)))
+        (hash-table
+          (or (gethash key pool)
+              (setf (gethash key pool) key)))))))
 
 (defun make-parser (in &key
                       (allow-comments nil)
@@ -804,8 +789,7 @@ see `close-parser'"
                 (#\f              (expect "false" nil))
                 (#\t              (expect "true" t))
                 (#\n              (expect "null" 'null))
-                (t                (multiple-value-bind (number lookahead)
-                                      (%read-json-number %step lc)
+                (t                (multiple-value-bind (number lookahead) (%read-json-number %step lc)
                                     (unless number
                                       (if lookahead
                                         (%raise 'json-parse-error %pos "Unexpected character in JSON data '~C' (~A)" lookahead (char-name lookahead))
@@ -865,7 +849,7 @@ see `close-parser'"
                               (values :end-object nil))
             (#.(char "\"" 0)  (setf (%parser-state-state %parser-state) 'after-read-key)
                               (push 'after-read-property (%parser-state-context %parser-state))
-                              (values :object-key (%key-fn %key-fn (%read-string %read-string)) nil))
+                              (values :object-key (%key-fn %key-fn (%read-string %read-string))))
             (t                (%raise 'json-parse-error %pos "Unexpected character '~A' (~A) when reading object, expecting key" lc (char-name lc))))))
       (after-read-key
         (let ((lc (%skip-whitespace %step %pos (%step %step) %allow-comments)))
@@ -1022,33 +1006,6 @@ see `close-parser'"
             (:end-object    (decf depth)
                             (finish-value (pop stack)))))))))
 
-(defun %make-string-pool ()
-  "Make a function for 'interning' strings in a pool."
-  (let ((pool (list "")))
-    (lambda (key)
-      (declare (type simple-string key))
-      (etypecase pool
-        (list
-          (loop :for elt :of-type simple-string :in pool
-                :for i :from 0
-                :do
-                  (when (string= key elt)
-                    (return elt))
-                  (when (> i 64) ;; had to search too long
-                    (let ((old pool)
-                          (new (make-hash-table :size (* i 2) :test 'equal)))
-                     (dolist (key old)
-                       (setf (gethash key new) key))
-                     (setf pool new))
-
-                     (return (or (gethash key pool)
-                                 (setf (gethash key pool) key))))
-                :finally (push key pool)
-                         (return key)))
-        (hash-table
-          (or (gethash key pool)
-              (setf (gethash key pool) key)))))))
-
 (defun %parse (%step %read-string %pos %key-fn %max-depth %allow-comments %allow-trailing-comma %allow-multiple-content)
   (declare (type function %step %read-string %pos %key-fn))
   (declare (type (integer 1 #xFFFF) %max-depth))
@@ -1108,14 +1065,6 @@ see `close-parser'"
             (:object-key    (push value key))
             (:end-object    (decf depth)
                             (finish-value (pop stack)))))))))
-
-(defclass %span ()
-  ((%vector :initarg :vector)
-   (%start :initarg :start)
-   (%end :initarg :end)))
-
-(defclass %string-span (%span) ())
-(defclass %octet-vector-span (%span) ())
 
 (defun span (in &key (start 0) end)
   "Define a bounded sequence in `in' for use in `parse' and `make-parser' with a `start' and `end'."

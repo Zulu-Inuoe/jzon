@@ -379,7 +379,7 @@ An example to start:
     (jzon:write-key* :age)
     (jzon:write-value* 24)
     
-    (jzon:write-property :colour :blue)
+    (jzon:write-property* :colour :blue)
     
     (jzon:write-properties* :outside nil
                             :interests #()
