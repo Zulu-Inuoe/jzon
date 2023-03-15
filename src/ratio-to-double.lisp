@@ -14,6 +14,7 @@
 (defpackage #:com.inuoe.jzon/ratio-to-double
   (:use #:cl)
   (:local-nicknames
+    #-ecl
     (#:ff #:org.shirakumo.float-features))
   (:export
     #:ratio-to-double))
@@ -29,10 +30,16 @@
 ;;; lo result - 4 lo bits of hi arg: 28 lo bits of lo arg
 
 (defun %make-float-from-fixnums (hi lo exp sign)
-  (ff:bits-double-float (logior (ash (if (minusp sign) 1 0) 63)
-                                (ash (ldb (byte 11 0) exp)  52)
-                                (ash (ldb (byte 24 0) hi)   28)
-                                (ash (ldb (byte 28 0) lo)   00))))
+  (let ((bits (logior (ash (if (minusp sign) 1 0) 63)
+                      (ash (ldb (byte 11 0) exp)  52)
+                      (ash (ldb (byte 24 0) hi)   28)
+                      (ash (ldb (byte 28 0) lo)   00))))
+    #-ecl
+    (ff:bits-double-float bits)
+    #+ecl
+    (ffi:with-foreign-object (double-tmp :double)
+     (setf (ffi:deref-pointer double-tmp :uint64-t) bits)
+     (ffi:deref-pointer double-tmp :double))))
 
 (defun ratio-to-double (number
                         &aux

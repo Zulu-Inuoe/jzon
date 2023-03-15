@@ -1,6 +1,7 @@
 (defpackage #:com.inuoe.jzon/eisel-lemire
   (:use #:cl)
   (:local-nicknames
+    #-ecl
     (#:ff #:org.shirakumo.float-features))
   (:export #:make-double))
 
@@ -95,6 +96,15 @@
          (lo (ldb (byte 64 0) (* x y))))
     (values hi lo)))
 
+(defmacro %raw-int-bits-to-double (x)
+  #-ecl
+  `(ff:bits-double-float ,x)
+  #+ecl
+  (let ((double-tmp (gensym (string 'double-tmp))))
+    `(ffi:with-foreign-object (,double-tmp :double)
+      (setf (ffi:deref-pointer ,double-tmp :uint64-t) ,x)
+      (ffi:deref-pointer ,double-tmp :double))))
+
 (defun make-double (mantissa exp10 neg)
   (when (and (typep mantissa '(unsigned-byte 64))
              (typep exp10 '(signed-byte 32)))
@@ -138,4 +148,4 @@
                   ;;
                   (unless (>= (%uint64 (- ret-exp-2 1)) (- #x7FF 1))
                     (let ((ret-bits (logior (%<<u64 ret-exp-2 52) (logand ret-mantissa #x000FFFFFFFFFFFFF) (if neg #x8000000000000000 0))))
-                      (ff:bits-double-float ret-bits))))))))))))
+                      (%raw-int-bits-to-double ret-bits))))))))))))

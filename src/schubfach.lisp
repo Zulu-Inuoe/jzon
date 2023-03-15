@@ -18,6 +18,7 @@
 (defpackage #:com.inuoe.jzon/schubfach
   (:use #:cl)
   (:local-nicknames
+    #-ecl
     (#:ff #:org.shirakumo.float-features))
   (:export
     #:write-float
@@ -236,7 +237,13 @@
         (%write-positive-int-digits q1 (- pos 2) buf ds)))))
 
 (defmacro %float-to-raw-int-bits (x)
-  `(the (unsigned-byte 32) (ff:single-float-bits ,x)))
+  #-ecl
+  `(the (unsigned-byte 32) (ff:single-float-bits ,x))
+  #+ecl
+  (let ((float-tmp (gensym (string 'float-tmp))))
+    `(ffi:with-foreign-object (,float-tmp :float)
+      (setf (ffi:deref-pointer ,float-tmp :float) ,x)
+      (ffi:deref-pointer ,float-tmp :uint32-t))))
 
 (defun %write-float (x buf
                       &aux
@@ -430,7 +437,13 @@
       (+ pos 3))))
 
 (defmacro %double-to-raw-long-bits (x)
-  `(the (unsigned-byte 64) (ff:double-float-bits ,x)))
+  #-ecl
+  `(the (unsigned-byte 64) (ff:double-float-bits ,x))
+  #+ecl
+  (let ((double-tmp (gensym (string 'double-tmp))))
+    `(ffi:with-foreign-object (,double-tmp :double)
+      (setf (ffi:deref-pointer ,double-tmp :double) ,x)
+      (ffi:deref-pointer ,double-tmp :uint64-t))))
 
 (defun %write-double (x buf
                       &aux
