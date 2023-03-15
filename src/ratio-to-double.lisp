@@ -1,15 +1,3 @@
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (flet ((#1=#:|| (package)
-          (unless (find-package package)
-            (cond
-              ((and (find-package '#:ql) (find-symbol (string '#:quickload) '#:ql))
-                (funcall (find-symbol (string '#:quickload) '#:ql) package))
-              ((and (find-package '#:asdf) (find-symbol (string '#:load-system) '#:asdf))
-                (funcall (find-symbol (string '#:load-system) '#:asdf) package))
-              (t
-                (require package))))))
-    (#1# '#:float-features)))
-
 ;;
 ;; This implementation was ported from the Clozure Common Lisp source
 ;;     CCL::%DOUBLE-FLOAT
@@ -26,12 +14,23 @@
 (defpackage #:com.inuoe.jzon/ratio-to-double
   (:use #:cl)
   (:local-nicknames
+    #-ecl
     (#:ff #:org.shirakumo.float-features))
   (:export
     #:ratio-to-double))
 
 (in-package #:com.inuoe.jzon/ratio-to-double)
 
+(defmacro %bits-double-float (x)
+  #-ecl
+  `(ff:bits-double-float ,x)
+  #+ecl
+  (if (find-symbol (string '#:bits-double-float) '#:si)
+    `(,(intern (string '#:bits-double-float) '#:si) ,x)
+    (let ((tmp (gensym (string 'tmp))))
+      `(ffi:with-foreign-object (,tmp :double)
+        (setf (ffi:deref-pointer ,tmp :uint64-t) ,x)
+        (ffi:deref-pointer ,tmp :double)))))
 
 ;;; make a float from hi - high 24 bits mantissa (ignore implied higher bit)
 ;;;                   lo -  low 28 bits mantissa
@@ -41,10 +40,11 @@
 ;;; lo result - 4 lo bits of hi arg: 28 lo bits of lo arg
 
 (defun %make-float-from-fixnums (hi lo exp sign)
-  (ff:bits-double-float (logior (ash (if (minusp sign) 1 0) 63)
-                                (ash (ldb (byte 11 0) exp)  52)
-                                (ash (ldb (byte 24 0) hi)   28)
-                                (ash (ldb (byte 28 0) lo)   00))))
+  (let ((bits (logior (ash (if (minusp sign) 1 0) 63)
+                      (ash (ldb (byte 11 0) exp)  52)
+                      (ash (ldb (byte 24 0) hi)   28)
+                      (ash (ldb (byte 28 0) lo)   00))))
+    (%bits-double-float bits)))
 
 (defun ratio-to-double (number
                         &aux

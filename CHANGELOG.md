@@ -4,6 +4,8 @@
 
 Changes relative to [v1.0.0](#v100)
 
+* [ECL][ecl] Support https://github.com/Zulu-Inuoe/jzon/issues/36
+* Add `jzon:parse-next-element` utility function for parsing a full element using the streaming reader.
 * bugfix - signal `jzon:json-eof-error` when we encounter an incomplete unicode escape sequence such as `\uAD`. Used to signal `cl:type-error`.
 * bugfix - `jzon:parse-next` no longer returns 3 values on `:object-key`
 * Add `jzon:span` for easier subsequence support for `jzon:parse` and `jzon:parser` https://github.com/Zulu-Inuoe/jzon/issues/30
@@ -29,3 +31,4 @@ Initial Release
 :tada:
 
 [json-lines]: https://jsonlines.org/
+[ecl]: https://gitlab.com/embeddable-common-lisp/ecl

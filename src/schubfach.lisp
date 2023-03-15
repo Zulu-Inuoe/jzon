@@ -18,6 +18,7 @@
 (defpackage #:com.inuoe.jzon/schubfach
   (:use #:cl)
   (:local-nicknames
+    #-ecl
     (#:ff #:org.shirakumo.float-features))
   (:export
     #:write-float
@@ -235,13 +236,21 @@
 
         (%write-positive-int-digits q1 (- pos 2) buf ds)))))
 
-(defmacro %float-to-raw-int-bits (x)
-  `(the (unsigned-byte 32) (ff:single-float-bits ,x)))
+(defmacro %single-float-bits (x)
+  #-ecl
+  `(the (unsigned-byte 32) (ff:single-float-bits ,x))
+  #+ecl
+  (if (find-symbol (string '#:single-float-bits) '#:si)
+    `(,(intern (string '#:single-float-bits) '#:si) ,x)
+    (let ((tmp (gensym (string 'tmp))))
+      `(ffi:with-foreign-object (,tmp :float)
+        (setf (ffi:deref-pointer ,tmp :float) ,x)
+        (ffi:deref-pointer ,tmp :uint32-t)))))
 
 (defun %write-float (x buf
                       &aux
                       (pos 0)
-                      (bits (%float-to-raw-int-bits x))
+                      (bits (%single-float-bits x))
                       (ds *%digits*)
                       (gs *%gs*))
   (declare (type single-float x)
@@ -429,13 +438,21 @@
       (setf (char buf (+ pos 2)) (code-char (ldb (byte 7 8) d)))
       (+ pos 3))))
 
-(defmacro %double-to-raw-long-bits (x)
-  `(the (unsigned-byte 64) (ff:double-float-bits ,x)))
+(defmacro %double-float-bits (x)
+  #-ecl
+  `(the (unsigned-byte 64) (ff:double-float-bits ,x))
+  #+ecl
+  (if (find-symbol (string '#:double-float-bits) '#:si)
+    `(,(intern (string '#:double-float-bits) '#:si) ,x)
+    (let ((tmp (gensym (string 'tmp))))
+      `(ffi:with-foreign-object (,tmp :double)
+        (setf (ffi:deref-pointer ,tmp :double) ,x)
+        (ffi:deref-pointer ,tmp :uint64-t)))))
 
 (defun %write-double (x buf
                       &aux
                       (pos 0)
-                      (bits (%double-to-raw-long-bits x))
+                      (bits (%double-float-bits x))
                       (ds (load-time-value *%digits*))
                       (gs (load-time-value *%gs*)))
   (declare (type double-float x)

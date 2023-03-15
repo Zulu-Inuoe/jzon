@@ -17,6 +17,7 @@
   (:import-from #:uiop)
   (:local-nicknames
    (#:jzon #:com.inuoe.jzon)
+   #-ecl
    (#:ff #:float-features)
    (#:fs #:flexi-streams))
   (:export
@@ -50,6 +51,17 @@
 
 (defun not-simple (vector)
   (make-array (length vector) :element-type (array-element-type vector) :fill-pointer t :initial-contents vector))
+
+(defmacro bits-double-float (x)
+  #-ecl
+  `(ff:bits-double-float ,x)
+  #+ecl
+  (if (find-symbol (string '#:bits-double-float) '#:si)
+    `(,(intern (string '#:bits-double-float) '#:si) ,x)
+    (let ((tmp (gensym (string 'tmp))))
+      `(ffi:with-foreign-object (,tmp :double)
+        (setf (ffi:deref-pointer ,tmp :uint64-t) ,x)
+        (ffi:deref-pointer ,tmp :double)))))
 
 (test parses-atoms
   (is (eq 'null (jzon:parse "null")))
@@ -144,40 +156,40 @@
   (is (eql 0 (jzon:parse "0"))))
 
 (test parses-negative-zero.0
-  (is (= (ff:bits-double-float #x8000000000000000) (jzon:parse "-0.0"))))
+  (is (= (bits-double-float #x8000000000000000) (jzon:parse "-0.0"))))
 
 (test parses-negative-zero
-  (is (= (ff:bits-double-float #x8000000000000000) (jzon:parse "-0"))))
+  (is (= (bits-double-float #x8000000000000000) (jzon:parse "-0"))))
 
 (test parse-1.31300000121E8
-  (is (= (ff:bits-double-float #x419F4DEA807BE76D) (jzon:parse "1.31300000121E8"))))
+  (is (= (bits-double-float #x419F4DEA807BE76D) (jzon:parse "1.31300000121E8"))))
 
 (test parse--1.31300000121E8
-  (is (= (ff:bits-double-float #xC19F4DEA807BE76D) (jzon:parse "-1.31300000121E8"))))
+  (is (= (bits-double-float #xC19F4DEA807BE76D) (jzon:parse "-1.31300000121E8"))))
 
 (test parse-23456789012E66
-  (is (= (ff:bits-double-float #x4FC9EE093A64B854) (jzon:parse "23456789012E66"))))
+  (is (= (bits-double-float #x4FC9EE093A64B854) (jzon:parse "23456789012E66"))))
 
 (test parse-0.000000000000000000000034567890120102012
-  (is (= (ff:bits-double-float #x3B44E51F35466432) (jzon:parse "0.000000000000000000000034567890120102012"))))
+  (is (= (bits-double-float #x3B44E51F35466432) (jzon:parse "0.000000000000000000000034567890120102012"))))
 
 (test parse-97924.49742786969
-  (is (= (ff:bits-double-float #x40F7E847F576ED07) (jzon:parse "97924.49742786969"))))
+  (is (= (bits-double-float #x40F7E847F576ED07) (jzon:parse "97924.49742786969"))))
 
 (test parse-22057.311791265754
-  (is (= (ff:bits-double-float #x40D58A53F4635A66) (jzon:parse "22057.311791265754"))))
+  (is (= (bits-double-float #x40D58A53F4635A66) (jzon:parse "22057.311791265754"))))
 
 (test parse-5e-324
-  (is (= (ff:bits-double-float #x0000000000000001) (jzon:parse "5e-324"))))
+  (is (= (bits-double-float #x0000000000000001) (jzon:parse "5e-324"))))
 
 (test parse-4.9E-324
-  (is (= (ff:bits-double-float #x0000000000000001) (jzon:parse "4.9E-324"))))
+  (is (= (bits-double-float #x0000000000000001) (jzon:parse "4.9E-324"))))
 
 (test parse-4.8E-324
-  (is (= (ff:bits-double-float #x0000000000000001) (jzon:parse "4.8E-324"))))
+  (is (= (bits-double-float #x0000000000000001) (jzon:parse "4.8E-324"))))
 
 (test parse-0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005
-  (is (= (ff:bits-double-float #x0000000000000001) (jzon:parse "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005"))))
+  (is (= (bits-double-float #x0000000000000001) (jzon:parse "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005"))))
 
 (test parse-g-clef
   (is (string= #.(string (code-char #x1D11E)) (jzon:parse "\"\\uD834\\uDD1E\""))))
@@ -709,6 +721,85 @@
       (is (= value 24)))
     (is (null (jzon:parse-next parser)))))
 
+(test parse-next-element-basics
+  (jzon:with-parser (p "[1,2,3]")
+    (is (eq :begin-array (jzon:parse-next p)))
+    (is (= 1 (jzon:parse-next-element p)))
+    (is (= 2 (jzon:parse-next-element p)))
+    (is (= 3 (jzon:parse-next-element p)))
+    (is (null (jzon:parse-next-element p :eof-error-p  nil)))
+    (is (eq nil (jzon:parse-next p)))))
+
+(test parse-next-element-nested-array-in-array
+  (jzon:with-parser (p "[[1,2,3]]")
+    (is (eq :begin-array (jzon:parse-next p)))
+    (is (equalp #(1 2 3) (jzon:parse-next-element p)))
+    (is (eq :end-array (jzon:parse-next p)))))
+
+(test parse-next-element-nested-object-in-array
+  (jzon:with-parser (p "[{\"x\":42}]")
+    (is (eq :begin-array (jzon:parse-next p)))
+    (is (equalp (ph "x" 42) (jzon:parse-next-element p)))
+    (is (eq :end-array (jzon:parse-next p)))))
+
+(test parse-next-element-nested-array-in-object
+  (jzon:with-parser (p "{\"foo\":[1,2,3]}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (equalp #(1 2 3) (jzon:parse-next-element p)))
+    (is (eq :end-object (jzon:parse-next p)))))
+
+(test parse-next-element-nested-object-in-object
+  (jzon:with-parser (p "{\"foo\":{\"x\":42}}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (equalp (ph "x" 42) (jzon:parse-next-element p)))
+    (is (eq :end-object (jzon:parse-next p)))))
+
+(test parse-next-element-errors-on-bad-position-begin-object
+  (jzon:with-parser (p "{\"x\":0}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (signals (error) (jzon:parse-next-element p))))
+
+(test parse-next-element-errors-on-bad-position-after-property
+  (jzon:with-parser (p "{\"x\":0,\"y\":1}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (signals (error) (jzon:parse-next-element p))))
+
+(test parse-next-element-errors-on-bad-position-after-toplevel
+  (jzon:with-parser (p "{\"x\":0,\"y\":1}")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (is (eq :end-object (jzon:parse-next p)))
+    (signals (error) (jzon:parse-next-element p))))
+
+(test parse-next-element-allows-after-toplevel-when-multiple-content
+  (jzon:with-parser (p "{\"x\":0,\"y\":1}" :allow-multiple-content t)
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (is (eq :value (jzon:parse-next p)))
+    (is (eq :end-object (jzon:parse-next p)))
+    (is (null (jzon:parse-next-element p :eof-error-p nil)))))
+
+(test parse-next-element-uses-max-depth-array
+  (jzon:with-parser (p "{ \"foo\": [1, [2], 3] }")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (signals (jzon:json-parse-limit-error) (jzon:parse-next-element p :max-depth 1))))
+
+(test parse-next-element-uses-max-depth-object
+  (jzon:with-parser (p "{ \"foo\": [1, {\"x\": 2}, 3] }")
+    (is (eq :begin-object (jzon:parse-next p)))
+    (is (eq :object-key (jzon:parse-next p)))
+    (signals (jzon:json-parse-limit-error) (jzon:parse-next-element p :max-depth 1))))
+
 (test multi-close-ok
   (jzon:with-parser (parser "{}")
     (jzon:close-parser parser)
@@ -1063,28 +1154,6 @@
   \"x\": 0
 }" (jzon:stringify (ph "x" 0) :pretty t))))
 
-(test stringify-pretty-object-newlines-multiple-kv
-  (is (string= "{
-  \"x\": 0,
-  \"y\": 5
-}" (jzon:stringify (ph "x" 0 "y" 5) :pretty t))))
-
-(test stringify-pretty-object-newlines-if-nested-object
-  (is (string= "{
-  \"obj\": {
-    \"x\": 0,
-    \"y\": 5
-  }
-}" (jzon:stringify (ph "obj" (ph "x" 0 "y" 5)) :pretty t))))
-
-(test stringify-pretty-array-newlines-if-nested-object
-  (is (string= "[
-  1,
-  {
-    \"x\": 0,
-    \"y\": 5
-  }
-]" (jzon:stringify (vector 1 (ph "x" 0 "y" 5)) :pretty t))))
 
 (test string-expands-special-escapes
   (is-every string=

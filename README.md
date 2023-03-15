@@ -997,9 +997,53 @@ When *allow-multiple-content* enabled in the [`jzon:parser`](#jzonparser), it sh
   (jzon:parse-next parser)) #| nil, nil |#
 ```
 
+### jzon:parse-next-element
+
+*Function* **jzon:parse-next-element** *parser &key max-depth eof-error-p eof-value*
+
+*=> value*
+
+* *parser* - a [`jzon:parser`](#jzonparser).
+* *max-depth* - a positive `integer`, or a boolean
+* *eof-error-p* - a generalized boolean. The default is true.
+* *eof-value* - an object. The default is nil.
+
+*value* - a `jzon:json-element` (see [Type Mappings](#type-mappings))
+
+#### Description
+
+Read the next element from the [`jzon:parser`](#jzonparser).
+
+This is a utility function around [`jzon:parse-next`](#jzonparse-next) that behaves similar to [`jzon:parse`](#jzonparse), reading a full `jzon:json-element` from a [`jzon:parser`](#jzonparser).
+
+##### *eof-error-p* and *eof-value*
+
+Similar to `cl:read-line`, *eof-error-p* controls whether we should signal an error when no more elements are available, or whether to return *eof-value*.
+
+:warning: These values are most relevant when reading array elements. See the following example:
+
+```lisp
+(jzon:with-parser (p "[1, 2]")
+  (jzon:parse-next p)  #| :begin-array, nil |#
+  (jzon:parse-next-element p :eof-error-p nil)  #| 1 |#
+  (jzon:parse-next-element p :eof-error-p nil)  #| 2 |#
+  (jzon:parse-next-element p :eof-error-p nil)) #| nil |#
+```
+
+Use this when you want to read a full sub-object from a parser, as follows:
+
+```lisp
+(jzon:with-parser (p "{ \"foo\": [1, 2, 3] }")
+  (jzon:parse-next p)          #| :begin-object, nil |#
+  (jzon:parse-next p)          #| :object-key, "foo" |#
+  #| Saw `:object-key`, so next must be a value |#
+  (jzon:parse-next-element p)  #| #(1 2 3) |#
+  (jzon:parse-next p))         #| :end-object, nil |#
+```
+
 ### Streaming Parser Example
 
-`jzon:parse` could be approximately defined as follows:
+[`jzon:parse`](#jzonparse) could be approximately defined as follows:
 
 ```lisp
 (defun my/jzon-parse (in)
