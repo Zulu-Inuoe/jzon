@@ -5,7 +5,7 @@
   :license "MIT"
   :depends-on (#:closer-mop
                #:flexi-streams
-               #:float-features
+               (:feature (:not :ecl) #:float-features)
                #:trivial-gray-streams
                #:uiop)
   :components ((:file "eisel-lemire")

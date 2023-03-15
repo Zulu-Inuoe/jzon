@@ -17,6 +17,7 @@
   (:import-from #:uiop)
   (:local-nicknames
    (#:jzon #:com.inuoe.jzon)
+   #-ecl
    (#:ff #:float-features)
    (#:fs #:flexi-streams))
   (:export
