@@ -240,12 +240,12 @@
   #-ecl
   `(the (unsigned-byte 32) (ff:single-float-bits ,x))
   #+ecl
-  #.(if (find-symbol (string '#:single-float-bits) '#:si)
-      `(list ',(intern (string '#:single-float-bits) '#:si) x)
-      '(let ((tmp (gensym (string 'tmp))))
-         `(ffi:with-foreign-object (,tmp :float)
-           (setf (ffi:deref-pointer ,tmp :float) ,x)
-           (ffi:deref-pointer ,tmp :uint32-t)))))
+  (if (find-symbol (string '#:single-float-bits) '#:si)
+    `(,(intern (string '#:single-float-bits) '#:si) ,x)
+    (let ((tmp (gensym (string 'tmp))))
+      `(ffi:with-foreign-object (,tmp :float)
+        (setf (ffi:deref-pointer ,tmp :float) ,x)
+        (ffi:deref-pointer ,tmp :uint32-t)))))
 
 (defun %write-float (x buf
                       &aux
@@ -442,12 +442,12 @@
   #-ecl
   `(the (unsigned-byte 64) (ff:double-float-bits ,x))
   #+ecl
-  #.(if (find-symbol (string '#:double-float-bits) '#:si)
-      `(list ',(intern (string '#:double-float-bits) '#:si) x)
-      '(let ((tmp (gensym (string 'tmp))))
-         `(ffi:with-foreign-object (,tmp :double)
-           (setf (ffi:deref-pointer ,tmp :double) ,x)
-           (ffi:deref-pointer ,tmp :uint64-t)))))
+  (if (find-symbol (string '#:double-float-bits) '#:si)
+    `(,(intern (string '#:double-float-bits) '#:si) ,x)
+    (let ((tmp (gensym (string 'tmp))))
+      `(ffi:with-foreign-object (,tmp :double)
+        (setf (ffi:deref-pointer ,tmp :double) ,x)
+        (ffi:deref-pointer ,tmp :uint64-t)))))
 
 (defun %write-double (x buf
                       &aux

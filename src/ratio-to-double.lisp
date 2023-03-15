@@ -25,12 +25,12 @@
   #-ecl
   `(ff:bits-double-float ,x)
   #+ecl
-  #.(if (find-symbol (string '#:bits-double-float) '#:si)
-      `(list ',(intern (string '#:bits-double-float) '#:si) x)
-      '(let ((tmp (gensym (string 'tmp))))
-        (list 'ffi:with-foreign-object (list tmp :double)
-          (list 'setf (list 'ffi:deref-pointer tmp :uint64-t) x)
-          (list 'ffi:deref-pointer tmp :double)))))
+  (if (find-symbol (string '#:bits-double-float) '#:si)
+    `(,(intern (string '#:bits-double-float) '#:si) ,x)
+    (let ((tmp (gensym (string 'tmp))))
+      `(ffi:with-foreign-object (,tmp :double)
+        (setf (ffi:deref-pointer ,tmp :uint64-t) ,x)
+        (ffi:deref-pointer ,tmp :double)))))
 
 ;;; make a float from hi - high 24 bits mantissa (ignore implied higher bit)
 ;;;                   lo -  low 28 bits mantissa
