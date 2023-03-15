@@ -21,6 +21,16 @@
 
 (in-package #:com.inuoe.jzon/ratio-to-double)
 
+(defmacro %bits-double-float (x)
+  #-ecl
+  `(ff:bits-double-float ,x)
+  #+ecl
+  #.(if (find-symbol (string '#:bits-double-float) '#:si)
+      `(list ',(intern (string '#:bits-double-float) '#:si) x)
+      '(let ((tmp (gensym (string 'tmp))))
+        (list 'ffi:with-foreign-object (list tmp :double)
+          (list 'setf (list 'ffi:deref-pointer tmp :uint64-t) x)
+          (list 'ffi:deref-pointer tmp :double)))))
 
 ;;; make a float from hi - high 24 bits mantissa (ignore implied higher bit)
 ;;;                   lo -  low 28 bits mantissa
@@ -34,12 +44,7 @@
                       (ash (ldb (byte 11 0) exp)  52)
                       (ash (ldb (byte 24 0) hi)   28)
                       (ash (ldb (byte 28 0) lo)   00))))
-    #-ecl
-    (ff:bits-double-float bits)
-    #+ecl
-    (ffi:with-foreign-object (double-tmp :double)
-     (setf (ffi:deref-pointer double-tmp :uint64-t) bits)
-     (ffi:deref-pointer double-tmp :double))))
+    (%bits-double-float bits)))
 
 (defun ratio-to-double (number
                         &aux

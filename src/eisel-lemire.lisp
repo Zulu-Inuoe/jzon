@@ -96,14 +96,16 @@
          (lo (ldb (byte 64 0) (* x y))))
     (values hi lo)))
 
-(defmacro %raw-int-bits-to-double (x)
+(defmacro %bits-double-float (x)
   #-ecl
   `(ff:bits-double-float ,x)
   #+ecl
-  (let ((double-tmp (gensym (string 'double-tmp))))
-    `(ffi:with-foreign-object (,double-tmp :double)
-      (setf (ffi:deref-pointer ,double-tmp :uint64-t) ,x)
-      (ffi:deref-pointer ,double-tmp :double))))
+  #.(if (find-symbol (string '#:bits-double-float) '#:si)
+      `(list ',(intern (string '#:bits-double-float) '#:si) x)
+      '(let ((tmp (gensym (string 'tmp))))
+        `(ffi:with-foreign-object (,tmp :double)
+          (setf (ffi:deref-pointer ,tmp :uint64-t) ,x)
+          (ffi:deref-pointer ,tmp :double)))))
 
 (defun make-double (mantissa exp10 neg)
   (when (and (typep mantissa '(unsigned-byte 64))
@@ -148,4 +150,4 @@
                   ;;
                   (unless (>= (%uint64 (- ret-exp-2 1)) (- #x7FF 1))
                     (let ((ret-bits (logior (%<<u64 ret-exp-2 52) (logand ret-mantissa #x000FFFFFFFFFFFFF) (if neg #x8000000000000000 0))))
-                      (%raw-int-bits-to-double ret-bits))))))))))))
+                      (%bits-double-float ret-bits))))))))))))
