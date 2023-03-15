@@ -1084,6 +1084,39 @@
         (loop :repeat 130 :do (jzon:begin-array*))
         (loop :repeat 130 :do (jzon:end-array*))))))
 
+(test writer-pretty-object-newlines-multiple-kv
+  (is (string= "{
+  \"x\": 0,
+  \"y\": 5
+}"
+               (with-writer-to-string (jzon:*writer* :pretty t)
+                 (jzon:write-object* "x" 0 "y" 5)))))
+
+(test writer-pretty-object-newlines-if-nested-object
+  (is (string= "{
+  \"obj\": {
+    \"x\": 0,
+    \"y\": 5
+  }
+}"
+               (with-writer-to-string (jzon:*writer* :pretty t)
+                 (jzon:with-object*
+                   (jzon:write-key* "obj")
+                   (jzon:write-object* "x" 0 "y" 5))))))
+
+(test writer-pretty-array-newlines-if-nested-object
+  (is (string= "[
+  1,
+  {
+    \"x\": 0,
+    \"y\": 5
+  }
+]"
+               (with-writer-to-string (jzon:*writer* :pretty t)
+                 (jzon:with-array*
+                   (jzon:write-value* 1)
+                   (jzon:write-object* "x" 0 "y" 5))))))
+
 (def-suite stringify :in jzon)
 
 (in-suite stringify)
@@ -1121,28 +1154,6 @@
   \"x\": 0
 }" (jzon:stringify (ph "x" 0) :pretty t))))
 
-(test stringify-pretty-object-newlines-multiple-kv
-  (is (string= "{
-  \"x\": 0,
-  \"y\": 5
-}" (jzon:stringify (ph "x" 0 "y" 5) :pretty t))))
-
-(test stringify-pretty-object-newlines-if-nested-object
-  (is (string= "{
-  \"obj\": {
-    \"x\": 0,
-    \"y\": 5
-  }
-}" (jzon:stringify (ph "obj" (ph "x" 0 "y" 5)) :pretty t))))
-
-(test stringify-pretty-array-newlines-if-nested-object
-  (is (string= "[
-  1,
-  {
-    \"x\": 0,
-    \"y\": 5
-  }
-]" (jzon:stringify (vector 1 (ph "x" 0 "y" 5)) :pretty t))))
 
 (test string-expands-special-escapes
   (is-every string=
