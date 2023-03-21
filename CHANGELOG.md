@@ -1,7 +1,5 @@
 ## v1.1.0
 
-**PENDING**
-
 Changes relative to [v1.0.0](#v100)
 
 * [ECL][ecl] Support https://github.com/Zulu-Inuoe/jzon/issues/36
