@@ -9,6 +9,6 @@
   (#:alexandria
    #:fiveam
    #:flexi-streams
-   #:float-features
+   (:feature (:not :ecl) #:float-features)
    #:com.inuoe.jzon
    #:uiop))

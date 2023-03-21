@@ -16,6 +16,7 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
   * [Type Mappings](#type-mappings)
 * [Usage](#usage)
   * [`jzon:parse`](#jzonparse)
+    * [`jzon:span`](#jzonspan)
   * [`jzon:stringify`](#jzonstringify)
     * [Additional Types for Writing](#additionally-supported-types-for-writing)
   * [`jzon:writer`](#jzonwriter)
@@ -31,11 +32,10 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
     * [`jzon:with-parser`](#jzonwith-parser)
     * [`jzon:parse-next`](#jzonparse-next)
     * [Streaming Parser Example](#streaming-parser-example)
-
 * [Motivation and Features](#motivation-and-features)
   * [Safety](#safety)
   * [Correctness](#correctness)
-  * [Simplicity](#simplicity)
+  * [Convenience](#convenience)
   * [Performance](#performance)
 * [Dependencies](#dependencies)
 * [License](#license)
@@ -45,14 +45,14 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
 
 **Note**: *Examples in this README can be copy-pasted in your REPL assuming you've got a nickname set up for jzon. Try `(uiop:add-package-local-nickname '#:jzon '#:com.inuoe.jzon)`.*
 
-Most users will simply use `jzon:parse` for reading, and `jzon:stringify` for writing. These mirror the [JSON methods in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON).
+Most users will simply use [`jzon:parse`](#jzonparse) for reading, and [`jzon:stringify`](#jzonstringify) for writing. These mirror the [JSON methods in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON).
 
 ### Reading
 
-`jzon:parse` will parse JSON and produce a CL value
+[`jzon:parse`](#jzonparse) will parse JSON and produce a CL value
 
 ```lisp
-(jzon:parse "{
+(defparameter *ht* (jzon:parse "{
   \"license\": null,
   \"active\": false,
   \"important\": true,
@@ -62,10 +62,7 @@ Most users will simply use `jzon:parse` for reading, and `jzon:stringify` for wr
   \"tags\":  [
     \"alone\"
   ]
-}") 
-#| => #<HASH-TABLE :TEST EQUAL :COUNT 7 {100693CD63} |#
-
-(defparameter *ht* *)
+}"))
 
 (equalp 'null       (gethash "licence" *ht*))
 (equalp nil         (gethash "active" *ht*))
@@ -78,7 +75,7 @@ Most users will simply use `jzon:parse` for reading, and `jzon:stringify` for wr
 
 ### Writing
 
-`jzon:stringify` will serialize a value to JSON:
+[`jzon:stringify`](#jzonstringify) will serialize a value to JSON:
 
 ```lisp
 (jzon:stringify #(null nil t 42 3.14 "Hello, world!") :stream t :pretty t)
@@ -114,18 +111,19 @@ When writing, additional values are supported. Please see the section [jzon:stri
 
 # Usage
 
-As noted, `jzon:parse` and `jzon:stringify` suit most use-cases, this section goes into more detail, as well as an introduction to the [`jzon:writer` interface](#jzonwriter).
+As noted, [`jzon:parse`](#jzonparse) and [`jzon:stringify`](#jzonstringify) suit most use-cases, this section goes into more detail, as well as an introduction to the [`jzon:writer` interface](#jzonwriter).
 
 ### jzon:parse
 
-*Function* **jzon:parse** *in &key max-depth allow-comments allow-trailing-comma max-string-length key-fn*
+*Function* **jzon:parse** *in &key max-depth allow-comments allow-trailing-comma allow-multiple-content max-string-length key-fn*
 
 *=> value* 
 
-* *in* - a `string`, `vector (unsigned-byte 8)`, `stream`, or `pathname`
+* *in* - a `string`, `vector (unsigned-byte 8)`, `stream`, `pathname`, or [`jzon:span`](#jzonspan)
 * *max-depth* - a positive `integer`, or a boolean
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
+* *allow-multiple-content* - a `boolean`
 * *max-string-length* - `nil`, `t`, or a positive `integer`
 * *key-fn* - a designator for a function of one argument, or a boolean
 
@@ -141,10 +139,14 @@ Reads JSON from `in` and returns a `jzon:json-element` per [Type Mappings](#type
 * (vector (unsigned-byte 8)) - octets in utf-8
 * stream - character or binary in utf-8
 * pathname - `jzon:parse` will open the file for reading in utf-8
+* [`jzon:span`](#jzonspan) - denoting a part of a string/vector
+
+**Tip:** *You can also use a displaced array to denote a region of an array without copying it.*
 
 The keyword arguments control optional features when reading:
 * `:allow-comments` controls if we allow single-line // comments and /**/ multiline block comments.
 * `:allow-trailing-comma` controls if we allow a single comma `,` after all elements of an array or object.
+* `:allow-multiple-content` controls if we allow for more than one element at the 'toplevel' *see below*
 * `:key-fn` is a function of one value which is called on object keys as they are read, or a boolean *(see below)*
 * `:max-depth` controls the maximum depth allowed when nesting arrays or objects.
 * `:max-string-length` controls the maximum length allowed when reading a string key or value.
@@ -155,6 +157,33 @@ The keyword arguments control optional features when reading:
 * `t` - Default limit
 
 When either *max-depth* or *max-string-length* is exceeded, `jzon:parse` shall signal a `jzon:json-parse-limit-error` error.
+
+##### *allow-multiple-content*
+
+JSON requires there  be only one toplevel element. Using *allow-multiple-content* tells `jzon:parse` to stop after reading one full toplevel element:
+
+```lisp
+(jzon:parse "1 2 3" :allow-multiple-content t) #| => 1 |#
+```
+
+When reading a stream we can call [`jzon:parse`](#jzonparse) several times:
+
+```lisp
+(with-input-from-string (s "1 2 3")
+  (jzon:parse s :allow-multiple-content t)  #| => 1 |#
+  (jzon:parse s :allow-multiple-content t)  #| => 2 |#
+  (jzon:parse s :allow-multiple-content t)) #| => 3 |#
+```
+
+:warning: When reading numbers, `null`, `false`, or `true`, they **must** be followed by whitespace. [`jzon:parse`](#jzonparse) shall signal an error otherwise:
+
+```lisp
+(jzon:parse "123[1, 2, 3]" :allow-multiple-content t) #| error |#
+```
+
+This is to prevent errors caused by the lookahead necessary for parsing non-delimited tokens.
+
+This is not required when using [`jzon:parse-next`](#jzonparse-next).
 
 ##### *key-fn*
 
@@ -194,6 +223,28 @@ Pass `nil` to *key-fn* in order to avoid [key pooling](#object-key-pooling):
 This *may* help speed up parsing on highly heterogeneous JSON.
 
 **Note**: It is recommended leave this as default. The performance improvement is usually not substantive enough to warrant duplicated strings, and interning strings from untrusted JSON is a security risk.
+
+### jzon:span
+
+*Function* **jzon:span** *in* *&key start end*
+
+*=> span*
+
+* *in* - a `string`, or `vector (unsigned-byte 8)`
+* *start, end* - bounding index designators of sequence. The defaults for *start* and *end* are 0 and nil, respectively.
+
+*span* a span object representing the range.
+
+#### Description
+
+Create a span to be used in [`jzon:parse`](#jzonparse), or [`jzon:make-parser`](#jzonparser) in order to specify a bounded *start* and *end* for a string or vector.
+
+##### Example
+
+```lisp
+(jzon:parse (jzon:span "garbage42moregarbage" :start 7 :end 9)) 
+#| => 42 |#
+```
 
 ### jzon:stringify
 
@@ -843,13 +894,14 @@ An example:
 
 ### jzon:make-parser
 
-*Function* **jzon:make-parser** *in &key allow-comments allow-trailing-comma max-string-length key-fn*
+*Function* **jzon:make-parser** *in &key allow-comments allow-trailing-comma *allow-multiple-content* max-string-length key-fn*
 
 *=> writer*
 
-* *in* - a string, vector (unsigned-byte 8), stream, or pathname
+* *in* - a string, vector (unsigned-byte 8), stream, pathname, or [`jzon:span`](#jzonspan)
 * *allow-comments* - a `boolean`
 * *allow-trailing-comma* - a `boolean`
+* *allow-multiple-content* - a `boolean`
 * *max-string-length* - a positive `integer`
 * *key-fn* - a designator for a function of one argument, or a boolean
 
@@ -867,8 +919,13 @@ The behaviour of `jzon:parser` is analogous to `jzon:parse`, except you control 
 * `(vector (unsigned-byte 8))` - octets in utf-8
 * `stream` - character or binary in utf-8
 * `pathname` - `jzon:make-parser` will open the file for reading in utf-8
+* [`jzon:span`](#jzonspan) - denoting a part of a string/vector
+
+**Tip:** *You can also use a displaced array to denote a region of an array without copying it.*
 
 When *max-string-length* is exceeded, [`jzon:parse-next`](#jzonparse-next) shall signal a `jzon:json-parse-limit-error` error.
+
+JSON requires there  be only one toplevel element. Using *allow-multiple-content* allows parsing of multiple toplevel JSON elements. See [`jzon:parse-next`](#jzonparse-next) on how this affects the results.
 
 :warning: Because [`jzon:make-parser`](#jzonmake-parser) can open a file, it is recommended you use [`jzon:with-parser`](#jzonwith-parser) instead, unless you need indefinite extent.
 
@@ -927,9 +984,64 @@ Always returns two values indicating the next available event on the JSON stream
 
 When the parser's *max-string-length* is exceeded, [`jzon:parse-next`](#jzonparse-next) shall signal a `jzon:json-parse-limit-error` error. See [`jzon:make-parser`](#jzonmake-parser).
 
+##### *allow-multiple-content*
+
+When *allow-multiple-content* enabled in the [`jzon:parser`](#jzonparser), it shall emit the `nil` event after no more content is available.
+
+```lisp
+(jzon:with-parser (parser "1 2")
+  (jzon:parse-next parser)  #| :value, 1 |#
+  (jzon:parse-next parser)  #| :value, 2 |#
+  (jzon:parse-next parser)) #| nil, nil |#
+```
+
+### jzon:parse-next-element
+
+*Function* **jzon:parse-next-element** *parser &key max-depth eof-error-p eof-value*
+
+*=> value*
+
+* *parser* - a [`jzon:parser`](#jzonparser).
+* *max-depth* - a positive `integer`, or a boolean
+* *eof-error-p* - a generalized boolean. The default is true.
+* *eof-value* - an object. The default is nil.
+
+*value* - a `jzon:json-element` (see [Type Mappings](#type-mappings))
+
+#### Description
+
+Read the next element from the [`jzon:parser`](#jzonparser).
+
+This is a utility function around [`jzon:parse-next`](#jzonparse-next) that behaves similar to [`jzon:parse`](#jzonparse), reading a full `jzon:json-element` from a [`jzon:parser`](#jzonparser).
+
+##### *eof-error-p* and *eof-value*
+
+Similar to `cl:read-line`, *eof-error-p* controls whether we should signal an error when no more elements are available, or whether to return *eof-value*.
+
+:warning: These values are most relevant when reading array elements. See the following example:
+
+```lisp
+(jzon:with-parser (p "[1, 2]")
+  (jzon:parse-next p)  #| :begin-array, nil |#
+  (jzon:parse-next-element p :eof-error-p nil)  #| 1 |#
+  (jzon:parse-next-element p :eof-error-p nil)  #| 2 |#
+  (jzon:parse-next-element p :eof-error-p nil)) #| nil |#
+```
+
+Use this when you want to read a full sub-object from a parser, as follows:
+
+```lisp
+(jzon:with-parser (p "{ \"foo\": [1, 2, 3] }")
+  (jzon:parse-next p)          #| :begin-object, nil |#
+  (jzon:parse-next p)          #| :object-key, "foo" |#
+  #| Saw `:object-key`, so next must be a value |#
+  (jzon:parse-next-element p)  #| #(1 2 3) |#
+  (jzon:parse-next p))         #| :end-object, nil |#
+```
+
 ### Streaming Parser Example
 
-`jzon:parse` could be approximately defined as follows:
+[`jzon:parse`](#jzonparse) could be approximately defined as follows:
 
 ```lisp
 (defun my/jzon-parse (in)
@@ -958,7 +1070,7 @@ In writing jzon, we prioritize the following properties, in order:
 
 * [Safety](#safety)
 * [Correctness](#correctness)
-* [Simplicity](#simplicity)
+* [Convenience](#convenience)
 * [Performance](#performance)
 
 ## Safety
@@ -1015,7 +1127,7 @@ While more work is doubtlessly necessary to validate further, care has been take
 
 In particular, certain edge-case values such as subnormals shall parse `===` with JavaScript parsing libraries.
 
-## Simplicity
+## Convenience
 
 You call `jzon:parse`, and you get a reasonably standard CL object back.
 You call `jzon:stringify` with a reasonably standard CL object and you should get reasonable JSON.
@@ -1135,6 +1247,7 @@ I believe jzon to be the superior choice and hope for it to become the new, true
 
 [JSONRFC]: https://tools.ietf.org/html/rfc8259
 [JSONTestSuite]: https://github.com/nst/JSONTestSuite
+[json-lines]: https://jsonlines.org/
 [jsown]: https://github.com/madnificent/jsown
 [cl-json]: https://cl-json.common-lisp.dev/cl-json.html
 [jonathan]: https://github.com/Rudolph-Miller/jonathan
