@@ -964,6 +964,109 @@
     (jzon:parse-next p)
     (is (equalp '(:object-key "x") (multiple-value-list (jzon:parse-next p))))))
 
+(defparameter *cube.glb* (coerce 
+  #(#x67 #x6C #x54 #x46 #x02 #x00 #x00 #x00 #x90 #x07 #x00 #x00 #x2C #x04 #x00 #x00 #x4A #x53 #x4F #x4E #x7B #x22
+    #x61 #x73 #x73 #x65 #x74 #x22 #x3A #x7B #x22 #x67 #x65 #x6E #x65 #x72 #x61 #x74 #x6F #x72 #x22 #x3A #x22 #x4B
+    #x68 #x72 #x6F #x6E #x6F #x73 #x20 #x67 #x6C #x54 #x46 #x20 #x42 #x6C #x65 #x6E #x64 #x65 #x72 #x20 #x49 #x2F
+    #x4F #x20 #x76 #x33 #x2E #x34 #x2E #x35 #x30 #x22 #x2C #x22 #x76 #x65 #x72 #x73 #x69 #x6F #x6E #x22 #x3A #x22
+    #x32 #x2E #x30 #x22 #x7D #x2C #x22 #x73 #x63 #x65 #x6E #x65 #x22 #x3A #x30 #x2C #x22 #x73 #x63 #x65 #x6E #x65
+    #x73 #x22 #x3A #x5B #x7B #x22 #x6E #x61 #x6D #x65 #x22 #x3A #x22 #x53 #x63 #x65 #x6E #x65 #x22 #x2C #x22 #x6E
+    #x6F #x64 #x65 #x73 #x22 #x3A #x5B #x30 #x5D #x7D #x5D #x2C #x22 #x6E #x6F #x64 #x65 #x73 #x22 #x3A #x5B #x7B
+    #x22 #x6D #x65 #x73 #x68 #x22 #x3A #x30 #x2C #x22 #x6E #x61 #x6D #x65 #x22 #x3A #x22 #x43 #x75 #x62 #x65 #x22
+    #x7D #x5D #x2C #x22 #x6D #x61 #x74 #x65 #x72 #x69 #x61 #x6C #x73 #x22 #x3A #x5B #x7B #x22 #x64 #x6F #x75 #x62
+    #x6C #x65 #x53 #x69 #x64 #x65 #x64 #x22 #x3A #x74 #x72 #x75 #x65 #x2C #x22 #x6E #x61 #x6D #x65 #x22 #x3A #x22
+    #x4D #x61 #x74 #x65 #x72 #x69 #x61 #x6C #x22 #x2C #x22 #x70 #x62 #x72 #x4D #x65 #x74 #x61 #x6C #x6C #x69 #x63
+    #x52 #x6F #x75 #x67 #x68 #x6E #x65 #x73 #x73 #x22 #x3A #x7B #x22 #x62 #x61 #x73 #x65 #x43 #x6F #x6C #x6F #x72
+    #x46 #x61 #x63 #x74 #x6F #x72 #x22 #x3A #x5B #x30 #x2E #x38 #x30 #x30 #x30 #x30 #x30 #x30 #x31 #x31 #x39 #x32
+    #x30 #x39 #x32 #x39 #x2C #x30 #x2E #x38 #x30 #x30 #x30 #x30 #x30 #x30 #x31 #x31 #x39 #x32 #x30 #x39 #x32 #x39
+    #x2C #x30 #x2E #x38 #x30 #x30 #x30 #x30 #x30 #x30 #x31 #x31 #x39 #x32 #x30 #x39 #x32 #x39 #x2C #x31 #x5D #x2C
+    #x22 #x6D #x65 #x74 #x61 #x6C #x6C #x69 #x63 #x46 #x61 #x63 #x74 #x6F #x72 #x22 #x3A #x30 #x2C #x22 #x72 #x6F
+    #x75 #x67 #x68 #x6E #x65 #x73 #x73 #x46 #x61 #x63 #x74 #x6F #x72 #x22 #x3A #x30 #x2E #x35 #x7D #x7D #x5D #x2C
+    #x22 #x6D #x65 #x73 #x68 #x65 #x73 #x22 #x3A #x5B #x7B #x22 #x6E #x61 #x6D #x65 #x22 #x3A #x22 #x43 #x75 #x62
+    #x65 #x22 #x2C #x22 #x70 #x72 #x69 #x6D #x69 #x74 #x69 #x76 #x65 #x73 #x22 #x3A #x5B #x7B #x22 #x61 #x74 #x74
+    #x72 #x69 #x62 #x75 #x74 #x65 #x73 #x22 #x3A #x7B #x22 #x50 #x4F #x53 #x49 #x54 #x49 #x4F #x4E #x22 #x3A #x30
+    #x2C #x22 #x54 #x45 #x58 #x43 #x4F #x4F #x52 #x44 #x5F #x30 #x22 #x3A #x31 #x2C #x22 #x4E #x4F #x52 #x4D #x41
+    #x4C #x22 #x3A #x32 #x7D #x2C #x22 #x69 #x6E #x64 #x69 #x63 #x65 #x73 #x22 #x3A #x33 #x2C #x22 #x6D #x61 #x74
+    #x65 #x72 #x69 #x61 #x6C #x22 #x3A #x30 #x7D #x5D #x7D #x5D #x2C #x22 #x61 #x63 #x63 #x65 #x73 #x73 #x6F #x72
+    #x73 #x22 #x3A #x5B #x7B #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x56 #x69 #x65 #x77 #x22 #x3A #x30 #x2C #x22 #x63
+    #x6F #x6D #x70 #x6F #x6E #x65 #x6E #x74 #x54 #x79 #x70 #x65 #x22 #x3A #x35 #x31 #x32 #x36 #x2C #x22 #x63 #x6F
+    #x75 #x6E #x74 #x22 #x3A #x32 #x34 #x2C #x22 #x6D #x61 #x78 #x22 #x3A #x5B #x31 #x2C #x31 #x2C #x31 #x5D #x2C
+    #x22 #x6D #x69 #x6E #x22 #x3A #x5B #x2D #x31 #x2C #x2D #x31 #x2C #x2D #x31 #x5D #x2C #x22 #x74 #x79 #x70 #x65
+    #x22 #x3A #x22 #x56 #x45 #x43 #x33 #x22 #x7D #x2C #x7B #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x56 #x69 #x65 #x77
+    #x22 #x3A #x31 #x2C #x22 #x63 #x6F #x6D #x70 #x6F #x6E #x65 #x6E #x74 #x54 #x79 #x70 #x65 #x22 #x3A #x35 #x31
+    #x32 #x36 #x2C #x22 #x63 #x6F #x75 #x6E #x74 #x22 #x3A #x32 #x34 #x2C #x22 #x74 #x79 #x70 #x65 #x22 #x3A #x22
+    #x56 #x45 #x43 #x32 #x22 #x7D #x2C #x7B #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x56 #x69 #x65 #x77 #x22 #x3A #x32
+    #x2C #x22 #x63 #x6F #x6D #x70 #x6F #x6E #x65 #x6E #x74 #x54 #x79 #x70 #x65 #x22 #x3A #x35 #x31 #x32 #x36 #x2C
+    #x22 #x63 #x6F #x75 #x6E #x74 #x22 #x3A #x32 #x34 #x2C #x22 #x74 #x79 #x70 #x65 #x22 #x3A #x22 #x56 #x45 #x43
+    #x33 #x22 #x7D #x2C #x7B #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x56 #x69 #x65 #x77 #x22 #x3A #x33 #x2C #x22 #x63
+    #x6F #x6D #x70 #x6F #x6E #x65 #x6E #x74 #x54 #x79 #x70 #x65 #x22 #x3A #x35 #x31 #x32 #x33 #x2C #x22 #x63 #x6F
+    #x75 #x6E #x74 #x22 #x3A #x33 #x36 #x2C #x22 #x74 #x79 #x70 #x65 #x22 #x3A #x22 #x53 #x43 #x41 #x4C #x41 #x52
+    #x22 #x7D #x5D #x2C #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x56 #x69 #x65 #x77 #x73 #x22 #x3A #x5B #x7B #x22 #x62
+    #x75 #x66 #x66 #x65 #x72 #x22 #x3A #x30 #x2C #x22 #x62 #x79 #x74 #x65 #x4C #x65 #x6E #x67 #x74 #x68 #x22 #x3A
+    #x32 #x38 #x38 #x2C #x22 #x62 #x79 #x74 #x65 #x4F #x66 #x66 #x73 #x65 #x74 #x22 #x3A #x30 #x2C #x22 #x74 #x61
+    #x72 #x67 #x65 #x74 #x22 #x3A #x33 #x34 #x39 #x36 #x32 #x7D #x2C #x7B #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x22
+    #x3A #x30 #x2C #x22 #x62 #x79 #x74 #x65 #x4C #x65 #x6E #x67 #x74 #x68 #x22 #x3A #x31 #x39 #x32 #x2C #x22 #x62
+    #x79 #x74 #x65 #x4F #x66 #x66 #x73 #x65 #x74 #x22 #x3A #x32 #x38 #x38 #x2C #x22 #x74 #x61 #x72 #x67 #x65 #x74
+    #x22 #x3A #x33 #x34 #x39 #x36 #x32 #x7D #x2C #x7B #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x22 #x3A #x30 #x2C #x22
+    #x62 #x79 #x74 #x65 #x4C #x65 #x6E #x67 #x74 #x68 #x22 #x3A #x32 #x38 #x38 #x2C #x22 #x62 #x79 #x74 #x65 #x4F
+    #x66 #x66 #x73 #x65 #x74 #x22 #x3A #x34 #x38 #x30 #x2C #x22 #x74 #x61 #x72 #x67 #x65 #x74 #x22 #x3A #x33 #x34
+    #x39 #x36 #x32 #x7D #x2C #x7B #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x22 #x3A #x30 #x2C #x22 #x62 #x79 #x74 #x65
+    #x4C #x65 #x6E #x67 #x74 #x68 #x22 #x3A #x37 #x32 #x2C #x22 #x62 #x79 #x74 #x65 #x4F #x66 #x66 #x73 #x65 #x74
+    #x22 #x3A #x37 #x36 #x38 #x2C #x22 #x74 #x61 #x72 #x67 #x65 #x74 #x22 #x3A #x33 #x34 #x39 #x36 #x33 #x7D #x5D
+    #x2C #x22 #x62 #x75 #x66 #x66 #x65 #x72 #x73 #x22 #x3A #x5B #x7B #x22 #x62 #x79 #x74 #x65 #x4C #x65 #x6E #x67
+    #x74 #x68 #x22 #x3A #x38 #x34 #x30 #x7D #x5D #x7D #x48 #x03 #x00 #x00 #x42 #x49 #x4E #x00 #x00 #x00 #x80 #x3F
+    #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00
+    #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF
+    #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00
+    #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F
+    #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00
+    #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F
+    #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00
+    #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF
+    #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00
+    #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F
+    #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00
+    #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF
+    #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00
+    #x20 #x3F #x00 #x00 #x00 #x3F #x00 #x00 #x20 #x3F #x00 #x00 #x00 #x3F #x00 #x00 #x20 #x3F #x00 #x00 #x00 #x3F
+    #x00 #x00 #xC0 #x3E #x00 #x00 #x00 #x3F #x00 #x00 #xC0 #x3E #x00 #x00 #x00 #x3F #x00 #x00 #xC0 #x3E #x00 #x00
+    #x00 #x3F #x00 #x00 #x20 #x3F #x00 #x00 #x80 #x3E #x00 #x00 #x20 #x3F #x00 #x00 #x80 #x3E #x00 #x00 #x20 #x3F
+    #x00 #x00 #x80 #x3E #x00 #x00 #xC0 #x3E #x00 #x00 #x80 #x3E #x00 #x00 #xC0 #x3E #x00 #x00 #x80 #x3E #x00 #x00
+    #xC0 #x3E #x00 #x00 #x80 #x3E #x00 #x00 #x20 #x3F #x00 #x00 #x40 #x3F #x00 #x00 #x20 #x3F #x00 #x00 #x40 #x3F
+    #x00 #x00 #x60 #x3F #x00 #x00 #x00 #x3F #x00 #x00 #x00 #x3E #x00 #x00 #x00 #x3F #x00 #x00 #xC0 #x3E #x00 #x00
+    #x40 #x3F #x00 #x00 #xC0 #x3E #x00 #x00 #x40 #x3F #x00 #x00 #x20 #x3F #x00 #x00 #x00 #x00 #x00 #x00 #x20 #x3F
+    #x00 #x00 #x80 #x3F #x00 #x00 #x60 #x3F #x00 #x00 #x80 #x3E #x00 #x00 #x00 #x3E #x00 #x00 #x80 #x3E #x00 #x00
+    #xC0 #x3E #x00 #x00 #x00 #x00 #x00 #x00 #xC0 #x3E #x00 #x00 #x80 #x3F #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00
+    #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x3F #x00 #x00 #x00 #x80 #x00 #x00 #x80 #x3F #x00 #x00
+    #x00 #x00 #x00 #x00 #x00 #x80 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x80 #x00 #x00 #x00 #x00
+    #x00 #x00 #x00 #x00 #x00 #x00 #x80 #xBF #x00 #x00 #x80 #x3F #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x00 #x00
+    #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x3F #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x3F #x00 #x00 #x00 #x80
+    #x00 #x00 #x80 #x3F #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #xBF #x00 #x00
+    #x00 #x80 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x3F #x00 #x00 #x80 #x3F #x00 #x00 #x00 #x00
+    #x00 #x00 #x00 #x80 #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x00 #x00 #x00 #x00 #x00 #x00
+    #x00 #x00 #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x3F #x00 #x00 #x00 #x80 #x00 #x00 #x00 #x00
+    #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x80 #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x00 #x00
+    #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x3F
+    #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x3F #x00 #x00
+    #x00 #x80 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x80 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00
+    #x00 #x00 #x80 #x3F #x00 #x00 #x80 #xBF #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x80 #x01 #x00 #x0E #x00 #x14 #x00
+    #x01 #x00 #x14 #x00 #x07 #x00 #x0A #x00 #x06 #x00 #x12 #x00 #x0A #x00 #x12 #x00 #x16 #x00 #x17 #x00 #x13 #x00
+    #x0C #x00 #x17 #x00 #x0C #x00 #x10 #x00 #x0F #x00 #x03 #x00 #x09 #x00 #x0F #x00 #x09 #x00 #x15 #x00 #x05 #x00
+    #x02 #x00 #x08 #x00 #x05 #x00 #x08 #x00 #x0B #x00 #x11 #x00 #x0D #x00 #x00 #x00 #x11 #x00 #x00 #x00 #x04 #x00)
+  '(simple-array (unsigned-byte 8) (*))))
+
+(test parse-ub8-resets-to-correct-pos-on-error-report
+  (signals jzon:json-parse-error (jzon:parse (jzon:span *cube.glb* :start 20)))
+  (let ((err (nth-value 1 (ignore-errors (jzon:parse (jzon:span *cube.glb* :start 20))))))
+    (is (= 1 (jzon::%json-parse-error-line err)))
+    (is (= 1070 (jzon::%json-parse-error-column err)))))
+
+(test parse-binary-stream-resets-to-correct-pos-on-error-report
+  (signals jzon:json-parse-error (jzon:parse (flexi-streams:make-in-memory-input-stream *cube.glb* :start 20)))
+  (let ((err (nth-value 1 (ignore-errors (jzon:parse (flexi-streams:make-in-memory-input-stream *cube.glb* :start 20))))))
+    (is (= 1 (jzon::%json-parse-error-line err)))
+    (is (= 1070 (jzon::%json-parse-error-column err)))))
+
 (def-suite writer :in jzon)
 (in-suite writer)
 

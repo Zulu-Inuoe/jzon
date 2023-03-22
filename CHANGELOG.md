@@ -3,6 +3,7 @@
 Changes relative to [v1.1.0](#v110)
 
 * Fix printing non-square multidimensional arrays https://github.com/Zulu-Inuoe/jzon/issues/43
+* Fix `cl:error` when calculating multibyte position of binary streams or ub8 vectors on json parse error
 
 ## v1.1.0
 
