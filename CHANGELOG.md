@@ -1,3 +1,9 @@
+## PENDING v1.2.0
+
+Changes relative to [v1.1.0](#v110)
+
+* Fix printing non-square multidimensional arrays https://github.com/Zulu-Inuoe/jzon/issues/43
+
 ## v1.1.0
 
 Changes relative to [v1.0.0](#v100)
