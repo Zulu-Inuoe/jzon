@@ -1177,6 +1177,18 @@
   (is (string= "5" (jzon:stringify 5)))
   (is (string= "0" (jzon:stringify 0))))
 
+(test stringify-1.0s0
+  (is (string= "1.0" (jzon:stringify 1.0s0))))
+
+(test stringify-1.0d0
+  (is (string= "1.0" (jzon:stringify 1.0d0))))
+
+(test strigify-12.0d0
+  (is (string= "12.0" (jzon:stringify 12.0d0))))
+
+(test stringify-123456.0s0
+  (is (string= "123456.0" (jzon:stringify 123456.0s0))))
+
 (test stringify-1.2d0
   (is (string= "1.2" (jzon:stringify 1.2d0))))
 
