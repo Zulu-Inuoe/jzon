@@ -211,30 +211,30 @@
       (setf (char buf (+ pos 1)) (code-char (ldb (byte 7 8) d)))
       (+ pos 2))))
 
-(defun %write-positive-int-digits (q0 pos buf ds)
-  (declare (type (unsigned-byte 31) q0)
-           (type (integer 0 23) pos)
+(defun %write-positive-int-digits (q p buf ds)
+  (declare (type (unsigned-byte 31) q)
+           (type (integer 0 23) p)
            (type (or (simple-base-string 15)
                      (simple-base-string 24)) buf)
            (type (simple-array (unsigned-byte 16) (100)) ds))
-  (cond
-    ((< q0 100)
-      (cond
-        ((< q0 10)
-          (setf (char buf pos) (code-char (+ q0 (char-code #\0)))))
-        (t
-          (let ((d (aref ds q0)))
-            (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
-            (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d))))))
-      (values))
-    (t
-      (let* ((q1 (%int32 (%>>64 (* q0 1374389535) 37)))
+  (let ((q0 q)
+        (pos p))
+    (loop
+      (setf pos (- pos 2))
+      (when (< q0 100)
+        (return))
+      
+      (let* ((q1 (%int32 (%>>64 (%int64 (* q0 1374389535)) 37)))
              (d (aref ds (- q0 (* q1 100)))))
-
-        (setf (char buf (- pos 1)) (code-char (ldb (byte 7 0) d)))
-        (setf (char buf (- pos 0)) (code-char (ldb (byte 7 8) d)))
-
-        (%write-positive-int-digits q1 (- pos 2) buf ds)))))
+        (setf (char buf (+ pos 0)) (code-char (ldb (byte 7 0) d)))
+        (setf (char buf (+ pos 1)) (code-char (ldb (byte 7 8) d)))
+        (setf q0 q1)))
+    (if (< q0 10)
+      (setf (char buf (+ pos 1)) (code-char (+ q0 (char-code #\0))))
+      (let ((d (aref ds q0)))
+        (setf (char buf (+ pos 0)) (code-char (ldb (byte 7 0) d)))
+        (setf (char buf (+ pos 1)) (code-char (ldb (byte 7 8) d))))))
+  (values))
 
 (defmacro %single-float-bits (x)
   #-ecl

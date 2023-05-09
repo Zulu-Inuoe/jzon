@@ -1,8 +1,14 @@
 ## PENDING v1.2.0
 
-Changes relative to [v1.1.0](#v110)
+Changes relative to [v1.1.1](#v111)
 
 * Fix printing non-square multidimensional arrays https://github.com/Zulu-Inuoe/jzon/issues/43
+
+## v1.1.1
+
+Changes relative to [v1.1.0](#v110)
+
+* **Major fix** - Fix printing floating point without fractional or exponent parts. https://github.com/Zulu-Inuoe/jzon/issues/45
 
 ## v1.1.0
 
