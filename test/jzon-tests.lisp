@@ -1229,6 +1229,12 @@
 (test stringify-multidimensional-array
   (is (string= "[[1,2],[3,4]]" (jzon:stringify #2A((1 2) (3 4))))))
 
+(test stringify-non-square-multidimensional-arrays-2×3
+  (is (string= "[[0,1,2],[3,4,5]]" (jzon:stringify #2A((0 1 2) (3 4 5))))))
+
+(test stringify-non-square-multidimensional-arrays-3x2
+  (is (string= "[[0,1],[2,3],[4,5]]" (jzon:stringify #2A((0 1) (2 3) (4 5))))))
+
 (test 0-dimension-array
   (is (string= "42" (jzon:stringify #0A42))))
 

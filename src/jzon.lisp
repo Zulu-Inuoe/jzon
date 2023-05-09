@@ -1678,16 +1678,22 @@ see `write-values'"
   (:method ((writer writer) (value array))
     (let ((dimensions (array-dimensions value)))
       (if (null dimensions)
-          (write-value writer (aref value))
-          (labels ((recurse (dimensions acc)
+        (write-value writer (aref value))
+        (labels ((recurse (dimensions head tail)
+                   (if (null dimensions)
+                     (write-value writer (apply #'aref value head))
                      (destructuring-bind (d . rest) dimensions
                        (with-array writer
-                         (if (null rest)
-                           (loop :for i :below d
-                                 :do (write-value writer (row-major-aref value (+ acc i))))
-                           (loop :for i :below d
-                                 :do (recurse rest (+ acc (* i d)))))))))
-            (recurse dimensions 0)))))
+                         (let ((cell (setf (cdr tail) (cons 0 nil))))
+                           (dotimes (i d)
+                             (setf (car cell) i)
+                             (recurse rest head cell))))))))
+          (destructuring-bind (d . rest) dimensions
+            (with-array writer
+              (let ((cell (cons 0 nil)))
+                (dotimes (i d)
+                  (setf (car cell) i)
+                  (recurse rest cell cell)))))))))
 
   ;;; Sequence support
   (:method ((writer writer) (value sequence))
