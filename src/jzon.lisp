@@ -1128,11 +1128,12 @@ see `close-parser'"
              `(let ((class (class-of ,element)))
                 (c2mop:ensure-finalized class)
                 (mapcar (lambda (s)
-                          (list (c2mop:slot-definition-name s)
-                                (c2mop:slot-value-using-class class ,element s)
-                                (c2mop:slot-definition-type s)))
-                        (remove-if-not (lambda (s) (c2mop:slot-boundp-using-class class ,element s))
-                                       (c2mop:class-slots class))))))
+                          (let ((slot-name (c2mop:slot-definition-name s)))
+                            (list slot-name
+                                  (slot-value ,element slot-name)
+                                  (c2mop:slot-definition-type s))))
+                          (remove-if-not (lambda (s) (slot-boundp ,element (c2mop:slot-definition-name s)))
+                                         (c2mop:class-slots class))))))
   (defgeneric coerced-fields (element)
     (:documentation "Return a list of key definitions for `element'.
  A key definition is a three-element list of the form
