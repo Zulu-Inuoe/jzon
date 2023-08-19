@@ -230,14 +230,16 @@ This *may* help speed up parsing on highly heterogeneous JSON.
 
 *=> span*
 
-* *in* - a `string`, or `vector (unsigned-byte 8)`
+* *in* - a `string`, `stream` ' or `vector (unsigned-byte 8)`
 * *start, end* - bounding index designators of sequence. The defaults for *start* and *end* are 0 and nil, respectively.
 
 *span* a span object representing the range.
 
 #### Description
 
-Create a span to be used in [`jzon:parse`](#jzonparse), or [`jzon:make-parser`](#jzonparser) in order to specify a bounded *start* and *end* for a string or vector.
+Create a span to be used in [`jzon:parse`](#jzonparse), or [`jzon:make-parser`](#jzonparser) in order to specify a bounded *start* and *end* for a string, stream or vector.
+
+NOTE: For streams, only input streams are allowed.
 
 ##### Example
 

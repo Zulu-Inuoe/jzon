@@ -1082,7 +1082,15 @@ see `close-parser'"
             (end (or end (length in))))
         (unless (<= 0 start end (length in))
           (error "The bounding indices ~A and ~A are bad for a sequence of length ~A." start end (length in)))
-        (make-instance '%octet-vector-span :vector in :start start :end end)))))
+        (make-instance '%octet-vector-span :vector in :start start :end end)))
+    (stream
+      (let ((start start)
+            (end (or end (file-length in))))
+        (unless (<= 0 start end (file-length in))
+          (error "The bounding indices ~A and ~A are bad for a stream of length ~A." start end (file-length in)))
+        (unless (input-stream-p in)
+          (error "The stream ~A is not an input stream." in))
+        (flexi-streams:make-flexi-stream in :element-type (stream-element-type in) :position start :bound end)))))
 
 (defun parse (in &key
                    (max-depth 128)
