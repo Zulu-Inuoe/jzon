@@ -1082,7 +1082,15 @@ see `close-parser'"
             (end (or end (length in))))
         (unless (<= 0 start end (length in))
           (error "The bounding indices ~A and ~A are bad for a sequence of length ~A." start end (length in)))
-        (make-instance '%octet-vector-span :vector in :start start :end end)))))
+        (make-instance '%octet-vector-span :vector in :start start :end end)))
+    (stream
+      (let ((start start)
+            (end (or end (file-length in))))
+        (unless (<= 0 start end (file-length in))
+          (error "The bounding indices ~A and ~A are bad for a stream of length ~A." start end (file-length in)))
+        (unless (input-stream-p in)
+          (error "The stream ~A is not an input stream." in))
+        (flexi-streams:make-flexi-stream in :element-type (stream-element-type in) :position start :bound end)))))
 
 (defun parse (in &key
                    (max-depth 128)
@@ -1128,11 +1136,12 @@ see `close-parser'"
              `(let ((class (class-of ,element)))
                 (c2mop:ensure-finalized class)
                 (mapcar (lambda (s)
-                          (list (c2mop:slot-definition-name s)
-                                (c2mop:slot-value-using-class class ,element s)
-                                (c2mop:slot-definition-type s)))
-                        (remove-if-not (lambda (s) (c2mop:slot-boundp-using-class class ,element s))
-                                       (c2mop:class-slots class))))))
+                          (let ((slot-name (c2mop:slot-definition-name s)))
+                            (list slot-name
+                                  (slot-value ,element slot-name)
+                                  (c2mop:slot-definition-type s))))
+                          (remove-if-not (lambda (s) (slot-boundp ,element (c2mop:slot-definition-name s)))
+                                         (c2mop:class-slots class))))))
   (defgeneric coerced-fields (element)
     (:documentation "Return a list of key definitions for `element'.
  A key definition is a three-element list of the form
