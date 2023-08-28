@@ -5,6 +5,8 @@
   :license "MIT"
   :components
   ((:file "jzon-tests"))
+  :perform
+  (test-op (o c) (symbol-call '#:com.inuoe.jzon-tests '#:run))
   :depends-on
   (#:alexandria
    #:fiveam

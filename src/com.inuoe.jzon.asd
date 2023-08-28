@@ -8,6 +8,7 @@
                (:feature (:not :ecl) #:float-features)
                #:trivial-gray-streams
                #:uiop)
+  :in-order-to ((test-op (test-op "com.inuoe.jzon-tests")))
   :components ((:file "eisel-lemire")
                (:file "ratio-to-double")
                (:file "schubfach")
