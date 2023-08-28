@@ -1,5 +1,5 @@
 (defsystem #:com.inuoe.jzon
-  :version "1.1.1"
+  :version "1.1.2"
   :description "A correct and safe(er) JSON RFC 8259 parser with sane defaults."
   :author "Wilfredo Velázquez-Rodríguez <zulu.inuoe@gmail.com>"
   :license "MIT"
@@ -8,6 +8,7 @@
                (:feature (:not :ecl) #:float-features)
                #:trivial-gray-streams
                #:uiop)
+  :in-order-to ((test-op (test-op "com.inuoe.jzon-tests")))
   :components ((:file "eisel-lemire")
                (:file "ratio-to-double")
                (:file "schubfach")

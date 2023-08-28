@@ -166,6 +166,7 @@
   (the (values null &optional)
     (let ((q0 q)
           (pos p))
+      (declare (type (signed-byte 32) q0))
       (loop :while (> pos pos-lim)
             :do (let* ((q1 (%int32 (%>>64 (* q0 1374389535) 37)))
                        (d (aref ds (- q0 (* q1 100)))))
@@ -183,6 +184,7 @@
     (let* ((q0 q)
            (q1 0)
            (pos p))
+      (declare (type (signed-byte 32) q0))
       (loop :while (let ((qp (%int64 (* q0 1374389535))))
                      (setf q1 (%int32 (%>>64 qp 37)))
                      (zerop (logand qp #x1FC0000000)))
@@ -219,6 +221,7 @@
            (type (simple-array (unsigned-byte 16) (100)) ds))
   (let ((q0 q)
         (pos p))
+    (declare (type (signed-byte 32) q0))
     (loop
       (setf pos (- pos 2))
       (when (< q0 100)

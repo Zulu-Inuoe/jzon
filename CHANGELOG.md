@@ -1,3 +1,17 @@
+## PENDING v1.1.3
+
+Changes relative to [v1.1.2](#v112)
+
+## v1.1.2
+
+Changes relative to [v1.1.1](#v111)
+
+* Fix printing non-square multidimensional arrays https://github.com/Zulu-Inuoe/jzon/issues/43
+* Fix serializing CLOS objects on LispWorks https://github.com/Zulu-Inuoe/jzon/issues/49
+* `jzon:span` support for `cl:stream`
+* Fix serializing non-square multidimensional arrays https://github.com/Zulu-Inuoe/jzon/pull/44
+* Can now test jzon via `asdf:test-system` https://github.com/Zulu-Inuoe/jzon/pull/51
+
 ## v1.1.1
 
 Changes relative to [v1.1.0](#v110)
