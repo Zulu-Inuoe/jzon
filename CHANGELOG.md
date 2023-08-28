@@ -10,6 +10,7 @@ Changes relative to [v1.1.1](#v111)
 * Fix serializing CLOS objects on LispWorks https://github.com/Zulu-Inuoe/jzon/issues/49
 * `jzon:span` support for `cl:stream`
 * Fix serializing non-square multidimensional arrays https://github.com/Zulu-Inuoe/jzon/pull/44
+* Can now test jzon via `asdf:test-system` https://github.com/Zulu-Inuoe/jzon/pull/51
 
 ## v1.1.1
 
