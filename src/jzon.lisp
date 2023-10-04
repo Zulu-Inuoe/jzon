@@ -1156,7 +1156,7 @@ Example return value:
 ")
     (:method (element)
       nil)
-    #+(or ccl clisp sbcl)
+    #+(or ccl clisp sbcl lispworks8)
     (:method ((element structure-object))
       (%coerced-fields-slots element))
     (:method ((element standard-object))
