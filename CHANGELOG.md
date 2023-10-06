@@ -2,6 +2,8 @@
 
 Changes relative to [v1.1.2](#v112)
 
+* LispWorks 8 Structure Serialization
+
 ## v1.1.2
 
 Changes relative to [v1.1.1](#v111)
