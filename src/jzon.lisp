@@ -700,7 +700,7 @@ see `close-parser'"
   (multiple-value-bind (input close-action)
       (typecase in
         (pathname
-          (let ((f (open in :direction :input :external-format :utf-8)))
+          (let ((f (open in :direction :input :external-format :utf-8 :element-type 'character)))
             (values f (lambda () (close f)))))
         (t (values in (lambda ()))))
     (let ((parser (make-instance 'parser))
@@ -1125,7 +1125,7 @@ see `close-parser'"
 
     (typecase in
       (pathname
-       (with-open-file (in in :direction :input :external-format :utf-8)
+       (with-open-file (in in :direction :input :external-format :utf-8 :element-type 'character)
          (parse in :max-depth max-depth :allow-comments allow-comments :allow-trailing-comma allow-trailing-comma :allow-multiple-content allow-multiple-content :max-string-length max-string-length :key-fn key-fn)))
       (t
         (multiple-value-bind (%step %read-string %pos) (%make-fns in max-string-length)
@@ -1305,7 +1305,8 @@ Example return value:
           (let ((stream (open stream :direction :output
                                      :if-does-not-exist :create
                                      :if-exists :supersede
-                                     :external-format :utf-8)))
+                                     :external-format :utf-8
+                                     :element-type 'character)))
             (values stream (lambda () (close stream)))))
         ((streamp stream)
           (unless (output-stream-p stream)
