@@ -5,6 +5,7 @@
    #:parse
 
    ;;;; Streaming reader
+   #:parser
    #:make-parser
    #:parse-next
    #:parse-next-element
