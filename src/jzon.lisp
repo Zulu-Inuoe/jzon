@@ -969,9 +969,9 @@ see `close-parser'"
                       (return value)
                       (let ((container (car stack)))
                         (if (listp container)
-                          (progn (push value (the list (car stack)))
+                          (progn (setf (car stack) (cons value (the list container)))
                                  (incf (the (integer 0) (car len))))
-                          (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+                          (setf (gethash (pop key) (the hash-table container)) value))))))
                (inc-depth ()
                  `(progn
                    (when (= depth %max-depth)
@@ -1033,9 +1033,9 @@ see `close-parser'"
                         (setf top value))
                       (let ((container (car stack)))
                         (if (listp container)
-                          (progn (push value (the list (car stack)))
+                          (progn (setf (car stack) (cons value (the list container)))
                                  (incf (the (integer 0) (car len))))
-                          (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+                          (setf (gethash (pop key) (the hash-table container)) value))))))
                 (inc-depth ()
                   `(progn
                     (when (= depth %max-depth)
