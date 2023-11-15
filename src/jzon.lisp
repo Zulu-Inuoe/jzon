@@ -401,7 +401,6 @@ see `json-atom'"
   (declare (type (integer 1) n))
   (loop :with line :of-type (integer 1)  := 1
         :with col :of-type (integer 1) := 1
-        :with cr := nil
         :for p :from 0 :below (1- n)
         :for c := (%step step)
         :do (case c
