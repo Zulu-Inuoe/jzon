@@ -1177,8 +1177,8 @@
   (is (string= "5" (jzon:stringify 5)))
   (is (string= "0" (jzon:stringify 0))))
 
-(test stringify-1.0s0
-  (is (string= "1.0" (jzon:stringify 1.0s0))))
+(test stringify-1.0f0
+  (is (string= "1.0" (jzon:stringify 1.0f0))))
 
 (test stringify-1.0d0
   (is (string= "1.0" (jzon:stringify 1.0d0))))
@@ -1186,14 +1186,14 @@
 (test strigify-12.0d0
   (is (string= "12.0" (jzon:stringify 12.0d0))))
 
-(test stringify-123456.0s0
-  (is (string= "123456.0" (jzon:stringify 123456.0s0))))
+(test stringify-123456.0f0
+  (is (string= "123456.0" (jzon:stringify 123456.0f0))))
 
 (test stringify-1.2d0
   (is (string= "1.2" (jzon:stringify 1.2d0))))
 
-(test stringify-1.2s0
-  (is (string= "1.2" (jzon:stringify 1.2s0))))
+(test stringify-1.2f0
+  (is (string= "1.2" (jzon:stringify 1.2f0))))
 
 (test stringify-strings
   (is (string= "\"hello, world!\"" (jzon:stringify "hello, world!")))
@@ -1255,17 +1255,17 @@
     (let ((*print-base* 2))
       (is (string= "{\"10\":10}" (jzon:stringify (ph 10 10)))))))
 
-(test stringify-coerce-key-writes-single-floats-without-s0
+(test stringify-coerce-key-writes-single-floats-without-f0
   (with-standard-io-syntax
-    (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5s0 1.5s0))))
+    (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5f0 1.5f0))))
     (let ((*read-default-float-format* 'double-float))
-      (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5s0 1.5s0)))))))
+      (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5f0 1.5f0)))))))
 
 (test stringify-coerce-key-writes-double-floats-without-d0
   (with-standard-io-syntax
     (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5d0 1.5d0))))
     (let ((*read-default-float-format* 'double-float))
-      (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5s0 1.5s0)))))))
+      (is (string= "{\"1.5\":1.5}" (jzon:stringify (ph 1.5f0 1.5f0)))))))
 
 (test stringify-coerce-key-writes-rationals-like-floats
   (with-standard-io-syntax

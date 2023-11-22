@@ -5,6 +5,7 @@ Changes relative to [v1.1.2](#v112)
 * LispWorks 8 Structure Serialization
 * Fix error when reading/writing from/to pathnames on LispWorks (https://github.com/Zulu-Inuoe/jzon/issues/56)
 * Export `jzon:parser`
+* Fix unit tests on LispWorks (https://github.com/Zulu-Inuoe/jzon/issues/57)
 
 ## v1.1.2
 
