@@ -5,6 +5,7 @@
    #:parse
 
    ;;;; Streaming reader
+   #:parser
    #:make-parser
    #:parse-next
    #:parse-next-element
@@ -249,16 +250,16 @@ see `json-atom'"
   (macrolet ((%read-code-point ()
               `(logior (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
                                (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
-                           12)
-                      (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
+                            12)
+                       (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
                                (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
-                           8)
-                      (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
+                            8)
+                       (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
                                (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
-                           4)
-                      (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
-                               (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
-                           0))))
+                            4)
+                       (ash (or (digit-char-p (or (%step step) (%raise 'json-eof-error pos "Unexpected end of input reading unicode escape code in string")) 16)
+                                (%raise 'json-parse-error pos "Non-digit in unicode escape code in string"))
+                            0))))
     (let ((code-point (%read-code-point)))
       (code-char
        (if (<= #xD800 code-point #xDBFF)
@@ -329,7 +330,7 @@ see `json-atom'"
                      (let ((exp10 (+ exp10 (* exp-sign exp-val))))
                        (return  (values
                                   (or (el:make-double mantissa exp10 (minusp sign))
-                                  (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
+                                      (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
                                   c)))
                      c))))
     (prog ((sign 1)
@@ -400,7 +401,6 @@ see `json-atom'"
   (declare (type (integer 1) n))
   (loop :with line :of-type (integer 1)  := 1
         :with col :of-type (integer 1) := 1
-        :with cr := nil
         :for p :from 0 :below (1- n)
         :for c := (%step step)
         :do (case c
@@ -700,7 +700,7 @@ see `close-parser'"
   (multiple-value-bind (input close-action)
       (typecase in
         (pathname
-          (let ((f (open in :direction :input :external-format :utf-8)))
+          (let ((f (open in :direction :input :external-format :utf-8 :element-type 'character)))
             (values f (lambda () (close f)))))
         (t (values in (lambda ()))))
     (let ((parser (make-instance 'parser))
@@ -960,7 +960,6 @@ see `close-parser'"
         (%allow-comments (slot-value parser '%allow-comments))
         (%allow-multiple-content (slot-value parser '%allow-multiple-content))
         (%parser-state (slot-value parser '%parser-state)))
-    (declare (dynamic-extent stack key len))
     (declare (type list stack key len))
     (macrolet ((finish-value (value)
                  `(let ((value ,value))
@@ -968,9 +967,9 @@ see `close-parser'"
                       (return value)
                       (let ((container (car stack)))
                         (if (listp container)
-                          (progn (push value (the list (car stack)))
+                          (progn (setf (car stack) (cons value (the list container)))
                                  (incf (the (integer 0) (car len))))
-                          (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+                          (setf (gethash (pop key) (the hash-table container)) value))))))
                (inc-depth ()
                  `(progn
                    (when (= depth %max-depth)
@@ -1016,7 +1015,6 @@ see `close-parser'"
         stack
         key
         len)
-    (declare (dynamic-extent %parser-state stack key))
     (declare (type (integer 0 #xFFFF) depth))
     (declare (type list stack key len))
     (macrolet ((finish-value (value &optional check-lc)
@@ -1032,9 +1030,9 @@ see `close-parser'"
                         (setf top value))
                       (let ((container (car stack)))
                         (if (listp container)
-                          (progn (push value (the list (car stack)))
+                          (progn (setf (car stack) (cons value (the list container)))
                                  (incf (the (integer 0) (car len))))
-                          (setf (gethash (pop key) (the hash-table (car stack))) value))))))
+                          (setf (gethash (pop key) (the hash-table container)) value))))))
                 (inc-depth ()
                   `(progn
                     (when (= depth %max-depth)
@@ -1125,7 +1123,7 @@ see `close-parser'"
 
     (typecase in
       (pathname
-       (with-open-file (in in :direction :input :external-format :utf-8)
+       (with-open-file (in in :direction :input :external-format :utf-8 :element-type 'character)
          (parse in :max-depth max-depth :allow-comments allow-comments :allow-trailing-comma allow-trailing-comma :allow-multiple-content allow-multiple-content :max-string-length max-string-length :key-fn key-fn)))
       (t
         (multiple-value-bind (%step %read-string %pos) (%make-fns in max-string-length)
@@ -1156,7 +1154,7 @@ Example return value:
 ")
     (:method (element)
       nil)
-    #+(or ccl clisp sbcl)
+    #+(or ccl clisp sbcl lispworks8)
     (:method ((element structure-object))
       (%coerced-fields-slots element))
     (:method ((element standard-object))
@@ -1305,7 +1303,8 @@ Example return value:
           (let ((stream (open stream :direction :output
                                      :if-does-not-exist :create
                                      :if-exists :supersede
-                                     :external-format :utf-8)))
+                                     :external-format :utf-8
+                                     :element-type 'character)))
             (values stream (lambda () (close stream)))))
         ((streamp stream)
           (unless (output-stream-p stream)

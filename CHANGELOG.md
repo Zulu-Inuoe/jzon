@@ -1,6 +1,12 @@
-## PENDING v1.1.3
+## v1.1.3
 
 Changes relative to [v1.1.2](#v112)
+
+* LispWorks 8 Structure Serialization
+* Fix error when reading/writing from/to pathnames on LispWorks (https://github.com/Zulu-Inuoe/jzon/issues/56)
+* Export `jzon:parser`
+* Fix unit tests on LispWorks (https://github.com/Zulu-Inuoe/jzon/issues/57)
+* Fix stack overflow on deeply nested JSON on SBCL 2.3.10+
 
 ## v1.1.2
 
