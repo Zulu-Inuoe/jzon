@@ -960,7 +960,6 @@ see `close-parser'"
         (%allow-comments (slot-value parser '%allow-comments))
         (%allow-multiple-content (slot-value parser '%allow-multiple-content))
         (%parser-state (slot-value parser '%parser-state)))
-    (declare (dynamic-extent stack key len))
     (declare (type list stack key len))
     (macrolet ((finish-value (value)
                  `(let ((value ,value))
@@ -1016,7 +1015,6 @@ see `close-parser'"
         stack
         key
         len)
-    (declare (dynamic-extent %parser-state stack key))
     (declare (type (integer 0 #xFFFF) depth))
     (declare (type list stack key len))
     (macrolet ((finish-value (value &optional check-lc)
