@@ -330,7 +330,7 @@ see `json-atom'"
                      (let ((exp10 (+ exp10 (* exp-sign exp-val))))
                        (return  (values
                                   (or (el:make-double mantissa exp10 (minusp sign))
-                                  (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
+                                      (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
                                   c)))
                      c))))
     (prog ((sign 1)
