@@ -398,7 +398,10 @@
       (#(1 2 3)          (jzon:parse "[1,2,3]"))
       ((ph "x" 10 "y" 0) (jzon:parse "{ \"x\": 10, \"y\": 0}")))))
 
-(test parse-returns-base-strings
+(test (parse-returns-base-strings :depends-on
+                                  ;; Skip test on ECL - producing incorrectly upgraded array type https://github.com/Zulu-Inuoe/jzon/issues/59
+                                  #+ecl (or)
+                                  #-ecl (and))
   (is (eq '#.(upgraded-array-element-type 'base-char) (array-element-type (jzon:parse "\"COMMON-LISP\""))))
   (is (eq '#.(upgraded-array-element-type 'base-char) (array-element-type (jzon:parse "\"\\u0043\\u004F\\u004D\\u004D\\u004F\\u004E\\u002D\\u004C\\u0049\\u0053\\u0050\"")))))
 
