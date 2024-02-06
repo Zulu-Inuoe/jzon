@@ -271,7 +271,7 @@ If *pretty* is true, the output is formatted with spaces and newlines.
 
 *max-depth* limits the depth of nesting arrays/objects. Use `nil` to disable it, or `t` to set to default.
 
-In addition to serializing `json:jzon-element` values per [Type Mappings](#type-mappings), `jzon:stringify` allows other values. 
+In addition to serializing `jzon:json-element` values per [Type Mappings](#type-mappings), `jzon:stringify` allows other values. 
 See [Additionally Supported Types For Writing](#additionally-supported-types-for-writing) and [Custom Serialization](#custom-serialization).
 
 *max-string-length* may be an integer denoting the limit, or
