@@ -3,6 +3,7 @@
 Changes relative to [v1.1.3](#v113)
 
 * Skip optional failing unit test on ECL (https://github.com/Zulu-Inuoe/jzon/issues/59)
+* CLISP suport by removing PLN usage (https://github.com/Zulu-Inuoe/jzon/issues/53)
 
 ## v1.1.3
 
