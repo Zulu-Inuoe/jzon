@@ -75,11 +75,6 @@
    #:end-object*
    #:with-object*
    #:write-object*)
-  (:local-nicknames
-    (#:el #:com.inuoe.jzon/eisel-lemire)
-    (#:rtd #:com.inuoe.jzon/ratio-to-double)
-    (#:sf #:com.inuoe.jzon/schubfach)
-    (#:tgs #:trivial-gray-streams))
   (:import-from #:closer-mop)
   (:import-from #:flexi-streams)
   (:import-from #:float-features)
@@ -329,8 +324,8 @@ see `json-atom'"
                    (if (or (null c) (%ends-token-p c))
                      (let ((exp10 (+ exp10 (* exp-sign exp-val))))
                        (return  (values
-                                  (or (el:make-double mantissa exp10 (minusp sign))
-                                      (rtd:ratio-to-double (* mantissa (expt 10 exp10) sign)))
+                                  (or (com.inuoe.jzon/eisel-lemire:make-double mantissa exp10 (minusp sign))
+                                      (com.inuoe.jzon/ratio-to-double:ratio-to-double (* mantissa (expt 10 exp10) sign)))
                                   c)))
                      c))))
     (prog ((sign 1)
@@ -1185,16 +1180,16 @@ Example return value:
     (with-output-to-string (s)
       (macrolet ((#1=#:|| ()
                   `(etypecase key
-                    (double-float (sf:write-double key s))
-                    (single-float (sf:write-float key s))
+                    (double-float (com.inuoe.jzon/schubfach:write-double key s))
+                    (single-float (com.inuoe.jzon/schubfach:write-float key s))
                     ,@(unless (%type= 'short-float 'single-float)
-                      '((short-float (sf:write-float (coerce key 'single-float) s))))
+                      '((short-float (com.inuoe.jzon/schubfach:write-float (coerce key 'single-float) s))))
                     ,@(unless (%type= 'long-float 'double-float)
-                      '((long-float (sf:write-double (coerce key 'double-float) s)))))))
+                      '((long-float (com.inuoe.jzon/schubfach:write-double (coerce key 'double-float) s)))))))
         (#1#))))
   (:method ((key ratio))
     (with-output-to-string (s)
-      (sf:write-double (rtd:ratio-to-double key) s))))
+      (com.inuoe.jzon/schubfach:write-double (com.inuoe.jzon/ratio-to-double:ratio-to-double key) s))))
 
 (define-condition json-write-error (json-error) ()
   (:documentation "Error signalled when there is an issue during writing JSON."))
@@ -1218,13 +1213,13 @@ Example return value:
       (format stream " Limit: ~A." (%json-limit-error-limit c))))
   (:documentation "Error signalled when a limit on the JSON writer has been exceeded."))
 
-(defclass %string-output-stream (tgs:fundamental-character-output-stream)
+(defclass %string-output-stream (trivial-gray-streams:fundamental-character-output-stream)
   ((%string :initarg :string)))
 
-(defmethod tgs:stream-write-char ((stream %string-output-stream) character)
+(defmethod trivial-gray-streams:stream-write-char ((stream %string-output-stream) character)
   (vector-push-extend character (slot-value stream '%string)))
 
-(defmethod tgs:stream-write-string ((stream %string-output-stream) string &optional start end)
+(defmethod trivial-gray-streams:stream-write-string ((stream %string-output-stream) string &optional start end)
   (let* ((%string (slot-value stream '%string))
          (len (- (or end (length string)) (or start 0)))
          (prev-len (fill-pointer %string))
@@ -1547,7 +1542,7 @@ see `write-values'"
       ((eql nil)    (write-string "false" %stream))
       ((eql null)   (write-string "null" %stream))
       (integer      (format %stream "~D" value))
-      (double-float (sf:write-double value %stream))
+      (double-float (com.inuoe.jzon/schubfach:write-double value %stream))
       (string       (%write-json-string value %stream)))))
 
 (defgeneric write-value (writer value)
@@ -1622,12 +1617,12 @@ see `write-values'"
          (%write-indentation writer)))
       (macrolet ((#1=#:|| ()
                   `(etypecase value
-                    (double-float (sf:write-double value %stream))
-                    (single-float (sf:write-float value %stream))
+                    (double-float (com.inuoe.jzon/schubfach:write-double value %stream))
+                    (single-float (com.inuoe.jzon/schubfach:write-float value %stream))
                     ,@(unless (%type= 'short-float 'single-float)
-                      '((short-float (sf:write-float (coerce value 'single-float) %stream))))
+                      '((short-float (com.inuoe.jzon/schubfach:write-float (coerce value 'single-float) %stream))))
                     ,@(unless (%type= 'long-float 'double-float)
-                      '((long-float (sf:write-double (coerce value 'double-float) %stream)))))))
+                      '((long-float (com.inuoe.jzon/schubfach:write-double (coerce value 'double-float) %stream)))))))
         (#1#))))
   (:method ((writer writer) (value string))
     (%write-json-atom writer value))
@@ -1668,7 +1663,7 @@ see `write-values'"
 
   ;; Reals
   (:method ((writer writer) (value ratio))
-    (%write-json-atom writer (rtd:ratio-to-double value)))
+    (%write-json-atom writer (com.inuoe.jzon/ratio-to-double:ratio-to-double value)))
 
   ;;; Symbols
   (:method ((writer writer) (value symbol))

@@ -17,9 +17,6 @@
 
 (defpackage #:com.inuoe.jzon/schubfach
   (:use #:cl)
-  (:local-nicknames
-    #-ecl
-    (#:ff #:org.shirakumo.float-features))
   (:export
     #:write-float
     #:write-double))
@@ -241,7 +238,7 @@
 
 (defmacro %single-float-bits (x)
   #-ecl
-  `(the (unsigned-byte 32) (ff:single-float-bits ,x))
+  `(the (unsigned-byte 32) (org.shirakumo.float-features:single-float-bits ,x))
   #+ecl
   (if (find-symbol (string '#:single-float-bits) '#:si)
     `(,(intern (string '#:single-float-bits) '#:si) ,x)
@@ -443,7 +440,7 @@
 
 (defmacro %double-float-bits (x)
   #-ecl
-  `(the (unsigned-byte 64) (ff:double-float-bits ,x))
+  `(the (unsigned-byte 64) (org.shirakumo.float-features:double-float-bits ,x))
   #+ecl
   (if (find-symbol (string '#:double-float-bits) '#:si)
     `(,(intern (string '#:double-float-bits) '#:si) ,x)

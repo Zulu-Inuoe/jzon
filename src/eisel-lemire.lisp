@@ -1,8 +1,5 @@
 (defpackage #:com.inuoe.jzon/eisel-lemire
   (:use #:cl)
-  (:local-nicknames
-    #-ecl
-    (#:ff #:org.shirakumo.float-features))
   (:export #:make-double))
 
 (in-package #:com.inuoe.jzon/eisel-lemire)
@@ -98,7 +95,7 @@
 
 (defmacro %bits-double-float (x)
   #-ecl
-  `(ff:bits-double-float ,x)
+  `(org.shirakumo.float-features:bits-double-float ,x)
   #+ecl
   (if (find-symbol (string '#:bits-double-float) '#:si)
     `(,(intern (string '#:bits-double-float) '#:si) ,x)
