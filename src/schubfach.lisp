@@ -223,7 +223,7 @@
       (setf pos (- pos 2))
       (when (< q0 100)
         (return))
-      
+
       (let* ((q1 (%int32 (%>>64 (%int64 (* q0 1374389535)) 37)))
              (d (aref ds (- q0 (* q1 100)))))
         (setf (char buf (+ pos 0)) (code-char (ldb (byte 7 0) d)))
@@ -348,7 +348,7 @@
                 (setf (char buf (+ pos 1)) #\-)
                 (incf pos)
                 (when (< e10 0)
-                  (setf e10 (- 10))
+                  (setf e10 (- e10))
                   (incf pos))
                 (cond
                   ((< e10 10)
