@@ -1,4 +1,4 @@
-## PENDING v1.1.4
+## v1.1.4
 
 Changes relative to [v1.1.3](#v113)
 
