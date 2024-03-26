@@ -13,9 +13,6 @@
 
 (defpackage #:com.inuoe.jzon/ratio-to-double
   (:use #:cl)
-  (:local-nicknames
-    #-ecl
-    (#:ff #:org.shirakumo.float-features))
   (:export
     #:ratio-to-double))
 
@@ -23,7 +20,7 @@
 
 (defmacro %bits-double-float (x)
   #-ecl
-  `(ff:bits-double-float ,x)
+  `(org.shirakumo.float-features:bits-double-float ,x)
   #+ecl
   (if (find-symbol (string '#:bits-double-float) '#:si)
     `(,(intern (string '#:bits-double-float) '#:si) ,x)

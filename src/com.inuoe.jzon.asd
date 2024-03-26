@@ -1,5 +1,5 @@
 (defsystem #:com.inuoe.jzon
-  :version "1.1.3"
+  :version "1.1.4"
   :description "A correct and safe(r) JSON RFC 8259 reader/writer with sane defaults."
   :author "Wilfredo Velázquez-Rodríguez <zulu.inuoe@gmail.com>"
   :license "MIT"

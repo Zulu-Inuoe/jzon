@@ -43,9 +43,19 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
 
 # Quickstart
 
-**Note**: *Examples in this README can be copy-pasted in your REPL assuming you've got a nickname set up for jzon. Try `(uiop:add-package-local-nickname '#:jzon '#:com.inuoe.jzon)`.*
+jzon is on both Quicklisp and Ultralisp, and can be loaded via
+
+```lisp
+(ql:quickload '#:com.inuoe.jzon)
+```
 
 Most users will simply use [`jzon:parse`](#jzonparse) for reading, and [`jzon:stringify`](#jzonstringify) for writing. These mirror the [JSON methods in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON).
+
+**Note**: Examples in this README can be copy-pasted in your REPL if you've got a nickname set up for jzon. To follow along with the examples, use
+
+```lisp
+(uiop:add-package-local-nickname '#:jzon '#:com.inuoe.jzon)
+```
 
 ### Reading
 
@@ -271,7 +281,7 @@ If *pretty* is true, the output is formatted with spaces and newlines.
 
 *max-depth* limits the depth of nesting arrays/objects. Use `nil` to disable it, or `t` to set to default.
 
-In addition to serializing `json:jzon-element` values per [Type Mappings](#type-mappings), `jzon:stringify` allows other values. 
+In addition to serializing `jzon:json-element` values per [Type Mappings](#type-mappings), `jzon:stringify` allows other values. 
 See [Additionally Supported Types For Writing](#additionally-supported-types-for-writing) and [Custom Serialization](#custom-serialization).
 
 *max-string-length* may be an integer denoting the limit, or

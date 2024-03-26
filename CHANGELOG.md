@@ -1,3 +1,11 @@
+## v1.1.4
+
+Changes relative to [v1.1.3](#v113)
+
+* Skip optional failing unit test on ECL (https://github.com/Zulu-Inuoe/jzon/issues/59)
+* CLISP suport by removing PLN usage (https://github.com/Zulu-Inuoe/jzon/issues/53)
+* Fix bogus float serialization for certain floats (thanks https://github.com/atgreen)
+
 ## v1.1.3
 
 Changes relative to [v1.1.2](#v112)

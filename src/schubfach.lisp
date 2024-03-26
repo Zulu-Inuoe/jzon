@@ -17,9 +17,6 @@
 
 (defpackage #:com.inuoe.jzon/schubfach
   (:use #:cl)
-  (:local-nicknames
-    #-ecl
-    (#:ff #:org.shirakumo.float-features))
   (:export
     #:write-float
     #:write-double))
@@ -226,7 +223,7 @@
       (setf pos (- pos 2))
       (when (< q0 100)
         (return))
-      
+
       (let* ((q1 (%int32 (%>>64 (%int64 (* q0 1374389535)) 37)))
              (d (aref ds (- q0 (* q1 100)))))
         (setf (char buf (+ pos 0)) (code-char (ldb (byte 7 0) d)))
@@ -241,7 +238,7 @@
 
 (defmacro %single-float-bits (x)
   #-ecl
-  `(the (unsigned-byte 32) (ff:single-float-bits ,x))
+  `(the (unsigned-byte 32) (org.shirakumo.float-features:single-float-bits ,x))
   #+ecl
   (if (find-symbol (string '#:single-float-bits) '#:si)
     `(,(intern (string '#:single-float-bits) '#:si) ,x)
@@ -351,7 +348,7 @@
                 (setf (char buf (+ pos 1)) #\-)
                 (incf pos)
                 (when (< e10 0)
-                  (setf e10 (- 10))
+                  (setf e10 (- e10))
                   (incf pos))
                 (cond
                   ((< e10 10)
@@ -443,7 +440,7 @@
 
 (defmacro %double-float-bits (x)
   #-ecl
-  `(the (unsigned-byte 64) (ff:double-float-bits ,x))
+  `(the (unsigned-byte 64) (org.shirakumo.float-features:double-float-bits ,x))
   #+ecl
   (if (find-symbol (string '#:double-float-bits) '#:si)
     `(,(intern (string '#:double-float-bits) '#:si) ,x)
