@@ -1530,6 +1530,11 @@
                                                 t))
                 (nreverse called-on)))))
 
+;; This lies in (or (< e10 -3) (>= e10 7)) for schubfach
+;; where we previously were generating garbage strings
+(test stringify-1.0e-4
+  (is (equalp "1.0e-4" (stringify 1.0e-4))))
+
 (def-suite jzon.json-checker :in jzon)
 
 (in-suite jzon.json-checker)
