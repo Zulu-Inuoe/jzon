@@ -23,3 +23,9 @@ sbcl --noinform \
      --eval "(ql:quickload :com.inuoe.jzon-tests)" \
      --eval "$test_exp"
     
+ecl --eval "(load #p\"~/quicklisp/setup.lisp\")" \
+    --eval "(asdf:load-asd #p\"$jzon_asd\")" \
+    --eval "(asdf:load-asd #p\"$jzon_test_asd\")" \
+    --eval "(ql:quickload :com.inuoe.jzon-tests)" \
+    --eval "(com.inuoe.jzon-tests:main)" \
+    --eval "(quit)"
