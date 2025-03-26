@@ -12,6 +12,12 @@ test_exp="
     (sb-ext:exit :code -1073741510 :abort t)))
 "
 
+portable_test_exp="
+(progn (handler-case (uiop:quit (apply #'com.inuoe.jzon-tests:main (uiop:command-line-arguments)))
+         (error ()
+           (uiop:quit 2))))
+"
+
 sbcl --noinform \
      --end-runtime-options \
      --no-sysinit \
@@ -28,5 +34,4 @@ ecl --norc \
     --eval "(asdf:load-asd #p\"$jzon_asd\")" \
     --eval "(asdf:load-asd #p\"$jzon_test_asd\")" \
     --eval "(ql:quickload :com.inuoe.jzon-tests)" \
-    --eval "(com.inuoe.jzon-tests:main)" \
-    --eval "(quit)"
+    --eval "$portable_test_exp"
