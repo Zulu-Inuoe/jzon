@@ -16,6 +16,11 @@
   (sb-sys:interactive-interrupt ()^
     (sb-ext:exit :code -1073741510 :abort t)))
 
+@set PORTABLE_TEST_EXP=^
+(progn (handler-case (uiop:quit (apply #'com.inuoe.jzon-tests:main (uiop:command-line-arguments)))^
+         (error ()^
+           (uiop:quit 2))))
+
 @sbcl^
  --noinform^
  --end-runtime-options^
@@ -27,6 +32,16 @@
  --eval "(asdf:load-asd #p""%JZON_TESTS_ASD_E%\"")"^
  --eval "(ql:quickload '#:com.inuoe.jzon-tests)"^
  --eval "%TEST_EXP%"
+@if %errorlevel% neq 0 exit /b %errorlevel%
+
+@wx86cl64^
+ --quiet^
+ --no-init^
+ --eval "(load """"~/quicklisp/setup.lisp"""")"^
+ --eval "(asdf:load-asd #p""%JZON_ASD_E%\"")"^
+ --eval "(asdf:load-asd #p""%JZON_TESTS_ASD_E%\"")"^
+ --eval "(ql:quickload '#:com.inuoe.jzon-tests)"^
+ --eval "%PORTABLE_TEST_EXP%"
 @if %errorlevel% neq 0 exit /b %errorlevel%
 
 @endlocal
