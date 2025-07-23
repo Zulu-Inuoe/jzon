@@ -1583,6 +1583,7 @@ see `write-values'"
     writer)
   (:method ((writer writer) value)
     (let ((coerce-key (slot-value writer '%coerce-key))
+          (replacer (slot-value writer '%replacer))
           (fields (coerced-fields value)))
       (with-object writer
         (loop :for (name value . type-cell) :in fields
@@ -1596,8 +1597,15 @@ see `write-values'"
                                                     ((and (subtypep 'list type) (subtypep type 'list))
                                                      #())
                                                     (t 'null)))))
-                     (write-key writer key)
-                     (write-value writer coerced-value))))))
+                     (if replacer
+                         (multiple-value-call (lambda (write-p &optional (new-value nil value-changed-p))
+                                                (when write-p
+                                                  (write-key writer key)
+                                                  (write-value writer (if value-changed-p new-value value))))
+                           (funcall replacer key value))
+                         (progn
+                           (write-key writer key)
+                           (write-value writer coerced-value))))))))
   ;;; `json-atom' specializations
   (:method ((writer writer) (value (eql 't)))
     (%write-json-atom writer value))
