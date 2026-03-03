@@ -38,6 +38,7 @@ Please see the [changelog](CHANGELOG.md) for a list of changes between versions.
   * [Convenience](#convenience)
   * [Performance](#performance)
 * [Dependencies](#dependencies)
+* [Extensions](#extensions)
 * [License](#license)
 * [Alternatives](#alternatives)
 
@@ -1245,6 +1246,10 @@ When possible, strings will be coerced to `cl:simple-base-string`. This can lead
 * [flexi-streams](https://github.com/edicl/flexi-streams)
 * [float-features](https://github.com/Shinmera/float-features)
 * [uiop](https://gitlab.common-lisp.net/asdf/asdf)
+
+# Extensions
+
+* [jzon-util](https://github.com/daninus14/jzon-util)
 
 # License
 
