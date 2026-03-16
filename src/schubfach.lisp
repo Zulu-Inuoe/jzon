@@ -92,21 +92,15 @@
                                                          576460752303423478)))
 
 (defparameter *%digits* (let ((ds (make-array 100 :element-type '(unsigned-byte 16)))
-                              (i 0)
-                              (j 0))
-                           (declare (type (integer 0) i j))
-                           (loop :while (< j 10)
-                                 :for k :of-type (integer 0) := 0
-                                 :do (loop :while (< k 10)
-                                           :do (setf (aref ds i)
-                                                     (logior (ash (+ k (char-code #\0)) 8)
-                                                             (ash (+ j (char-code #\0)) 0)))
-                                               (incf i)
-                                               (incf k))
-
-
-                                     (incf j))
-                           ds))
+                              (i 0))
+                          (declare (type (integer 0) i))
+                          (loop :for j :below 10
+                                :do (loop :for k :below 10
+                                          :do (setf (aref ds i)
+                                                    (logior (ash (+ k (char-code #\0)) 8)
+                                                            (ash (+ j (char-code #\0)) 0)))
+                                              (incf i)))
+                          ds))
 
 (defparameter *%gs* (let* ((gs (make-array 1234 :element-type '(signed-byte 64)))
                            (i 0)
