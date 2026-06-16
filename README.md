@@ -113,19 +113,21 @@ If you have an up to date version of `uiop` installed:
 
 ### Type Mappings
 
-jzon cannonically maps types per the following chart:
+By default jzon maps types per the following chart:
 
-| JSON   | CL                      |
-|--------|-------------------------|
-| true   | symbol `t`              |
-| false  | symbol `nil`            |
-| null   | symbol `null`           |
-| number | integer or double-float |
-| string | simple-string           |
-| array  | simple-vector           |
-| object | hash-table (equal)      |
+| JSON   | CL                                       |
+|--------|------------------------------------------|
+| true   | symbol `t`                               |
+| false  | symbol `nil`<sup>Note 2</sup>            |
+| null   | symbol `null`                            |
+| number | integer or double-float                  |
+| string | simple-string                            |
+| array  | simple-vector                            |
+| object | hash-table (equal)                       |
 
-**Note** the usage of symbol `cl:null` as a sentinel for JSON `null`
+**Note 1** the usage of symbol `cl:null` as a sentinel for JSON `null`
+
+**Note 2** In `standard-objects` aka CLOS classes `nil` will be serialized to `null` unless `:type boolean` is specified in the slot options for that slot. See https://github.com/Zulu-Inuoe/jzon#standard-object for details.
 
 When writing, additional values are supported. Please see the section [jzon:stringify](#jzonstringify).
 
