@@ -51,9 +51,10 @@
                            (t
                              (truncate (ash 1 n) (expt 10 (- e))))))
                       (n (- n)))
-                  (loop :while (>= z (ash 1 128))
-                        :do (setf z (ash z -1))
-                            (incf n))
+                  (let ((shift (max 0 (- (integer-length z) 128))))
+                    (when (plusp shift)
+                      (setf z (ash z (- shift)))
+                      (incf n shift)))
                   (let* ((approx-n (ldb (byte 32 0) (+ (ash (* 217706 e) -16) 1087)))
                          (biased-n (ldb (byte 32 0) (+ bias n))))
                     (unless (= approx-n biased-n)
@@ -67,8 +68,11 @@
 
 (defvar *%detailed-powers-of-ten-min*)
 (defvar *%detailed-powers-of-ten-max*)
-
-(eval-when (:load-toplevel :compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute)
+  ;; The tables are embedded by #.*...* while compiling.  Do not regenerate
+  ;; them when the compiled file is loaded: generation performs expensive
+  ;; 2048-bit arithmetic despite the embedded table values already being
+  ;; present in the FASL.  :execute keeps direct source LOAD equivalent.
   (setf (values *%detailed-powers-of-ten-min*
                 *%detailed-powers-of-ten-max*)
         (%gen-powers-of-ten-tables)))
